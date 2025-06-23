@@ -77,16 +77,6 @@ class UserRoleAdmin(admin.ModelAdmin):
             return format_html('<span style="color: gray;">⚪ Limited</span>')
     access_level.short_description = "Access Level"
 
-class UserRoleAssignmentInline(admin.TabularInline):
-    """Inline for managing user role assignments"""
-    model = UserRoleAssignment
-    extra = 0
-    fields = ['role', 'department', 'start_date', 'end_date', 'is_active']
-    readonly_fields = ['assigned_at']
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('role', 'department')
-
 @admin.register(UserRoleAssignment)
 class UserRoleAssignmentAdmin(admin.ModelAdmin):
     list_display = [
@@ -134,42 +124,20 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
     assignment_period.short_description = "Period"
 
 # ================================
-# EXTENDED USER ADMIN
+# EXTENDED USER ADMIN (SIMPLIFIED)
 # ================================
 
-class ExtendedUserAdmin(BaseUserAdmin):
-    """Extended User admin with role assignments"""
-    inlines = BaseUserAdmin.inlines + [UserRoleAssignmentInline]
+class UserRoleAssignmentInline(admin.TabularInline):
+    """Inline for managing user role assignments"""
+    model = UserRoleAssignment
+    extra = 0
+    fields = ['role', 'department', 'start_date', 'end_date', 'is_active']
     
     def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related(
-            'role_assignments__role', 
-            'role_assignments__department'
-        )
-    
-    def user_roles(self, obj):
-        """Display user's active roles"""
-        active_roles = obj.role_assignments.filter(is_active=True)
-        roles = []
-        for assignment in active_roles[:3]:  # Show first 3 roles
-            role_text = assignment.role.display_name
-            if assignment.department:
-                role_text += f" ({assignment.department.code})"
-            roles.append(role_text)
-        
-        result = ", ".join(roles)
-        if active_roles.count() > 3:
-            result += f" +{active_roles.count() - 3} more"
-        
-        return result if result else "No active roles"
-    user_roles.short_description = "Active Roles"
-    
-    # Add user_roles to list_display
-    list_display = BaseUserAdmin.list_display + ('user_roles',)
+        return super().get_queryset(request).select_related('role', 'department')
 
-# Unregister the default User admin and register the extended one
-admin.site.unregister(User)
-admin.site.register(User, ExtendedUserAdmin)
+# Simple approach - don't extend BaseUserAdmin for now
+# Just register the inline separately if needed
 
 # ================================
 # ADMIN SITE CUSTOMIZATION
@@ -179,17 +147,3 @@ admin.site.register(User, ExtendedUserAdmin)
 admin.site.site_header = "BPS IT Inventory Management System"
 admin.site.site_title = "BPS Inventory Admin"
 admin.site.index_title = "Welcome to BPS IT Inventory Management"
-
-# Add custom CSS and JavaScript if needed
-class BPSAdminSite(admin.AdminSite):
-    """Custom admin site for BPS Inventory System"""
-    
-    def each_context(self, request):
-        """Add custom context to all admin pages"""
-        context = super().each_context(request)
-        context.update({
-            'system_name': 'BPS IT Inventory Management System',
-            'version': '1.0.0',
-            'organization': 'Bangladesh Parliament Secretariat'
-        })
-        return context

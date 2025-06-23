@@ -213,8 +213,7 @@ class DeviceAdmin(admin.ModelAdmin):
         'brand', 'model', 'mac_address', 'ip_address'
     ]
     readonly_fields = [
-        'device_id', 'qr_code', 'created_at', 'updated_at', 
-        'warranty_status', 'warranty_expires_soon'
+        'device_id', 'qr_code', 'created_at', 'updated_at'
     ]
     inlines = [AssignmentInline, MaintenanceScheduleInline]
     
@@ -312,7 +311,7 @@ class AssignmentAdmin(admin.ModelAdmin):
         'assigned_to_staff__full_name', 'assigned_to_department__name'
     ]
     readonly_fields = [
-        'assignment_id', 'created_at', 'updated_at', 'is_overdue_status'
+        'assignment_id', 'created_at', 'updated_at'
     ]
     inlines = [AssignmentHistoryInline]
     
