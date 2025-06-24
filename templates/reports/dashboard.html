@@ -1,0 +1,450 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Reports Dashboard - BPS IT Inventory{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item active">Reports</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .report-icon {
+        font-size: 3rem;
+        opacity: 0.8;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+    }
+    
+    .quick-stats {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="h3 mb-1">
+                        <i class="fas fa-chart-line me-2 text-primary"></i>
+                        Reports Dashboard
+                    </h2>
+                    <p class="text-muted mb-0">Generate comprehensive reports and analytics for your IT inventory</p>
+                </div>
+                <div>
+                    <a href="{% url 'reports:generate_custom_report' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i> Custom Report
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Statistics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card quick-stats">
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <div class="h3 mb-0">{{ total_devices|default:"0" }}</div>
+                            <div class="small opacity-75">Total Devices</div>
+                        </div>
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <div class="h3 mb-0">{{ active_assignments|default:"0" }}</div>
+                            <div class="small opacity-75">Active Assignments</div>
+                        </div>
+                        <div class="col-md-3 mb-3 mb-md-0">
+                            <div class="h3 mb-0 text-warning">{{ overdue_assignments|default:"0" }}</div>
+                            <div class="small opacity-75">Overdue Returns</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="h3 mb-0">{{ recent_reports.count|default:"0" }}</div>
+                            <div class="small opacity-75">Reports Generated</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Categories -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3">Available Reports</h4>
+        </div>
+        
+        <!-- Inventory Reports -->
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card report-card h-100" onclick="window.location.href='{% url 'reports:inventory_report' %}'">
+                <div class="card-body text-center">
+                    <div class="report-icon text-primary mb-3">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <h5 class="card-title">Inventory Report</h5>
+                    <p class="card-text text-muted">
+                        Comprehensive overview of all devices, categories, and asset values
+                    </p>
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="fw-bold text-primary">{{ total_devices|default:"0" }}</div>
+                            <div class="small text-muted">Devices</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold text-success">৳{{ device_status_stats.0.total_value|floatformat:"0"|default:"0" }}</div>
+                            <div class="small text-muted">Total Value</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card report-card h-100" onclick="window.location.href='{% url 'reports:assignment_report' %}'">
+                <div class="card-body text-center">
+                    <div class="report-icon text-success mb-3">
+                        <i class="fas fa-user-friends"></i>
+                    </div>
+                    <h5 class="card-title">Assignment Report</h5>
+                    <p class="card-text text-muted">
+                        Track device assignments, transfers, and utilization patterns
+                    </p>
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="fw-bold text-success">{{ active_assignments|default:"0" }}</div>
+                            <div class="small text-muted">Active</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold text-warning">{{ overdue_assignments|default:"0" }}</div>
+                            <div class="small text-muted">Overdue</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card report-card h-100" onclick="window.location.href='{% url 'reports:maintenance_report' %}'">
+                <div class="card-body text-center">
+                    <div class="report-icon text-warning mb-3">
+                        <i class="fas fa-tools"></i>
+                    </div>
+                    <h5 class="card-title">Maintenance Report</h5>
+                    <p class="card-text text-muted">
+                        Maintenance schedules, costs, and device reliability analysis
+                    </p>
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="fw-bold text-info">{{ maintenance_scheduled|default:"0" }}</div>
+                            <div class="small text-muted">Scheduled</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold text-success">{{ maintenance_completed|default:"0" }}</div>
+                            <div class="small text-muted">Completed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card report-card h-100" onclick="window.location.href='{% url 'reports:warranty_report' %}'">
+                <div class="card-body text-center">
+                    <div class="report-icon text-info mb-3">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h5 class="card-title">Warranty Report</h5>
+                    <p class="card-text text-muted">
+                        Warranty status, expiration alerts, and coverage analysis
+                    </p>
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="fw-bold text-success">{{ warranty_active|default:"0" }}</div>
+                            <div class="small text-muted">Active</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold text-warning">{{ warranty_expiring|default:"0" }}</div>
+                            <div class="small text-muted">Expiring Soon</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card report-card h-100" onclick="window.location.href='{% url 'reports:audit_report' %}'">
+                <div class="card-body text-center">
+                    <div class="report-icon text-danger mb-3">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <h5 class="card-title">Audit Report</h5>
+                    <p class="card-text text-muted">
+                        System activity logs, user actions, and compliance tracking
+                    </p>
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="fw-bold text-primary">{{ total_activities|default:"0" }}</div>
+                            <div class="small text-muted">Activities</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold text-info">{{ unique_users|default:"0" }}</div>
+                            <div class="small text-muted">Users</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card report-card h-100" onclick="window.location.href='{% url 'reports:department_utilization' %}'">
+                <div class="card-body text-center">
+                    <div class="report-icon text-secondary mb-3">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <h5 class="card-title">Department Utilization</h5>
+                    <p class="card-text text-muted">
+                        Department-wise device allocation and utilization metrics
+                    </p>
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="fw-bold text-primary">{{ departments_count|default:"0" }}</div>
+                            <div class="small text-muted">Departments</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="fw-bold text-success">{{ avg_utilization|default:"0" }}%</div>
+                            <div class="small text-muted">Avg. Utilization</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Reports and Analytics -->
+    <div class="row">
+        <!-- Recent Reports -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-history me-2"></i>Recent Reports
+                    </h6>
+                    <a href="#" class="btn btn-outline-primary btn-sm">
+                        View All
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_reports %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Report</th>
+                                        <th>Generated By</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for report in recent_reports %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold">{{ report.template.name }}</div>
+                                            <div class="text-muted small">{{ report.template.category }}</div>
+                                        </td>
+                                        <td>{{ report.generated_by.get_full_name|default:report.generated_by.username }}</td>
+                                        <td>{{ report.generation_started|date:"M d, Y H:i" }}</td>
+                                        <td>
+                                            {% if report.generation_failed %}
+                                                <span class="badge bg-danger">Failed</span>
+                                            {% elif report.generation_completed %}
+                                                <span class="badge bg-success">Completed</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Processing</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if report.generation_completed %}
+                                                <a href="#" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-download"></i>
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No reports generated yet</p>
+                            <a href="{% url 'reports:generate_custom_report' %}" class="btn btn-primary">
+                                Generate Your First Report
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Analytics -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie me-2"></i>Device Distribution
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="deviceStatusChart" style="height: 250px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Department Assignments Chart -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-building me-2"></i>Department-wise Device Distribution
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="departmentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Device Status Distribution Chart
+        const statusCtx = document.getElementById('deviceStatusChart').getContext('2d');
+        const statusChart = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [
+                    {% for status in device_status_stats %}
+                        '{{ status.status|capfirst }}'{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                datasets: [{
+                    data: [
+                        {% for status in device_status_stats %}
+                            {{ status.count }}{% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    backgroundColor: [
+                        '#28a745', '#17a2b8', '#ffc107', '#dc3545', '#6c757d'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        // Department Distribution Chart
+        const deptCtx = document.getElementById('departmentChart').getContext('2d');
+        const departmentChart = new Chart(deptCtx, {
+            type: 'bar',
+            data: {
+                labels: [
+                    {% for dept in dept_assignment_stats %}
+                        '{{ dept.assigned_to_department__name|default:"Unassigned" }}'{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                datasets: [{
+                    label: 'Assigned Devices',
+                    data: [
+                        {% for dept in dept_assignment_stats %}
+                            {{ dept.count }}{% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    backgroundColor: 'rgba(0, 102, 204, 0.8)',
+                    borderColor: 'rgba(0, 102, 204, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Animate report cards
+        document.querySelectorAll('.report-card').forEach((card, index) => {
+            setTimeout(() => {
+                card.style.opacity = '1';
+            }, index * 100);
+        });
+
+        // Add click animation to report cards
+        document.querySelectorAll('.report-card').forEach(card => {
+            card.addEventListener('click', function() {
+                card.classList.add('scale-95');
+                setTimeout(() => {
+                    card.classList.remove('scale-95');
+                }, 150);
+            });
+        });
+    });
+</script>
+
+<style>
+    .scale-95 {
+        transform: scale(0.95);
+        transition: transform 0.1s ease;
+    }
+</style>
+{% endblock %}

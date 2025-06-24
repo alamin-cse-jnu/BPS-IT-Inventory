@@ -92,8 +92,6 @@
                                 <i class="fas fa-qrcode me-1"></i> QR Codes
                             </a>
                             <ul class="dropdown-menu">
-                                <!-- Temporarily commented until QR views are implemented -->
-                                <!--
                                 <li><a class="dropdown-item" href="{% url 'qr_management:index' %}">
                                     <i class="fas fa-chart-bar me-2"></i> QR Dashboard
                                 </a></li>
@@ -108,11 +106,7 @@
                                     <i class="fas fa-check-double me-2"></i> Batch Verify
                                 </a></li>
                                 <li><a class="dropdown-item" href="{% url 'qr_management:qr_analytics' %}">
-                                    <i class="fas fa-analytics me-2"></i> Analytics
-                                </a></li>
-                                -->
-                                <li><a class="dropdown-item" href="#" onclick="alert('QR Management features coming soon!')">
-                                    <i class="fas fa-info-circle me-2"></i> Coming Soon
+                                    <i class="fas fa-chart-line me-2"></i> Analytics
                                 </a></li>
                             </ul>
                         </li>
@@ -124,8 +118,6 @@
                                 <i class="fas fa-chart-line me-1"></i> Reports
                             </a>
                             <ul class="dropdown-menu">
-                                <!-- Temporarily commented until Report views are implemented -->
-                                <!--
                                 <li><a class="dropdown-item" href="{% url 'reports:dashboard' %}">
                                     <i class="fas fa-chart-pie me-2"></i> Reports Dashboard
                                 </a></li>
@@ -148,10 +140,6 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'reports:generate_custom_report' %}">
                                     <i class="fas fa-cog me-2"></i> Custom Report
-                                </a></li>
-                                -->
-                                <li><a class="dropdown-item" href="#" onclick="alert('Reports features coming soon!')">
-                                    <i class="fas fa-info-circle me-2"></i> Coming Soon
                                 </a></li>
                             </ul>
                         </li>
@@ -315,7 +303,7 @@
                 <div class="col-md-6">
                     <small class="text-muted">
                         © 2025 Bangladesh Parliament Secretariat. 
-                        IT Inventory Management System v{{ settings.BPS_VERSION|default:'1.0.0' }}
+                        IT Inventory Management System v1.0.0
                     </small>
                 </div>
                 <div class="col-md-6 text-md-end">
@@ -455,7 +443,7 @@
                     <small>2 assignments are overdue</small>
                 </div>
                 <div class="text-center mt-2">
-                    <a href="#" onclick="alert('Reports coming soon!')" class="btn btn-sm btn-outline-primary">View All</a>
+                    <a href="#" onclick="alert('Full notifications coming soon!')" class="btn btn-sm btn-outline-primary">View All</a>
                 </div>
             `);
             $('#notification-count').text('5');
