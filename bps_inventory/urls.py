@@ -1,8 +1,4 @@
 # bps_inventory/urls.py
-"""
-URL configuration for BPS IT Inventory Management System.
-Enhanced with Phase 3 functionality.
-"""
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -59,6 +55,16 @@ urlpatterns = [
     # API endpoints (for future mobile app)
     # path('api/v1/', include('api.urls')),  # We'll create this later
 ]
+
+# Add Django Debug Toolbar URLs in development
+if settings.DEBUG:
+    try:
+        import debug_toolbar
+        urlpatterns = [
+            path('__debug__/', include(debug_toolbar.urls)),
+        ] + urlpatterns
+    except ImportError:
+        pass
 
 # Serve media files in development
 if settings.DEBUG:

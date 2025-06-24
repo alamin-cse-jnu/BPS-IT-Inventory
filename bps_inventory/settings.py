@@ -360,7 +360,7 @@ BPS_SYSTEM_NAME = "BPS IT Inventory Management System"
 BPS_VERSION = "1.0.0"
 BPS_ORGANIZATION = "Bangladesh Parliament Secretariat"
 BPS_CONTACT_EMAIL = config('BPS_CONTACT_EMAIL', default='it@parliament.gov.bd')
-BPS_ADMIN_NAME = config('BPS_ADMIN_NAME', default='IT Administrator')
+BPS_ADMIN_NAME = config('BPS_ADMIN_NAME', default='alamin')
 
 # QR Code Settings
 QR_CODE_BASE_URL = config('QR_CODE_BASE_URL', default='http://127.0.0.1:8000')
