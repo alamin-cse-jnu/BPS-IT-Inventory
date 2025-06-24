@@ -105,6 +105,8 @@ TEMPLATES = [
                 'django.template.context_processors.media',
                 'django.template.context_processors.static',
                 'django.template.context_processors.tz',
+                # Add to context processors to make these available in templates
+                'django.template.context_processors.request',
             ],
         },
     },
