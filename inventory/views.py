@@ -1,4 +1,4 @@
-# inventory/views.py - COMPLETE VERSION WITH ALL FUNCTIONS
+# inventory/views.py - COMPLETE DJANGO INVENTORY MANAGEMENT VIEWS
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, permission_required
@@ -7,7 +7,7 @@ from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from django.db.models import Count, Q, Sum, Avg, Max, Min, F, Case, When
+from django.db.models import Count, Q, Sum, Avg, Max, Min, F, Case, When, FloatField
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.forms import formset_factory
@@ -20,17 +20,17 @@ from io import StringIO
 
 from .models import (
     Device, Assignment, Staff, Department, Location, 
-    DeviceCategory, DeviceType, DeviceSubcategory, Vendor,
+    DeviceCategory, DeviceType, DeviceSubCategory, Vendor,
     MaintenanceSchedule, AuditLog, Room, Building
 )
 from .forms import (
-    DeviceForm, AssignmentForm, StaffForm, DepartmentForm, 
-    LocationForm, DeviceSearchForm, AssignmentSearchForm,
-    BulkAssignmentForm, MaintenanceForm, TransferForm,
-    ReturnForm, VendorForm, DeviceTypeForm
+    DeviceForm, AssignmentForm, StaffForm, 
+    LocationForm, DeviceSearchForm, 
+    BulkAssignmentForm, MaintenanceScheduleForm, DeviceTransferForm,
+    VendorForm
 )
 
-# FIXED: Import with comprehensive error handling
+# FIXED: Import with comprehensive error handling and missing form fallbacks
 try:
     from .utils import (
         get_device_assignment_summary, 
@@ -91,6 +91,48 @@ except ImportError as e:
     
     def get_recent_activities(limit=10):
         return []
+
+# Create missing forms as fallbacks
+from django import forms
+
+class AssignmentSearchForm(forms.Form):
+    """Simple search form for assignments"""
+    search = forms.CharField(max_length=200, required=False)
+    status = forms.ChoiceField(choices=[('', 'All'), ('active', 'Active'), ('inactive', 'Inactive')], required=False)
+    assignment_type = forms.ChoiceField(choices=[('', 'All'), ('permanent', 'Permanent'), ('temporary', 'Temporary')], required=False)
+    department = forms.ModelChoiceField(queryset=Department.objects.all(), required=False, empty_label="All Departments")
+    date_from = forms.DateField(required=False)
+    date_to = forms.DateField(required=False)
+
+class ReturnForm(forms.Form):
+    """Simple form for returning devices"""
+    return_date = forms.DateField(initial=timezone.now().date)
+    return_condition = forms.CharField(max_length=200, required=False)
+    return_notes = forms.CharField(widget=forms.Textarea, required=False)
+    device_condition = forms.CharField(max_length=50, required=False)
+
+class TransferForm(forms.Form):
+    """Simple form for transferring assignments"""
+    new_assigned_to_staff = forms.ModelChoiceField(queryset=Staff.objects.filter(is_active=True), required=False)
+    new_assigned_to_department = forms.ModelChoiceField(queryset=Department.objects.all(), required=False)
+    new_assigned_to_location = forms.ModelChoiceField(queryset=Location.objects.filter(is_active=True), required=False)
+    transfer_reason = forms.CharField(widget=forms.Textarea, required=False)
+    conditions = forms.CharField(widget=forms.Textarea, required=False)
+
+class DeviceTypeForm(forms.ModelForm):
+    """Simple form for device types"""
+    class Meta:
+        model = DeviceType
+        fields = ['name', 'subcategory', 'description']
+
+class DepartmentForm(forms.ModelForm):
+    """Simple form for departments"""
+    class Meta:
+        model = Department
+        fields = ['name', 'code', 'description']
+
+# Alias the correctly named forms
+MaintenanceForm = MaintenanceScheduleForm
 
 # ================================
 # DASHBOARD VIEWS
@@ -283,8 +325,7 @@ def device_detail(request, device_id):
             'assignments__assigned_to_staff',
             'assignments__assigned_to_department',
             'assignments__assigned_to_location',
-            'maintenance_schedules',
-            'qr_scans'
+            'maintenance_schedules'
         ), device_id=device_id)
         
         # Get current assignment
@@ -300,10 +341,8 @@ def device_detail(request, device_id):
             'vendor', 'created_by'
         ).order_by('-scheduled_date')[:5]
         
-        # Get recent QR scans
-        recent_scans = device.qr_scans.select_related(
-            'scanned_by', 'scan_location'
-        ).order_by('-timestamp')[:5]
+        # QR scans placeholder (implement when qr_management app is available)
+        recent_scans = []
         
         # Calculate warranty status with proper date handling
         warranty_status = 'Unknown'
@@ -756,6 +795,189 @@ def assignment_return(request, assignment_id):
         return redirect('inventory:assignment_list')
 
 @login_required
+@permission_required('inventory.change_assignment', raise_exception=True)
+def assignment_transfer(request, assignment_id):
+    """Transfer assignment to another staff/department"""
+    try:
+        assignment = get_object_or_404(Assignment, assignment_id=assignment_id, is_active=True)
+        
+        if request.method == 'POST':
+            form = DeviceTransferForm(request.POST)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        # Create new assignment
+                        new_assignment = Assignment.objects.create(
+                            device=assignment.device,
+                            assigned_to_staff=form.cleaned_data.get('new_staff'),
+                            assigned_to_department=form.cleaned_data.get('new_department'),
+                            assigned_to_location=form.cleaned_data.get('new_location'),
+                            is_temporary=assignment.is_temporary,
+                            expected_return_date=assignment.expected_return_date,
+                            purpose=form.cleaned_data.get('transfer_reason', ''),
+                            conditions=form.cleaned_data.get('conditions', ''),
+                            created_by=request.user,
+                            updated_by=request.user,
+                            requested_by=request.user
+                        )
+                        
+                        # Close old assignment
+                        assignment.is_active = False
+                        assignment.actual_return_date = timezone.now().date()
+                        assignment.updated_by = request.user
+                        assignment.save()
+                        
+                        # Create audit log
+                        AuditLog.objects.create(
+                            user=request.user,
+                            action='TRANSFER',
+                            model_name='Assignment',
+                            object_id=assignment.assignment_id,
+                            object_repr=str(assignment),
+                            changes={
+                                'transferred_to': str(new_assignment.assignment_id),
+                                'reason': form.cleaned_data.get('transfer_reason', '')
+                            },
+                            ip_address=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        messages.success(request, f'Assignment transferred successfully. New assignment ID: {new_assignment.assignment_id}')
+                        return redirect('inventory:assignment_detail', assignment_id=new_assignment.assignment_id)
+                        
+                except Exception as e:
+                    messages.error(request, f'Error transferring assignment: {str(e)}')
+        else:
+            form = DeviceTransferForm()
+        
+        context = {
+            'form': form,
+            'assignment': assignment,
+            'title': f'Transfer Assignment {assignment.assignment_id}',
+        }
+        return render(request, 'inventory/assignment_transfer.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading assignment: {str(e)}")
+        return redirect('inventory:assignment_list')
+
+@login_required
+@permission_required('inventory.change_assignment', raise_exception=True)
+def assignment_edit(request, assignment_id):
+    """Edit assignment details"""
+    try:
+        assignment = get_object_or_404(Assignment, assignment_id=assignment_id)
+        original_data = {
+            'assigned_to_staff': assignment.assigned_to_staff,
+            'assigned_to_department': assignment.assigned_to_department,
+            'expected_return_date': assignment.expected_return_date,
+        }
+        
+        if request.method == 'POST':
+            form = AssignmentForm(request.POST, instance=assignment)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        assignment = form.save(commit=False)
+                        assignment.updated_by = request.user
+                        assignment.save()
+                        
+                        # Track changes
+                        changes = {}
+                        for field, old_value in original_data.items():
+                            new_value = getattr(assignment, field)
+                            if old_value != new_value:
+                                changes[field] = {'old': str(old_value), 'new': str(new_value)}
+                        
+                        if changes:
+                            AuditLog.objects.create(
+                                user=request.user,
+                                action='UPDATE',
+                                model_name='Assignment',
+                                object_id=assignment.assignment_id,
+                                object_repr=str(assignment),
+                                changes=changes,
+                                ip_address=request.META.get('REMOTE_ADDR')
+                            )
+                        
+                        messages.success(request, f'Assignment "{assignment.assignment_id}" updated successfully.')
+                        return redirect('inventory:assignment_detail', assignment_id=assignment.assignment_id)
+                except Exception as e:
+                    messages.error(request, f'Error updating assignment: {str(e)}')
+        else:
+            form = AssignmentForm(instance=assignment)
+        
+        context = {
+            'form': form,
+            'assignment': assignment,
+            'title': f'Edit Assignment {assignment.assignment_id}',
+            'action': 'Update',
+        }
+        return render(request, 'inventory/assignment_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading assignment: {str(e)}")
+        return redirect('inventory:assignment_list')
+
+@login_required
+@permission_required('inventory.change_assignment', raise_exception=True)
+def assignment_extend(request, assignment_id):
+    """Extend assignment return date"""
+    try:
+        assignment = get_object_or_404(Assignment, assignment_id=assignment_id, is_active=True, is_temporary=True)
+        
+        if request.method == 'POST':
+            new_return_date = request.POST.get('new_return_date')
+            extension_reason = request.POST.get('extension_reason', '')
+            
+            if new_return_date:
+                try:
+                    new_date = datetime.strptime(new_return_date, '%Y-%m-%d').date()
+                    
+                    if new_date <= assignment.expected_return_date:
+                        messages.error(request, 'New return date must be after the current expected return date.')
+                    else:
+                        with transaction.atomic():
+                            old_date = assignment.expected_return_date
+                            assignment.expected_return_date = new_date
+                            assignment.notes = f"{assignment.notes}\n\nExtended on {timezone.now().date()}: {extension_reason}".strip()
+                            assignment.updated_by = request.user
+                            assignment.save()
+                            
+                            # Create audit log
+                            AuditLog.objects.create(
+                                user=request.user,
+                                action='EXTEND',
+                                model_name='Assignment',
+                                object_id=assignment.assignment_id,
+                                object_repr=str(assignment),
+                                changes={
+                                    'old_return_date': str(old_date),
+                                    'new_return_date': str(new_date),
+                                    'reason': extension_reason
+                                },
+                                ip_address=request.META.get('REMOTE_ADDR')
+                            )
+                            
+                            messages.success(request, f'Assignment return date extended to {new_date.strftime("%B %d, %Y")}.')
+                            return redirect('inventory:assignment_detail', assignment_id=assignment.assignment_id)
+                            
+                except ValueError:
+                    messages.error(request, 'Invalid date format.')
+                except Exception as e:
+                    messages.error(request, f'Error extending assignment: {str(e)}')
+            else:
+                messages.error(request, 'Please provide a new return date.')
+        
+        context = {
+            'assignment': assignment,
+        }
+        return render(request, 'inventory/assignment_extend.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading assignment: {str(e)}")
+        return redirect('inventory:assignment_list')
+
+@login_required
 @permission_required('inventory.add_assignment', raise_exception=True)
 def bulk_assignment_create(request):
     """Create multiple assignments at once"""
@@ -967,6 +1189,49 @@ def staff_create(request):
     return render(request, 'inventory/staff_form.html', context)
 
 @login_required
+@permission_required('inventory.change_staff', raise_exception=True)
+def staff_edit(request, staff_id):
+    """Edit staff member details"""
+    try:
+        staff = get_object_or_404(Staff, id=staff_id)
+        
+        if request.method == 'POST':
+            form = StaffForm(request.POST, instance=staff)
+            if form.is_valid():
+                try:
+                    staff = form.save()
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='UPDATE',
+                        model_name='Staff',
+                        object_id=str(staff.id),
+                        object_repr=str(staff),
+                        changes={'updated': 'Staff details updated'},
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Staff member "{staff.full_name}" updated successfully.')
+                    return redirect('inventory:staff_detail', staff_id=staff.id)
+                except Exception as e:
+                    messages.error(request, f'Error updating staff member: {str(e)}')
+        else:
+            form = StaffForm(instance=staff)
+        
+        context = {
+            'form': form,
+            'staff': staff,
+            'title': f'Edit {staff.full_name}',
+            'action': 'Update',
+        }
+        return render(request, 'inventory/staff_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading staff: {str(e)}")
+        return redirect('inventory:staff_list')
+
+@login_required
 def staff_assignments(request, staff_id):
     """View all assignments for a specific staff member"""
     try:
@@ -1069,6 +1334,84 @@ def department_detail(request, department_id):
         return redirect('inventory:department_list')
 
 @login_required
+@permission_required('inventory.add_department', raise_exception=True)
+def department_create(request):
+    """Create new department"""
+    if request.method == 'POST':
+        form = DepartmentForm(request.POST)
+        if form.is_valid():
+            try:
+                department = form.save()
+                
+                # Create audit log
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='CREATE',
+                    model_name='Department',
+                    object_id=str(department.id),
+                    object_repr=str(department),
+                    changes={'created': 'New department added'},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Department "{department.name}" created successfully.')
+                return redirect('inventory:department_detail', department_id=department.id)
+            except Exception as e:
+                messages.error(request, f'Error creating department: {str(e)}')
+    else:
+        form = DepartmentForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Department',
+        'action': 'Create',
+    }
+    return render(request, 'inventory/department_form.html', context)
+
+@login_required
+@permission_required('inventory.change_department', raise_exception=True)
+def department_edit(request, department_id):
+    """Edit department details"""
+    try:
+        department = get_object_or_404(Department, id=department_id)
+        
+        if request.method == 'POST':
+            form = DepartmentForm(request.POST, instance=department)
+            if form.is_valid():
+                try:
+                    department = form.save()
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='UPDATE',
+                        model_name='Department',
+                        object_id=str(department.id),
+                        object_repr=str(department),
+                        changes={'updated': 'Department details updated'},
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Department "{department.name}" updated successfully.')
+                    return redirect('inventory:department_detail', department_id=department.id)
+                except Exception as e:
+                    messages.error(request, f'Error updating department: {str(e)}')
+        else:
+            form = DepartmentForm(instance=department)
+        
+        context = {
+            'form': form,
+            'department': department,
+            'title': f'Edit {department.name}',
+            'action': 'Update',
+        }
+        return render(request, 'inventory/department_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading department: {str(e)}")
+        return redirect('inventory:department_list')
+
+@login_required
 def department_assignments(request, department_id):
     """View all assignments for a specific department"""
     try:
@@ -1104,6 +1447,316 @@ def department_assignments(request, department_id):
     except Exception as e:
         messages.error(request, f"Error loading department assignments: {str(e)}")
         return redirect('inventory:department_list')
+
+# ================================
+# LOCATION MANAGEMENT VIEWS
+# ================================
+
+@login_required
+def location_list(request):
+    """List all locations with device counts"""
+    try:
+        locations = Location.objects.select_related(
+            'room__department', 'room__building'
+        ).prefetch_related(
+            'device_locations__device'
+        ).annotate(
+            device_count=Count('device_locations', filter=Q(device_locations__is_active=True))
+        ).order_by('room__building__name', 'room__name', 'name')
+        
+        # Search functionality
+        search = request.GET.get('search')
+        if search:
+            locations = locations.filter(
+                Q(name__icontains=search) |
+                Q(room__name__icontains=search) |
+                Q(room__department__name__icontains=search)
+            )
+        
+        # Building filter
+        building_id = request.GET.get('building')
+        if building_id:
+            locations = locations.filter(room__building_id=building_id)
+        
+        # Department filter
+        department_id = request.GET.get('department')
+        if department_id:
+            locations = locations.filter(room__department_id=department_id)
+        
+        # Pagination
+        paginator = Paginator(locations, 25)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Get filter options
+        buildings = Building.objects.all().order_by('name')
+        departments = Department.objects.all().order_by('name')
+        
+        context = {
+            'page_obj': page_obj,
+            'buildings': buildings,
+            'departments': departments,
+            'search': search,
+            'selected_building': building_id,
+            'selected_department': department_id,
+        }
+        
+        return render(request, 'inventory/location_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading locations: {str(e)}")
+        return render(request, 'inventory/location_list.html', {'page_obj': None})
+
+@login_required
+def location_detail(request, location_id):
+    """Display location details with assigned devices"""
+    try:
+        location = get_object_or_404(Location.objects.select_related(
+            'room__department', 'room__building'
+        ), id=location_id)
+        
+        # Get devices at this location
+        current_assignments = Assignment.objects.filter(
+            assigned_to_location=location,
+            is_active=True
+        ).select_related('device', 'assigned_to_staff')
+        
+        # Get assignment history for this location
+        assignment_history = Assignment.objects.filter(
+            assigned_to_location=location
+        ).select_related('device', 'assigned_to_staff').order_by('-created_at')[:20]
+        
+        # Calculate statistics
+        total_devices = current_assignments.count()
+        total_value = current_assignments.aggregate(
+            total=Sum('device__purchase_price')
+        )['total'] or 0
+        
+        # Device categories at this location
+        category_breakdown = current_assignments.values(
+            'device__device_type__subcategory__category__name'
+        ).annotate(count=Count('id')).order_by('-count')
+        
+        context = {
+            'location': location,
+            'current_assignments': current_assignments,
+            'assignment_history': assignment_history,
+            'total_devices': total_devices,
+            'total_value': total_value,
+            'category_breakdown': category_breakdown,
+        }
+        
+        return render(request, 'inventory/location_detail.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading location details: {str(e)}")
+        return redirect('inventory:location_list')
+
+@login_required
+@permission_required('inventory.add_location', raise_exception=True)
+def location_create(request):
+    """Create new location"""
+    if request.method == 'POST':
+        form = LocationForm(request.POST)
+        if form.is_valid():
+            try:
+                location = form.save()
+                
+                # Create audit log
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='CREATE',
+                    model_name='Location',
+                    object_id=str(location.id),
+                    object_repr=str(location),
+                    changes={'created': 'New location added'},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Location "{location.name}" created successfully.')
+                return redirect('inventory:location_detail', location_id=location.id)
+            except Exception as e:
+                messages.error(request, f'Error creating location: {str(e)}')
+    else:
+        form = LocationForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Location',
+        'action': 'Create',
+    }
+    return render(request, 'inventory/location_form.html', context)
+
+# ================================
+# VENDOR MANAGEMENT VIEWS
+# ================================
+
+@login_required
+def vendor_list(request):
+    """List all vendors with device and maintenance counts"""
+    try:
+        vendors = Vendor.objects.prefetch_related(
+            'devices', 'maintenance_schedules'
+        ).annotate(
+            device_count=Count('devices'),
+            maintenance_count=Count('maintenance_schedules')
+        ).order_by('name')
+        
+        # Search functionality
+        search = request.GET.get('search')
+        if search:
+            vendors = vendors.filter(
+                Q(name__icontains=search) |
+                Q(contact_person__icontains=search) |
+                Q(email__icontains=search)
+            )
+        
+        # Pagination
+        paginator = Paginator(vendors, 25)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'page_obj': page_obj,
+            'search': search,
+        }
+        
+        return render(request, 'inventory/vendor_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading vendors: {str(e)}")
+        return render(request, 'inventory/vendor_list.html', {'page_obj': None})
+
+@login_required
+def vendor_detail(request, vendor_id):
+    """Display vendor details with devices and maintenance history"""
+    try:
+        vendor = get_object_or_404(Vendor, id=vendor_id)
+        
+        # Get devices from this vendor
+        vendor_devices = Device.objects.filter(vendor=vendor).select_related(
+            'device_type__subcategory__category'
+        ).order_by('-purchase_date')
+        
+        # Get maintenance schedules
+        maintenance_schedules = MaintenanceSchedule.objects.filter(
+            vendor=vendor
+        ).select_related('device').order_by('-scheduled_date')[:20]
+        
+        # Calculate statistics
+        total_devices = vendor_devices.count()
+        total_purchase_value = vendor_devices.aggregate(
+            total=Sum('purchase_price')
+        )['total'] or 0
+        
+        recent_purchases = vendor_devices.filter(
+            purchase_date__gte=timezone.now().date() - timedelta(days=365)
+        ).count()
+        
+        # Device categories from this vendor
+        category_breakdown = vendor_devices.values(
+            'device__device_type__subcategory__category__name'
+        ).annotate(count=Count('id')).order_by('-count')
+        
+        # Maintenance statistics
+        maintenance_stats = maintenance_schedules.values('status').annotate(
+            count=Count('id')
+        )
+        
+        context = {
+            'vendor': vendor,
+            'vendor_devices': vendor_devices[:10],  # Show latest 10
+            'maintenance_schedules': maintenance_schedules,
+            'total_devices': total_devices,
+            'total_purchase_value': total_purchase_value,
+            'recent_purchases': recent_purchases,
+            'category_breakdown': category_breakdown,
+            'maintenance_stats': maintenance_stats,
+        }
+        
+        return render(request, 'inventory/vendor_detail.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading vendor details: {str(e)}")
+        return redirect('inventory:vendor_list')
+
+@login_required
+@permission_required('inventory.add_vendor', raise_exception=True)
+def vendor_create(request):
+    """Create new vendor"""
+    if request.method == 'POST':
+        form = VendorForm(request.POST)
+        if form.is_valid():
+            try:
+                vendor = form.save()
+                
+                # Create audit log
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='CREATE',
+                    model_name='Vendor',
+                    object_id=str(vendor.id),
+                    object_repr=str(vendor),
+                    changes={'created': 'New vendor added'},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Vendor "{vendor.name}" created successfully.')
+                return redirect('inventory:vendor_detail', vendor_id=vendor.id)
+            except Exception as e:
+                messages.error(request, f'Error creating vendor: {str(e)}')
+    else:
+        form = VendorForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Vendor',
+        'action': 'Create',
+    }
+    return render(request, 'inventory/vendor_form.html', context)
+
+@login_required
+@permission_required('inventory.change_vendor', raise_exception=True)
+def vendor_edit(request, vendor_id):
+    """Edit vendor details"""
+    try:
+        vendor = get_object_or_404(Vendor, id=vendor_id)
+        
+        if request.method == 'POST':
+            form = VendorForm(request.POST, instance=vendor)
+            if form.is_valid():
+                try:
+                    vendor = form.save()
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='UPDATE',
+                        model_name='Vendor',
+                        object_id=str(vendor.id),
+                        object_repr=str(vendor),
+                        changes={'updated': 'Vendor details updated'},
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Vendor "{vendor.name}" updated successfully.')
+                    return redirect('inventory:vendor_detail', vendor_id=vendor.id)
+                except Exception as e:
+                    messages.error(request, f'Error updating vendor: {str(e)}')
+        else:
+            form = VendorForm(instance=vendor)
+        
+        context = {
+            'form': form,
+            'vendor': vendor,
+            'title': f'Edit {vendor.name}',
+            'action': 'Update',
+        }
+        return render(request, 'inventory/vendor_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading vendor: {str(e)}")
+        return redirect('inventory:vendor_list')
 
 # ================================
 # MAINTENANCE MANAGEMENT VIEWS
@@ -1167,7 +1820,7 @@ def maintenance_detail(request, maintenance_id):
 def maintenance_create(request):
     """Schedule new maintenance"""
     if request.method == 'POST':
-        form = MaintenanceForm(request.POST)
+        form = MaintenanceScheduleForm(request.POST)
         if form.is_valid():
             try:
                 maintenance = form.save(commit=False)
@@ -1191,7 +1844,7 @@ def maintenance_create(request):
             except Exception as e:
                 messages.error(request, f'Error scheduling maintenance: {str(e)}')
     else:
-        form = MaintenanceForm()
+        form = MaintenanceScheduleForm()
         
         # Pre-fill device if provided
         device_id = request.GET.get('device')
@@ -1208,6 +1861,197 @@ def maintenance_create(request):
         'action': 'Create',
     }
     return render(request, 'inventory/maintenance_form.html', context)
+
+@login_required
+@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
+def maintenance_edit(request, maintenance_id):
+    """Edit maintenance schedule"""
+    try:
+        maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
+        
+        if request.method == 'POST':
+            form = MaintenanceScheduleForm(request.POST, instance=maintenance)
+            if form.is_valid():
+                try:
+                    maintenance = form.save(commit=False)
+                    maintenance.updated_by = request.user
+                    maintenance.save()
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='UPDATE',
+                        model_name='MaintenanceSchedule',
+                        object_id=str(maintenance.id),
+                        object_repr=str(maintenance),
+                        changes={'updated': 'Maintenance schedule updated'},
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Maintenance "{maintenance.title}" updated successfully.')
+                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+                except Exception as e:
+                    messages.error(request, f'Error updating maintenance: {str(e)}')
+        else:
+            form = MaintenanceScheduleForm(instance=maintenance)
+        
+        context = {
+            'form': form,
+            'maintenance': maintenance,
+            'title': f'Edit {maintenance.title}',
+            'action': 'Update',
+        }
+        return render(request, 'inventory/maintenance_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading maintenance: {str(e)}")
+        return redirect('inventory:maintenance_list')
+
+@login_required
+@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
+def maintenance_complete(request, maintenance_id):
+    """Mark maintenance as completed"""
+    try:
+        maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
+        
+        if request.method == 'POST':
+            actual_cost = request.POST.get('actual_cost')
+            completion_notes = request.POST.get('completion_notes', '')
+            
+            try:
+                with transaction.atomic():
+                    maintenance.status = 'COMPLETED'
+                    maintenance.actual_date = timezone.now().date()
+                    maintenance.completion_notes = completion_notes
+                    maintenance.updated_by = request.user
+                    
+                    if actual_cost:
+                        try:
+                            maintenance.actual_cost = float(actual_cost)
+                        except ValueError:
+                            pass
+                    
+                    maintenance.save()
+                    
+                    # Update device last maintenance date
+                    device = maintenance.device
+                    device.last_maintenance_date = maintenance.actual_date
+                    device.updated_by = request.user
+                    device.save()
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='COMPLETE',
+                        model_name='MaintenanceSchedule',
+                        object_id=str(maintenance.id),
+                        object_repr=str(maintenance),
+                        changes={
+                            'status': 'COMPLETED',
+                            'actual_cost': actual_cost,
+                            'completion_date': str(maintenance.actual_date)
+                        },
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Maintenance "{maintenance.title}" marked as completed.')
+                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+                    
+            except Exception as e:
+                messages.error(request, f'Error completing maintenance: {str(e)}')
+        
+        context = {
+            'maintenance': maintenance,
+        }
+        return render(request, 'inventory/maintenance_complete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading maintenance: {str(e)}")
+        return redirect('inventory:maintenance_list')
+
+# ================================
+# DEVICE TYPE MANAGEMENT VIEWS
+# ================================
+
+@login_required
+def device_type_list(request):
+    """List all device types with device counts"""
+    try:
+        device_types = DeviceType.objects.select_related(
+            'subcategory__category'
+        ).prefetch_related('devices').annotate(
+            device_count=Count('devices')
+        ).order_by('subcategory__category__name', 'subcategory__name', 'name')
+        
+        # Search functionality
+        search = request.GET.get('search')
+        if search:
+            device_types = device_types.filter(
+                Q(name__icontains=search) |
+                Q(subcategory__name__icontains=search) |
+                Q(subcategory__category__name__icontains=search)
+            )
+        
+        # Category filter
+        category_id = request.GET.get('category')
+        if category_id:
+            device_types = device_types.filter(subcategory__category_id=category_id)
+        
+        # Pagination
+        paginator = Paginator(device_types, 25)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Get categories for filter
+        categories = DeviceCategory.objects.all().order_by('name')
+        
+        context = {
+            'page_obj': page_obj,
+            'categories': categories,
+            'search': search,
+            'selected_category': category_id,
+        }
+        
+        return render(request, 'inventory/device_type_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading device types: {str(e)}")
+        return render(request, 'inventory/device_type_list.html', {'page_obj': None})
+
+@login_required
+@permission_required('inventory.add_devicetype', raise_exception=True)
+def device_type_create(request):
+    """Create new device type"""
+    if request.method == 'POST':
+        form = DeviceTypeForm(request.POST)
+        if form.is_valid():
+            try:
+                device_type = form.save()
+                
+                # Create audit log
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='CREATE',
+                    model_name='DeviceType',
+                    object_id=str(device_type.id),
+                    object_repr=str(device_type),
+                    changes={'created': 'New device type added'},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Device type "{device_type.name}" created successfully.')
+                return redirect('inventory:device_type_list')
+            except Exception as e:
+                messages.error(request, f'Error creating device type: {str(e)}')
+    else:
+        form = DeviceTypeForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Device Type',
+        'action': 'Create',
+    }
+    return render(request, 'inventory/device_type_form.html', context)
 
 # ================================
 # AJAX & API VIEWS
@@ -1412,6 +2256,214 @@ def device_availability_check(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+@login_required
+@require_http_methods(["GET"])
+def get_staff_by_department(request, department_id):
+    """Get staff members for a specific department (AJAX)"""
+    try:
+        staff_members = Staff.objects.filter(department_id=department_id).order_by('last_name', 'first_name')
+        
+        data = {
+            'staff_members': [
+                {
+                    'id': staff.id,
+                    'name': staff.full_name,
+                    'employee_id': staff.employee_id,
+                    'designation': staff.designation or '',
+                }
+                for staff in staff_members
+            ]
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["GET"])
+def get_rooms_by_building(request, building_id):
+    """Get rooms for a specific building (AJAX)"""
+    try:
+        rooms = Room.objects.filter(building_id=building_id).order_by('name')
+        
+        data = {
+            'rooms': [
+                {
+                    'id': room.id,
+                    'name': room.name,
+                    'floor': room.floor or '',
+                    'department': room.department.name if room.department else '',
+                }
+                for room in rooms
+            ]
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["GET"])
+def get_locations_by_room(request, room_id):
+    """Get locations for a specific room (AJAX)"""
+    try:
+        locations = Location.objects.filter(room_id=room_id).order_by('name')
+        
+        data = {
+            'locations': [
+                {
+                    'id': location.id,
+                    'name': location.name,
+                    'location_type': location.location_type or '',
+                    'description': location.description or '',
+                }
+                for location in locations
+            ]
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+# ================================
+# BULK OPERATIONS VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def bulk_device_update(request):
+    """Bulk update device properties"""
+    if request.method == 'POST':
+        device_ids = request.POST.getlist('device_ids')
+        update_field = request.POST.get('update_field')
+        new_value = request.POST.get('new_value')
+        
+        if not device_ids:
+            messages.error(request, 'No devices selected.')
+            return redirect('inventory:device_list')
+        
+        if not update_field or not new_value:
+            messages.error(request, 'Please specify field and value to update.')
+            return redirect('inventory:device_list')
+        
+        try:
+            with transaction.atomic():
+                devices = Device.objects.filter(device_id__in=device_ids)
+                updated_count = 0
+                
+                for device in devices:
+                    if hasattr(device, update_field):
+                        if update_field == 'status':
+                            if new_value in dict(Device.STATUS_CHOICES):
+                                setattr(device, update_field, new_value)
+                                device.updated_by = request.user
+                                device.save()
+                                updated_count += 1
+                        elif update_field == 'condition':
+                            if new_value in dict(Device.CONDITION_CHOICES):
+                                setattr(device, update_field, new_value)
+                                device.updated_by = request.user
+                                device.save()
+                                updated_count += 1
+                        elif update_field == 'current_location':
+                            try:
+                                location = Location.objects.get(id=int(new_value))
+                                device.current_location = location
+                                device.updated_by = request.user
+                                device.save()
+                                updated_count += 1
+                            except (Location.DoesNotExist, ValueError):
+                                continue
+                
+                # Create audit log for bulk update
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='BULK_UPDATE',
+                    model_name='Device',
+                    object_id=','.join(device_ids),
+                    object_repr=f'Bulk update of {updated_count} devices',
+                    changes={
+                        'field': update_field,
+                        'new_value': new_value,
+                        'device_count': updated_count
+                    },
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Successfully updated {updated_count} devices.')
+                
+        except Exception as e:
+            messages.error(request, f'Error performing bulk update: {str(e)}')
+    
+    return redirect('inventory:device_list')
+
+@login_required
+@permission_required('inventory.change_assignment', raise_exception=True)
+def bulk_assignment_return(request):
+    """Bulk return multiple assignments"""
+    if request.method == 'POST':
+        assignment_ids = request.POST.getlist('assignment_ids')
+        return_date = request.POST.get('return_date')
+        return_notes = request.POST.get('return_notes', '')
+        
+        if not assignment_ids:
+            messages.error(request, 'No assignments selected.')
+            return redirect('inventory:assignment_list')
+        
+        try:
+            return_date_parsed = datetime.strptime(return_date, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return_date_parsed = timezone.now().date()
+        
+        try:
+            with transaction.atomic():
+                assignments = Assignment.objects.filter(
+                    assignment_id__in=assignment_ids,
+                    is_active=True
+                )
+                returned_count = 0
+                
+                for assignment in assignments:
+                    # Update assignment
+                    assignment.is_active = False
+                    assignment.actual_return_date = return_date_parsed
+                    assignment.return_notes = return_notes
+                    assignment.updated_by = request.user
+                    assignment.save()
+                    
+                    # Update device status
+                    device = assignment.device
+                    device.status = 'AVAILABLE'
+                    device.updated_by = request.user
+                    device.save()
+                    
+                    returned_count += 1
+                
+                # Create audit log for bulk return
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='BULK_RETURN',
+                    model_name='Assignment',
+                    object_id=','.join(assignment_ids),
+                    object_repr=f'Bulk return of {returned_count} assignments',
+                    changes={
+                        'return_date': str(return_date_parsed),
+                        'notes': return_notes,
+                        'assignment_count': returned_count
+                    },
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Successfully returned {returned_count} assignments.')
+                
+        except Exception as e:
+            messages.error(request, f'Error performing bulk return: {str(e)}')
+    
+    return redirect('inventory:assignment_list')
+
 # ================================
 # EXPORT FUNCTIONS
 # ================================
@@ -1505,67 +2557,510 @@ def export_assignments_csv(request):
         
     except Exception as e:
         messages.error(request, f"Error exporting assignments: {str(e)}")
-        return redirect('inventory:assignment_list'))
-def assignment_transfer(request, assignment_id):
-    """Transfer assignment to another staff/department"""
+        return redirect('inventory:assignment_list')
+
+# ================================
+# REPORTING VIEWS
+# ================================
+
+@login_required
+def inventory_summary_report(request):
+    """Generate comprehensive inventory summary report"""
     try:
-        assignment = get_object_or_404(Assignment, assignment_id=assignment_id, is_active=True)
+        # Device statistics by category
+        category_stats = DeviceCategory.objects.prefetch_related(
+            'subcategories__device_types__devices'
+        ).annotate(
+            total_devices=Count('subcategories__device_types__devices'),
+            assigned_devices=Count(
+                'subcategories__device_types__devices__assignments',
+                filter=Q(subcategories__device_types__devices__assignments__is_active=True)
+            ),
+            total_value=Sum('subcategories__device_types__devices__purchase_price')
+        ).order_by('name')
         
-        if request.method == 'POST':
-            form = TransferForm(request.POST)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        # Create new assignment
-                        new_assignment = Assignment.objects.create(
-                            device=assignment.device,
-                            assigned_to_staff=form.cleaned_data.get('new_assigned_to_staff'),
-                            assigned_to_department=form.cleaned_data.get('new_assigned_to_department'),
-                            assigned_to_location=form.cleaned_data.get('new_assigned_to_location'),
-                            is_temporary=assignment.is_temporary,
-                            expected_return_date=assignment.expected_return_date,
-                            purpose=form.cleaned_data.get('transfer_reason', ''),
-                            conditions=form.cleaned_data.get('conditions', ''),
-                            created_by=request.user,
-                            updated_by=request.user,
-                            requested_by=request.user
-                        )
-                        
-                        # Close old assignment
-                        assignment.is_active = False
-                        assignment.actual_return_date = timezone.now().date()
-                        assignment.updated_by = request.user
-                        assignment.save()
-                        
-                        # Create audit log
-                        AuditLog.objects.create(
-                            user=request.user,
-                            action='TRANSFER',
-                            model_name='Assignment',
-                            object_id=assignment.assignment_id,
-                            object_repr=str(assignment),
-                            changes={
-                                'transferred_to': str(new_assignment.assignment_id),
-                                'reason': form.cleaned_data.get('transfer_reason', '')
-                            },
-                            ip_address=request.META.get('REMOTE_ADDR')
-                        )
-                        
-                        messages.success(request, f'Assignment transferred successfully. New assignment ID: {new_assignment.assignment_id}')
-                        return redirect('inventory:assignment_detail', assignment_id=new_assignment.assignment_id)
-                        
-                except Exception as e:
-                    messages.error(request, f'Error transferring assignment: {str(e)}')
-        else:
-            form = TransferForm()
+        # Device status distribution
+        status_distribution = Device.objects.values('status').annotate(
+            count=Count('id'),
+            total_value=Sum('purchase_price')
+        ).order_by('status')
+        
+        # Assignment statistics
+        assignment_stats = {
+            'total_assignments': Assignment.objects.count(),
+            'active_assignments': Assignment.objects.filter(is_active=True).count(),
+            'temporary_assignments': Assignment.objects.filter(is_temporary=True, is_active=True).count(),
+            'overdue_assignments': Assignment.objects.filter(
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            ).count()
+        }
+        
+        # Department statistics
+        department_stats = Department.objects.annotate(
+            total_assignments=Count('department_assignments', filter=Q(department_assignments__is_active=True)),
+            total_staff_assignments=Count('staff_members__staff_assignments', filter=Q(staff_members__staff_assignments__is_active=True))
+        ).order_by('-total_assignments')[:10]
+        
+        # Vendor statistics
+        vendor_stats = Vendor.objects.annotate(
+            device_count=Count('devices'),
+            total_value=Sum('devices__purchase_price')
+        ).order_by('-device_count')[:10]
+        
+        # Warranty expiring soon
+        today = timezone.now().date()
+        warranty_expiring = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=90)
+        ).order_by('warranty_end_date')[:20]
         
         context = {
-            'form': form,
-            'assignment': assignment,
-            'title': f'Transfer Assignment {assignment.assignment_id}',
+            'category_stats': category_stats,
+            'status_distribution': status_distribution,
+            'assignment_stats': assignment_stats,
+            'department_stats': department_stats,
+            'vendor_stats': vendor_stats,
+            'warranty_expiring': warranty_expiring,
+            'report_date': today,
         }
-        return render(request, 'inventory/assignment_transfer.html', context)
+        
+        return render(request, 'inventory/inventory_summary_report.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading assignment: {str(e)}")
-        return redirect('inventory:assignment_list')
+        messages.error(request, f"Error generating report: {str(e)}")
+        return redirect('inventory:dashboard')
+
+@login_required
+def asset_utilization_report(request):
+    """Generate asset utilization report"""
+    try:
+        # Device utilization by department
+        dept_utilization = Department.objects.annotate(
+            total_devices=Count('department_assignments', filter=Q(department_assignments__is_active=True)) +
+                         Count('staff_members__staff_assignments', filter=Q(staff_members__staff_assignments__is_active=True)),
+            staff_count=Count('staff_members'),
+            devices_per_staff=Case(
+                When(staff_count=0, then=0),
+                default=F('total_devices') * 1.0 / F('staff_count'),
+                output_field=FloatField()
+            )
+        ).order_by('-total_devices')
+        
+        # Most assigned device types
+        popular_devices = DeviceType.objects.annotate(
+            assignment_count=Count('devices__assignments', filter=Q(devices__assignments__is_active=True))
+        ).order_by('-assignment_count')[:15]
+        
+        # Assignment duration analysis
+        completed_assignments = Assignment.objects.filter(
+            is_active=False,
+            actual_return_date__isnull=False
+        ).annotate(
+            duration=F('actual_return_date') - F('start_date')
+        ).order_by('-created_at')[:100]
+        
+        # Long-term assignments (over 1 year)
+        long_term_assignments = Assignment.objects.filter(
+            is_active=True,
+            start_date__lte=timezone.now().date() - timedelta(days=365)
+        ).select_related('device', 'assigned_to_staff').order_by('start_date')
+        
+        context = {
+            'dept_utilization': dept_utilization,
+            'popular_devices': popular_devices,
+            'completed_assignments': completed_assignments,
+            'long_term_assignments': long_term_assignments,
+            'report_date': timezone.now().date(),
+        }
+        
+        return render(request, 'inventory/asset_utilization_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating utilization report: {str(e)}")
+        return redirect('inventory:dashboard')
+
+@login_required
+def device_lifecycle_report(request):
+    """Generate device lifecycle analysis report"""
+    try:
+        # Devices by age groups
+        today = timezone.now().date()
+        
+        age_groups = {
+            'new': Device.objects.filter(purchase_date__gte=today - timedelta(days=365)).count(),
+            'recent': Device.objects.filter(
+                purchase_date__gte=today - timedelta(days=1095),
+                purchase_date__lt=today - timedelta(days=365)
+            ).count(),
+            'mature': Device.objects.filter(
+                purchase_date__gte=today - timedelta(days=1825),
+                purchase_date__lt=today - timedelta(days=1095)
+            ).count(),
+            'old': Device.objects.filter(purchase_date__lt=today - timedelta(days=1825)).count(),
+        }
+        
+        # Devices approaching retirement (>5 years old)
+        retirement_candidates = Device.objects.filter(
+            purchase_date__lt=today - timedelta(days=1825)
+        ).select_related('device_type__subcategory__category').order_by('purchase_date')[:20]
+        
+        # Maintenance frequency analysis
+        maintenance_frequency = Device.objects.annotate(
+            maintenance_count=Count('maintenance_schedules'),
+            last_maintenance=Max('maintenance_schedules__actual_date')
+        ).filter(maintenance_count__gt=0).order_by('-maintenance_count')[:20]
+        
+        # Devices never maintained
+        never_maintained = Device.objects.filter(
+            maintenance_schedules__isnull=True,
+            purchase_date__lt=today - timedelta(days=365)
+        ).order_by('purchase_date')[:20]
+        
+        # Cost analysis by year
+        yearly_purchases = Device.objects.filter(
+            purchase_date__isnull=False
+        ).extra(
+            select={'year': 'EXTRACT(year FROM purchase_date)'}
+        ).values('year').annotate(
+            count=Count('id'),
+            total_cost=Sum('purchase_price')
+        ).order_by('-year')
+        
+        context = {
+            'age_groups': age_groups,
+            'retirement_candidates': retirement_candidates,
+            'maintenance_frequency': maintenance_frequency,
+            'never_maintained': never_maintained,
+            'yearly_purchases': yearly_purchases,
+            'report_date': today,
+        }
+        
+        return render(request, 'inventory/device_lifecycle_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating lifecycle report: {str(e)}")
+        return redirect('inventory:dashboard')
+
+@login_required
+def warranty_management_report(request):
+    """Generate warranty management report"""
+    try:
+        today = timezone.now().date()
+        
+        # Warranty status categories
+        warranty_stats = {
+            'expired': Device.objects.filter(warranty_end_date__lt=today).count(),
+            'expiring_30': Device.objects.filter(
+                warranty_end_date__gte=today,
+                warranty_end_date__lte=today + timedelta(days=30)
+            ).count(),
+            'expiring_90': Device.objects.filter(
+                warranty_end_date__gte=today + timedelta(days=31),
+                warranty_end_date__lte=today + timedelta(days=90)
+            ).count(),
+            'active': Device.objects.filter(warranty_end_date__gt=today + timedelta(days=90)).count(),
+            'no_warranty': Device.objects.filter(warranty_end_date__isnull=True).count(),
+        }
+        
+        # Devices expiring soon (detailed list)
+        expiring_soon = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=90)
+        ).select_related(
+            'device_type__subcategory__category', 'vendor'
+        ).order_by('warranty_end_date')
+        
+        # Recently expired warranties
+        recently_expired = Device.objects.filter(
+            warranty_end_date__gte=today - timedelta(days=30),
+            warranty_end_date__lt=today
+        ).select_related(
+            'device_type__subcategory__category', 'vendor'
+        ).order_by('-warranty_end_date')
+        
+        # Warranty by vendor
+        vendor_warranty = Vendor.objects.annotate(
+            total_devices=Count('devices'),
+            expired_warranties=Count('devices', filter=Q(devices__warranty_end_date__lt=today)),
+            active_warranties=Count('devices', filter=Q(devices__warranty_end_date__gte=today))
+        ).filter(total_devices__gt=0).order_by('-total_devices')
+        
+        # Warranty cost implications (estimated)
+        expiring_value = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=90)
+        ).aggregate(total_value=Sum('purchase_price'))['total_value'] or 0
+        
+        context = {
+            'warranty_stats': warranty_stats,
+            'expiring_soon': expiring_soon,
+            'recently_expired': recently_expired,
+            'vendor_warranty': vendor_warranty,
+            'expiring_value': expiring_value,
+            'report_date': today,
+        }
+        
+        return render(request, 'inventory/warranty_management_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating warranty report: {str(e)}")
+        return redirect('inventory:dashboard')
+
+# ================================
+# SYSTEM ADMINISTRATION VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.view_auditlog', raise_exception=True)
+def system_statistics(request):
+    """Display comprehensive system statistics"""
+    try:
+        # Database statistics
+        db_stats = {
+            'total_devices': Device.objects.count(),
+            'total_assignments': Assignment.objects.count(),
+            'total_staff': Staff.objects.count(),
+            'total_departments': Department.objects.count(),
+            'total_locations': Location.objects.count(),
+            'total_vendors': Vendor.objects.count(),
+            'total_maintenance_schedules': MaintenanceSchedule.objects.count(),
+            'total_audit_logs': AuditLog.objects.count(),
+        }
+        
+        # Activity statistics (last 30 days)
+        thirty_days_ago = timezone.now().date() - timedelta(days=30)
+        activity_stats = {
+            'devices_added': Device.objects.filter(created_at__date__gte=thirty_days_ago).count(),
+            'assignments_created': Assignment.objects.filter(created_at__date__gte=thirty_days_ago).count(),
+            'assignments_returned': Assignment.objects.filter(
+                actual_return_date__gte=thirty_days_ago
+            ).count(),
+            'maintenance_completed': MaintenanceSchedule.objects.filter(
+                actual_date__gte=thirty_days_ago,
+                status='COMPLETED'
+            ).count(),
+        }
+        
+        # User activity
+        user_activity = User.objects.annotate(
+            recent_logins=Count('auditlog_entries', filter=Q(auditlog_entries__timestamp__date__gte=thirty_days_ago)),
+            total_actions=Count('auditlog_entries')
+        ).filter(total_actions__gt=0).order_by('-recent_logins')[:10]
+        
+        # System health indicators
+        health_indicators = {
+            'devices_without_assignments': Device.objects.filter(assignments__isnull=True).count(),
+            'overdue_assignments': Assignment.objects.filter(
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            ).count(),
+            'expired_warranties': Device.objects.filter(
+                warranty_end_date__lt=timezone.now().date()
+            ).count(),
+            'pending_maintenance': MaintenanceSchedule.objects.filter(
+                status__in=['SCHEDULED', 'IN_PROGRESS']
+            ).count(),
+        }
+        
+        # Recent system errors (from audit logs)
+        recent_errors = AuditLog.objects.filter(
+            action='ERROR',
+            timestamp__date__gte=thirty_days_ago
+        ).order_by('-timestamp')[:10]
+        
+        context = {
+            'db_stats': db_stats,
+            'activity_stats': activity_stats,
+            'user_activity': user_activity,
+            'health_indicators': health_indicators,
+            'recent_errors': recent_errors,
+            'report_date': timezone.now().date(),
+        }
+        
+        return render(request, 'inventory/system_statistics.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating system statistics: {str(e)}")
+        return redirect('inventory:dashboard')
+
+@login_required
+@permission_required('inventory.view_auditlog', raise_exception=True)
+def audit_log_list(request):
+    """Display audit logs with filtering"""
+    try:
+        audit_logs = AuditLog.objects.select_related('user').order_by('-timestamp')
+        
+        # Filters
+        user_id = request.GET.get('user')
+        action = request.GET.get('action')
+        model_name = request.GET.get('model')
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        
+        if user_id:
+            audit_logs = audit_logs.filter(user_id=user_id)
+        
+        if action:
+            audit_logs = audit_logs.filter(action=action)
+        
+        if model_name:
+            audit_logs = audit_logs.filter(model_name=model_name)
+        
+        if date_from:
+            try:
+                date_from_parsed = datetime.strptime(date_from, '%Y-%m-%d').date()
+                audit_logs = audit_logs.filter(timestamp__date__gte=date_from_parsed)
+            except ValueError:
+                messages.warning(request, 'Invalid date format for "from" date.')
+        
+        if date_to:
+            try:
+                date_to_parsed = datetime.strptime(date_to, '%Y-%m-%d').date()
+                audit_logs = audit_logs.filter(timestamp__date__lte=date_to_parsed)
+            except ValueError:
+                messages.warning(request, 'Invalid date format for "to" date.')
+        
+        # Pagination
+        paginator = Paginator(audit_logs, 50)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Get filter options
+        users = User.objects.filter(auditlog_entries__isnull=False).distinct().order_by('username')
+        actions = AuditLog.objects.values_list('action', flat=True).distinct()
+        models = AuditLog.objects.values_list('model_name', flat=True).distinct()
+        
+        context = {
+            'page_obj': page_obj,
+            'users': users,
+            'actions': actions,
+            'models': models,
+            'filters': {
+                'user': user_id,
+                'action': action,
+                'model': model_name,
+                'date_from': date_from,
+                'date_to': date_to,
+            }
+        }
+        
+        return render(request, 'inventory/audit_log_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading audit logs: {str(e)}")
+        return render(request, 'inventory/audit_log_list.html', {'page_obj': None})
+
+# ================================
+# DATA CLEANUP AND MAINTENANCE VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def data_cleanup_tools(request):
+    """Data cleanup and maintenance tools"""
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        try:
+            if action == 'cleanup_inactive_assignments':
+                # Remove very old inactive assignments
+                cutoff_date = timezone.now().date() - timedelta(days=2 * 365)  # 2 years
+                deleted_count = Assignment.objects.filter(
+                    is_active=False,
+                    actual_return_date__lt=cutoff_date
+                ).count()
+                
+                messages.success(request, f'Would delete {deleted_count} old inactive assignments (dry run).')
+                
+            elif action == 'fix_device_statuses':
+                # Fix device statuses based on active assignments
+                fixed_count = 0
+                for device in Device.objects.all():
+                    active_assignment = Assignment.objects.filter(device=device, is_active=True).first()
+                    if active_assignment and device.status != 'ASSIGNED':
+                        device.status = 'ASSIGNED'
+                        device.save()
+                        fixed_count += 1
+                    elif not active_assignment and device.status == 'ASSIGNED':
+                        device.status = 'AVAILABLE'
+                        device.save()
+                        fixed_count += 1
+                
+                messages.success(request, f'Fixed status for {fixed_count} devices.')
+                
+            elif action == 'update_maintenance_dates':
+                # Update device last maintenance dates
+                updated_count = 0
+                for device in Device.objects.all():
+                    last_maintenance = MaintenanceSchedule.objects.filter(
+                        device=device,
+                        status='COMPLETED',
+                        actual_date__isnull=False
+                    ).order_by('-actual_date').first()
+                    
+                    if last_maintenance and device.last_maintenance_date != last_maintenance.actual_date:
+                        device.last_maintenance_date = last_maintenance.actual_date
+                        device.save()
+                        updated_count += 1
+                
+                messages.success(request, f'Updated maintenance dates for {updated_count} devices.')
+                
+            else:
+                messages.error(request, 'Unknown cleanup action.')
+                
+        except Exception as e:
+            messages.error(request, f'Error during cleanup: {str(e)}')
+    
+    # Get cleanup statistics
+    cleanup_stats = {
+        'old_inactive_assignments': Assignment.objects.filter(
+            is_active=False,
+            actual_return_date__lt=timezone.now().date() - timedelta(days=2 * 365)
+        ).count(),
+        'devices_wrong_status': 0,  # Would need complex query
+        'devices_missing_maintenance_dates': Device.objects.filter(
+            last_maintenance_date__isnull=True,
+            maintenance_schedules__status='COMPLETED'
+        ).count(),
+    }
+    
+    context = {
+        'cleanup_stats': cleanup_stats,
+    }
+    
+    return render(request, 'inventory/data_cleanup_tools.html', context)
+
+# ================================
+# QR CODE AND UTILITY FUNCTIONS
+# ================================
+
+@login_required
+def generate_qr_codes_bulk(request):
+    """Generate QR codes for multiple devices"""
+    if request.method == 'POST':
+        device_ids = request.POST.getlist('device_ids')
+        
+        if not device_ids:
+            messages.error(request, 'No devices selected for QR code generation.')
+            return redirect('inventory:device_list')
+        
+        try:
+            # Simple fallback QR code generation (you can implement this later)
+            generated_count = 0
+            for device_id in device_ids:
+                try:
+                    device = Device.objects.get(device_id=device_id)
+                    # TODO: Implement QR code generation when qr_management app is available
+                    generated_count += 1
+                except Device.DoesNotExist:
+                    continue
+            
+            messages.success(request, f'QR code generation queued for {generated_count} devices. (Feature pending implementation)')
+            
+        except Exception as e:
+            messages.error(request, f'Error generating QR codes: {str(e)}')
+    
+    return redirect('inventory:device_list')
