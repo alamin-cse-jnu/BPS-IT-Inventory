@@ -1,146 +1,659 @@
-// static/js/main.js
+/* static/js/main.js - BPS IT Inventory Management JavaScript */
 
-/* ========================================
-   BPS IT Inventory Management System
-   Main JavaScript Functions
-======================================== */
-
-// Global Configuration
-const BPS = {
+// Global BPS object
+window.BPS = {
     config: {
         ajaxTimeout: 30000,
-        refreshInterval: 300000, // 5 minutes
-        animationDuration: 300,
-        debounceDelay: 500,
-        maxFileSize: 10 * 1024 * 1024, // 10MB
-        allowedFileTypes: ['.csv', '.xlsx', '.xls', '.pdf'],
-        dateFormat: 'YYYY-MM-DD',
-        timeFormat: 'HH:mm:ss'
-    },
-    
-    // Utility functions
-    utils: {
-        formatCurrency: function(amount) {
-            return new Intl.NumberFormat('en-BD', {
-                style: 'currency',
-                currency: 'BDT',
-                minimumFractionDigits: 0
-            }).format(amount);
-        },
-        
-        formatDate: function(date, format = 'DD/MM/YYYY') {
-            if (!date) return '';
-            const d = new Date(date);
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            
-            switch(format) {
-                case 'DD/MM/YYYY':
-                    return `${day}/${month}/${year}`;
-                case 'YYYY-MM-DD':
-                    return `${year}-${month}-${day}`;
-                case 'MM/DD/YYYY':
-                    return `${month}/${day}/${year}`;
-                default:
-                    return d.toLocaleDateString('en-BD');
-            }
-        },
-        
-        showLoading: function(element) {
-            const $el = $(element);
-            $el.prop('disabled', true);
-            const originalText = $el.text();
-            $el.data('original-text', originalText);
-            $el.html('<i class="fas fa-spinner fa-spin me-1"></i> Loading...');
-        },
-        
-        hideLoading: function(element) {
-            const $el = $(element);
-            $el.prop('disabled', false);
-            const originalText = $el.data('original-text');
-            if (originalText) {
-                $el.text(originalText);
-            }
-        },
-        
-        debounce: function(func, delay) {
-            let timeoutId;
-            return function (...args) {
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => func.apply(this, args), delay);
-            };
-        },
-        
-        getCookie: function(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
+        chartColors: {
+            primary: '#0d6efd',
+            success: '#198754',
+            warning: '#ffc107',
+            danger: '#dc3545',
+            info: '#0dcaf0',
+            secondary: '#6c757d'
         }
     },
     
-    // Toast notifications
-    toast: {
-        show: function(message, type = 'info', duration = 5000) {
-            const iconMap = {
-                'success': 'fas fa-check-circle',
-                'error': 'fas fa-exclamation-triangle',
-                'warning': 'fas fa-exclamation-circle',
-                'info': 'fas fa-info-circle'
+    utils: {},
+    forms: {},
+    tables: {},
+    charts: {},
+    qr: {},
+    notifications: {}
+};
+
+// ================================
+// UTILITY FUNCTIONS
+// ================================
+
+BPS.utils = {
+    // Get CSRF token from cookies
+    getCookie: function(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    },
+    
+    // Format currency
+    formatCurrency: function(amount) {
+        if (amount === null || amount === undefined) return 'N/A';
+        return new Intl.NumberFormat('en-BD', {
+            style: 'currency',
+            currency: 'BDT',
+            minimumFractionDigits: 2
+        }).format(amount);
+    },
+    
+    // Format date
+    formatDate: function(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    },
+    
+    // Show loading spinner
+    showLoading: function() {
+        $('#loading-spinner').removeClass('d-none');
+    },
+    
+    // Hide loading spinner
+    hideLoading: function() {
+        $('#loading-spinner').addClass('d-none');
+    },
+    
+    // Debounce function
+    debounce: function(func, wait, immediate) {
+        let timeout;
+        return function executedFunction() {
+            const context = this;
+            const args = arguments;
+            const later = function() {
+                timeout = null;
+                if (!immediate) func.apply(context, args);
             };
+            const callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(context, args);
+        };
+    },
+    
+    // Copy to clipboard
+    copyToClipboard: function(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            BPS.notifications.success('Copied to clipboard');
+        }).catch(function() {
+            BPS.notifications.error('Failed to copy to clipboard');
+        });
+    }
+};
+
+// ================================
+// FORM UTILITIES
+// ================================
+
+BPS.forms = {
+    // Initialize form enhancements
+    init: function() {
+        this.setupValidation();
+        this.setupDynamicSelects();
+        this.setupFileUploads();
+        this.setupDatePickers();
+    },
+    
+    // Setup form validation
+    setupValidation: function() {
+        // Bootstrap validation
+        const forms = document.querySelectorAll('.needs-validation');
+        Array.from(forms).forEach(form => {
+            form.addEventListener('submit', event => {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    BPS.notifications.warning('Please fill in all required fields correctly.');
+                }
+                form.classList.add('was-validated');
+            });
+        });
+        
+        // Custom validation rules
+        $('input[type="email"]').on('blur', function() {
+            const email = $(this).val();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (email && !emailRegex.test(email)) {
+                $(this).addClass('is-invalid');
+                $(this).siblings('.invalid-feedback').text('Please enter a valid email address.');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+        });
+        
+        // Phone number validation
+        $('input[data-validation="phone"]').on('blur', function() {
+            const phone = $(this).val();
+            const phoneRegex = /^[\+]?[0-9\-\(\)\s]+$/;
+            if (phone && !phoneRegex.test(phone)) {
+                $(this).addClass('is-invalid');
+                $(this).siblings('.invalid-feedback').text('Please enter a valid phone number.');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+        });
+    },
+    
+    // Setup dynamic select dropdowns
+    setupDynamicSelects: function() {
+        // Category -> Subcategory -> Device Type cascade
+        $('#id_category').on('change', function() {
+            const categoryId = $(this).val();
+            const subcategorySelect = $('#id_subcategory');
+            const deviceTypeSelect = $('#id_device_type');
             
-            const toast = $(`
-                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
-                    <div class="d-flex">
-                        <div class="toast-body">
-                            <i class="${iconMap[type]} me-2"></i>${message}
-                        </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                    </div>
-                </div>
-            `);
+            // Reset dependent selects
+            subcategorySelect.html('<option value="">Select Subcategory</option>');
+            deviceTypeSelect.html('<option value="">Select Device Type</option>');
             
-            // Create toast container if it doesn't exist
-            if ($('#toast-container').length === 0) {
-                $('body').append('<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;"></div>');
+            if (categoryId) {
+                $.ajax({
+                    url: '/inventory/ajax/subcategories/',
+                    data: { category_id: categoryId },
+                    success: function(data) {
+                        data.subcategories.forEach(function(item) {
+                            subcategorySelect.append(
+                                $('<option></option>').val(item.id).text(item.name)
+                            );
+                        });
+                    },
+                    error: function() {
+                        BPS.notifications.error('Failed to load subcategories');
+                    }
+                });
+            }
+        });
+        
+        $('#id_subcategory').on('change', function() {
+            const subcategoryId = $(this).val();
+            const deviceTypeSelect = $('#id_device_type');
+            
+            deviceTypeSelect.html('<option value="">Select Device Type</option>');
+            
+            if (subcategoryId) {
+                $.ajax({
+                    url: '/inventory/ajax/device-types/',
+                    data: { subcategory_id: subcategoryId },
+                    success: function(data) {
+                        data.device_types.forEach(function(item) {
+                            deviceTypeSelect.append(
+                                $('<option></option>').val(item.id).text(item.name)
+                            );
+                        });
+                    },
+                    error: function() {
+                        BPS.notifications.error('Failed to load device types');
+                    }
+                });
+            }
+        });
+        
+        // Building -> Room -> Location cascade
+        $('#id_building').on('change', function() {
+            const buildingId = $(this).val();
+            const roomSelect = $('#id_room');
+            const locationSelect = $('#id_location');
+            
+            roomSelect.html('<option value="">Select Room</option>');
+            locationSelect.html('<option value="">Select Location</option>');
+            
+            if (buildingId) {
+                $.ajax({
+                    url: `/inventory/ajax/rooms-by-building/${buildingId}/`,
+                    success: function(data) {
+                        data.rooms.forEach(function(item) {
+                            roomSelect.append(
+                                $('<option></option>').val(item.id).text(item.name)
+                            );
+                        });
+                    },
+                    error: function() {
+                        BPS.notifications.error('Failed to load rooms');
+                    }
+                });
+            }
+        });
+        
+        $('#id_room').on('change', function() {
+            const roomId = $(this).val();
+            const locationSelect = $('#id_location');
+            
+            locationSelect.html('<option value="">Select Location</option>');
+            
+            if (roomId) {
+                $.ajax({
+                    url: `/inventory/ajax/locations-by-room/${roomId}/`,
+                    success: function(data) {
+                        data.locations.forEach(function(item) {
+                            locationSelect.append(
+                                $('<option></option>').val(item.id).text(item.name)
+                            );
+                        });
+                    },
+                    error: function() {
+                        BPS.notifications.error('Failed to load locations');
+                    }
+                });
+            }
+        });
+        
+        // Department -> Staff cascade
+        $('#id_department').on('change', function() {
+            const departmentId = $(this).val();
+            const staffSelect = $('#id_assigned_to_staff');
+            
+            if (staffSelect.length) {
+                staffSelect.html('<option value="">Select Staff Member</option>');
+                
+                if (departmentId) {
+                    $.ajax({
+                        url: `/inventory/ajax/staff-by-department/${departmentId}/`,
+                        success: function(data) {
+                            data.staff_members.forEach(function(item) {
+                                staffSelect.append(
+                                    $('<option></option>').val(item.id).text(`${item.name} (${item.employee_id})`)
+                                );
+                            });
+                        },
+                        error: function() {
+                            BPS.notifications.error('Failed to load staff members');
+                        }
+                    });
+                }
+            }
+        });
+    },
+    
+    // Setup file upload enhancements
+    setupFileUploads: function() {
+        $('input[type="file"]').on('change', function() {
+            const file = this.files[0];
+            const label = $(this).siblings('label');
+            
+            if (file) {
+                label.text(file.name);
+                
+                // Validate file size (5MB limit)
+                if (file.size > 5 * 1024 * 1024) {
+                    BPS.notifications.error('File size should not exceed 5MB');
+                    $(this).val('');
+                    label.text('Choose file...');
+                }
+            } else {
+                label.text('Choose file...');
+            }
+        });
+    },
+    
+    // Setup date picker enhancements
+    setupDatePickers: function() {
+        // Set max date for date inputs to today (for past dates)
+        $('input[type="date"][data-max-today]').attr('max', new Date().toISOString().split('T')[0]);
+        
+        // Set min date for date inputs to today (for future dates)
+        $('input[type="date"][data-min-today]').attr('min', new Date().toISOString().split('T')[0]);
+    },
+    
+    // Submit form via AJAX
+    submitAjax: function(form, successCallback, errorCallback) {
+        const formData = new FormData(form);
+        
+        BPS.utils.showLoading();
+        
+        $.ajax({
+            url: $(form).attr('action') || window.location.href,
+            method: $(form).attr('method') || 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                BPS.utils.hideLoading();
+                if (successCallback) successCallback(response);
+            },
+            error: function(xhr) {
+                BPS.utils.hideLoading();
+                if (errorCallback) {
+                    errorCallback(xhr);
+                } else {
+                    BPS.notifications.error('An error occurred while submitting the form');
+                }
+            }
+        });
+    }
+};
+
+// ================================
+// TABLE UTILITIES
+// ================================
+
+BPS.tables = {
+    // Initialize table enhancements
+    init: function() {
+        this.setupSorting();
+        this.setupFiltering();
+        this.setupBulkActions();
+        this.setupRowActions();
+    },
+    
+    // Setup table sorting
+    setupSorting: function() {
+        $('.table-sortable th[data-sort]').on('click', function() {
+            const column = $(this).data('sort');
+            const currentOrder = $(this).data('order') || 'asc';
+            const newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+            
+            // Update URL with sort parameters
+            const url = new URL(window.location);
+            url.searchParams.set('sort', column);
+            url.searchParams.set('order', newOrder);
+            
+            window.location.href = url.toString();
+        });
+    },
+    
+    // Setup table filtering
+    setupFiltering: function() {
+        // Real-time search
+        $('#table-search').on('input', BPS.utils.debounce(function() {
+            const query = $(this).val().toLowerCase();
+            const rows = $('.table tbody tr');
+            
+            rows.each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(text.includes(query));
+            });
+        }, 300));
+        
+        // Column filters
+        $('.column-filter').on('change', function() {
+            const column = $(this).data('column');
+            const value = $(this).val();
+            const rows = $('.table tbody tr');
+            
+            if (value === '') {
+                rows.show();
+            } else {
+                rows.each(function() {
+                    const cellValue = $(this).find(`td[data-column="${column}"]`).text().trim();
+                    $(this).toggle(cellValue === value);
+                });
+            }
+        });
+    },
+    
+    // Setup bulk actions
+    setupBulkActions: function() {
+        // Select all checkbox
+        $('#select-all').on('change', function() {
+            const checked = $(this).prop('checked');
+            $('.row-select').prop('checked', checked);
+            BPS.tables.updateBulkActions();
+        });
+        
+        // Individual row checkboxes
+        $('.row-select').on('change', function() {
+            BPS.tables.updateBulkActions();
+        });
+        
+        // Bulk action buttons
+        $('.bulk-action').on('click', function() {
+            const action = $(this).data('action');
+            const selectedRows = $('.row-select:checked');
+            
+            if (selectedRows.length === 0) {
+                BPS.notifications.warning('Please select at least one item');
+                return;
             }
             
-            $('#toast-container').append(toast);
-            const bsToast = new bootstrap.Toast(toast[0], { delay: duration });
-            bsToast.show();
+            const selectedIds = selectedRows.map(function() {
+                return $(this).val();
+            }).get();
             
-            // Remove toast element after it's hidden
-            toast[0].addEventListener('hidden.bs.toast', function() {
-                toast.remove();
+            BPS.tables.performBulkAction(action, selectedIds);
+        });
+    },
+    
+    // Update bulk action button states
+    updateBulkActions: function() {
+        const selectedCount = $('.row-select:checked').length;
+        const totalCount = $('.row-select').length;
+        
+        $('.bulk-actions').toggle(selectedCount > 0);
+        $('.selected-count').text(selectedCount);
+        
+        // Update select all checkbox state
+        if (selectedCount === 0) {
+            $('#select-all').prop('indeterminate', false).prop('checked', false);
+        } else if (selectedCount === totalCount) {
+            $('#select-all').prop('indeterminate', false).prop('checked', true);
+        } else {
+            $('#select-all').prop('indeterminate', true).prop('checked', false);
+        }
+    },
+    
+    // Perform bulk action
+    performBulkAction: function(action, selectedIds) {
+        if (confirm(`Are you sure you want to ${action} ${selectedIds.length} items?`)) {
+            BPS.utils.showLoading();
+            
+            $.ajax({
+                url: `/inventory/bulk/${action}/`,
+                method: 'POST',
+                data: {
+                    'ids': selectedIds,
+                    'csrfmiddlewaretoken': BPS.utils.getCookie('csrftoken')
+                },
+                success: function(response) {
+                    BPS.utils.hideLoading();
+                    BPS.notifications.success(response.message || 'Bulk action completed successfully');
+                    location.reload();
+                },
+                error: function() {
+                    BPS.utils.hideLoading();
+                    BPS.notifications.error('Failed to perform bulk action');
+                }
             });
-        },
+        }
+    },
+    
+    // Setup row actions
+    setupRowActions: function() {
+        // Quick view
+        $('.btn-quick-view').on('click', function() {
+            const id = $(this).data('id');
+            const type = $(this).data('type');
+            BPS.tables.showQuickView(type, id);
+        });
         
-        success: function(message) {
-            this.show(message, 'success');
-        },
+        // Quick edit
+        $('.btn-quick-edit').on('click', function() {
+            const id = $(this).data('id');
+            const type = $(this).data('type');
+            BPS.tables.showQuickEdit(type, id);
+        });
+    },
+    
+    // Show quick view modal
+    showQuickView: function(type, id) {
+        $.ajax({
+            url: `/inventory/ajax/${type}-quick-info/${id}/`,
+            success: function(data) {
+                $('#quick-view-modal .modal-body').html(data.html);
+                $('#quick-view-modal').modal('show');
+            },
+            error: function() {
+                BPS.notifications.error('Failed to load quick view');
+            }
+        });
+    },
+    
+    // Show quick edit modal
+    showQuickEdit: function(type, id) {
+        // Implementation depends on specific requirements
+        BPS.notifications.info('Quick edit feature coming soon');
+    }
+};
+
+// ================================
+// NOTIFICATION SYSTEM
+// ================================
+
+BPS.notifications = {
+    show: function(message, type = 'info', duration = 5000) {
+        const alertClass = `alert-${type}`;
+        const iconClass = this.getIconClass(type);
         
-        error: function(message) {
-            this.show(message, 'danger');
-        },
+        const alert = $(`
+            <div class="alert ${alertClass} alert-dismissible fade show position-fixed" 
+                 style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;" role="alert">
+                <i class="${iconClass} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
         
-        warning: function(message) {
-            this.show(message, 'warning');
-        },
+        $('body').append(alert);
         
-        info: function(message) {
-            this.show(message, 'info');
+        // Auto-hide after duration
+        setTimeout(() => {
+            alert.fadeOut(() => alert.remove());
+        }, duration);
+    },
+    
+    getIconClass: function(type) {
+        const icons = {
+            'success': 'fas fa-check-circle',
+            'error': 'fas fa-exclamation-circle',
+            'warning': 'fas fa-exclamation-triangle',
+            'info': 'fas fa-info-circle',
+            'danger': 'fas fa-exclamation-circle'
+        };
+        return icons[type] || icons['info'];
+    },
+    
+    success: function(message, duration) {
+        this.show(message, 'success', duration);
+    },
+    
+    error: function(message, duration) {
+        this.show(message, 'danger', duration);
+    },
+    
+    warning: function(message, duration) {
+        this.show(message, 'warning', duration);
+    },
+    
+    info: function(message, duration) {
+        this.show(message, 'info', duration);
+    }
+};
+
+// ================================
+// QR CODE FUNCTIONALITY
+// ================================
+
+BPS.qr = {
+    scanner: null,
+    
+    // Initialize QR scanner
+    init: function() {
+        $('#start-scan').on('click', this.startScanning);
+        $('#stop-scan').on('click', this.stopScanning);
+    },
+    
+    startScanning: function() {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(function(stream) {
+                const video = document.getElementById('qr-video');
+                video.srcObject = stream;
+                video.play();
+                
+                $('#start-scan').hide();
+                $('#stop-scan').show();
+                
+                BPS.qr.scanner = stream;
+                BPS.qr.scanFrame();
+            })
+            .catch(function(err) {
+                BPS.notifications.error('Camera access denied or not available');
+                console.error('Camera error:', err);
+            });
+    },
+    
+    stopScanning: function() {
+        if (BPS.qr.scanner) {
+            const tracks = BPS.qr.scanner.getTracks();
+            tracks.forEach(track => track.stop());
+            BPS.qr.scanner = null;
+        }
+        
+        $('#start-scan').show();
+        $('#stop-scan').hide();
+        $('#qr-result').hide();
+    },
+    
+    scanFrame: function() {
+        const video = document.getElementById('qr-video');
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // QR code detection would go here with jsQR library
+            // For now, this is a placeholder
+            
+        }
+        
+        if (BPS.qr.scanner) {
+            requestAnimationFrame(BPS.qr.scanFrame);
+        }
+    },
+    
+    handleQRResult: function(result) {
+        $('#qr-result-text').text(result);
+        $('#qr-result').show();
+        
+        // Process QR code result
+        try {
+            const data = JSON.parse(result);
+            if (data.deviceId) {
+                window.location.href = `/inventory/devices/${data.deviceId}/`;
+            }
+        } catch (e) {
+            // If not JSON, treat as device ID
+            window.location.href = `/verify/${result}/`;
         }
     }
 };
+
+// ================================
+// INITIALIZATION
+// ================================
 
 // Document Ready Functions
 $(document).ready(function() {
@@ -154,15 +667,12 @@ $(document).ready(function() {
 BPS.init = function() {
     this.setupCSRF();
     this.setupAjaxDefaults();
-    this.setupFormValidation();
-    this.setupTableFeatures();
-    this.setupSearchFilters();
-    this.setupModals();
+    this.forms.init();
+    this.tables.init();
+    this.qr.init();
     this.setupTooltips();
-    this.setupDropdowns();
-    this.setupFormControls();
+    this.setupModals();
     this.setupKeyboardShortcuts();
-    this.startPeriodicTasks();
 };
 
 // CSRF Setup for Django
@@ -188,586 +698,55 @@ BPS.setupAjaxDefaults = function() {
             console.error('AJAX Error:', error);
             
             if (xhr.status === 403) {
-                BPS.toast.error('Access denied. Please check your permissions.');
+                BPS.notifications.error('Access denied. Please check your permissions.');
             } else if (xhr.status === 404) {
-                BPS.toast.error('The requested resource was not found.');
+                BPS.notifications.error('The requested resource was not found.');
             } else if (xhr.status === 500) {
-                BPS.toast.error('Internal server error. Please try again later.');
+                BPS.notifications.error('Internal server error. Please try again later.');
             } else if (status === 'timeout') {
-                BPS.toast.error('Request timeout. Please check your connection.');
-            } else {
-                BPS.toast.error('An unexpected error occurred. Please try again.');
+                BPS.notifications.error('Request timeout. Please check your connection.');
+            } else if (xhr.status !== 0) { // Don't show error for cancelled requests
+                BPS.notifications.error('An unexpected error occurred. Please try again.');
             }
         }
     });
 };
 
-// Form Validation
-BPS.setupFormValidation = function() {
-    // Bootstrap validation
-    const forms = document.querySelectorAll('.needs-validation');
-    Array.from(forms).forEach(form => {
-        form.addEventListener('submit', event => {
-            if (!form.checkValidity()) {
-                event.preventDefault();
-                event.stopPropagation();
-                BPS.toast.warning('Please fill in all required fields correctly.');
-            }
-            form.classList.add('was-validated');
-        });
-    });
-    
-    // Custom validation rules
-    $('input[type="email"]').on('blur', function() {
-        const email = $(this).val();
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (email && !emailRegex.test(email)) {
-            $(this).addClass('is-invalid');
-            $(this).siblings('.invalid-feedback').text('Please enter a valid email address.');
-        } else {
-            $(this).removeClass('is-invalid');
-        }
-    });
-    
-    // Phone number validation
-    $('input[type="tel"], input[name*="phone"]').on('blur', function() {
-        const phone = $(this).val();
-        const phoneRegex = /^(\+88)?01[3-9]\d{8}$/;
-        if (phone && !phoneRegex.test(phone)) {
-            $(this).addClass('is-invalid');
-            $(this).siblings('.invalid-feedback').text('Please enter a valid phone number.');
-        } else {
-            $(this).removeClass('is-invalid');
-        }
+// Setup tooltips
+BPS.setupTooltips = function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 };
 
-// Table Features
-BPS.setupTableFeatures = function() {
-    // Sortable tables
-    $('.sortable-table th[data-sort]').on('click', function() {
-        const $th = $(this);
-        const column = $th.data('sort');
-        const $table = $th.closest('table');
-        const $tbody = $table.find('tbody');
-        const rows = $tbody.find('tr').toArray();
-        
-        const isAsc = $th.hasClass('sort-asc');
-        
-        // Remove existing sort classes
-        $table.find('th').removeClass('sort-asc sort-desc');
-        
-        // Add new sort class
-        $th.addClass(isAsc ? 'sort-desc' : 'sort-asc');
-        
-        // Sort rows
-        rows.sort((a, b) => {
-            const aVal = $(a).find(`td:nth-child(${$th.index() + 1})`).text().trim();
-            const bVal = $(b).find(`td:nth-child(${$th.index() + 1})`).text().trim();
-            
-            if (isAsc) {
-                return bVal.localeCompare(aVal, undefined, { numeric: true });
-            } else {
-                return aVal.localeCompare(bVal, undefined, { numeric: true });
-            }
-        });
-        
-        $tbody.empty().append(rows);
-    });
-    
-    // Row selection
-    $('.selectable-table').each(function() {
-        const $table = $(this);
-        const $checkAll = $table.find('thead input[type="checkbox"]');
-        const $rowChecks = $table.find('tbody input[type="checkbox"]');
-        
-        $checkAll.on('change', function() {
-            $rowChecks.prop('checked', this.checked);
-            $table.trigger('selection:changed');
-        });
-        
-        $rowChecks.on('change', function() {
-            const totalRows = $rowChecks.length;
-            const checkedRows = $rowChecks.filter(':checked').length;
-            
-            $checkAll.prop('checked', checkedRows === totalRows);
-            $checkAll.prop('indeterminate', checkedRows > 0 && checkedRows < totalRows);
-            $table.trigger('selection:changed');
-        });
-    });
-};
-
-// Search and Filter Setup
-BPS.setupSearchFilters = function() {
-    // Live search
-    const debouncedSearch = BPS.utils.debounce(function(query, target) {
-        if (target) {
-            $(target).trigger('search:query', [query]);
-        }
-    }, BPS.config.debounceDelay);
-    
-    $('[data-live-search]').on('input', function() {
-        const query = $(this).val();
-        const target = $(this).data('live-search');
-        debouncedSearch(query, target);
-    });
-    
-    // Advanced filters
-    $('.filter-form').on('submit', function(e) {
-        e.preventDefault();
-        const $form = $(this);
-        const formData = $form.serialize();
-        const target = $form.data('target') || window.location.href;
-        
-        window.location.href = target + '?' + formData;
-    });
-    
-    // Clear filters
-    $('.clear-filters').on('click', function(e) {
-        e.preventDefault();
-        const $form = $(this).closest('form');
-        $form[0].reset();
-        $form.find('select').val('').trigger('change');
-        $form.submit();
-    });
-};
-
-// Modal Setup
+// Setup modals
 BPS.setupModals = function() {
     // Auto-focus first input in modals
     $('.modal').on('shown.bs.modal', function() {
-        $(this).find('input:visible:first').focus();
+        $(this).find('input[type="text"], input[type="email"], textarea').first().focus();
     });
     
-    // Confirm delete modals
-    $('[data-confirm-delete]').on('click', function(e) {
-        e.preventDefault();
-        const $btn = $(this);
-        const message = $btn.data('confirm-delete') || 'Are you sure you want to delete this item?';
-        const url = $btn.attr('href') || $btn.data('url');
-        
-        if (confirm(message)) {
-            if ($btn.data('method') === 'delete') {
-                // Send DELETE request
-                $.ajax({
-                    url: url,
-                    method: 'DELETE',
-                    success: function(response) {
-                        BPS.toast.success(response.message || 'Item deleted successfully');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    }
-                });
-            } else {
-                window.location.href = url;
-            }
-        }
-    });
-    
-    // Dynamic modal loading
-    $('[data-modal-url]').on('click', function(e) {
-        e.preventDefault();
-        const url = $(this).data('modal-url');
-        const target = $(this).data('modal-target') || '#dynamicModal';
-        
-        $.get(url)
-            .done(function(data) {
-                $(target).find('.modal-content').html(data);
-                $(target).modal('show');
-            })
-            .fail(function() {
-                BPS.toast.error('Failed to load modal content');
-            });
+    // Clear forms when modal is closed
+    $('.modal').on('hidden.bs.modal', function() {
+        $(this).find('form')[0]?.reset();
+        $(this).find('.is-invalid').removeClass('is-invalid');
+        $(this).find('.was-validated').removeClass('was-validated');
     });
 };
 
-// Tooltips and Popovers
-BPS.setupTooltips = function() {
-    // Initialize Bootstrap tooltips
-    $('[data-bs-toggle="tooltip"]').each(function() {
-        new bootstrap.Tooltip(this);
-    });
-    
-    // Initialize Bootstrap popovers
-    $('[data-bs-toggle="popover"]').each(function() {
-        new bootstrap.Popover(this);
-    });
-    
-    // Dynamic tooltips for truncated text
-    $('.text-truncate').each(function() {
-        const $el = $(this);
-        if (this.scrollWidth > this.clientWidth) {
-            $el.attr('title', $el.text());
-            new bootstrap.Tooltip(this);
-        }
-    });
-};
-
-// Dropdown Enhancements
-BPS.setupDropdowns = function() {
-    // Searchable dropdowns
-    $('.dropdown-search').each(function() {
-        const $dropdown = $(this);
-        const $input = $dropdown.find('.dropdown-search-input');
-        const $items = $dropdown.find('.dropdown-item');
-        
-        $input.on('input', function() {
-            const query = $(this).val().toLowerCase();
-            $items.each(function() {
-                const text = $(this).text().toLowerCase();
-                $(this).toggle(text.includes(query));
-            });
-        });
-    });
-    
-    // Multi-select dropdowns
-    $('.dropdown-multiselect').each(function() {
-        const $dropdown = $(this);
-        const $button = $dropdown.find('.dropdown-toggle');
-        const $checkboxes = $dropdown.find('input[type="checkbox"]');
-        
-        $checkboxes.on('change', function() {
-            const selected = $checkboxes.filter(':checked').length;
-            const total = $checkboxes.length;
-            
-            if (selected === 0) {
-                $button.text('Select items');
-            } else if (selected === total) {
-                $button.text('All selected');
-            } else {
-                $button.text(`${selected} selected`);
-            }
-        });
-    });
-};
-
-// Form Controls
-BPS.setupFormControls = function() {
-    // Auto-resize textareas
-    $('textarea[data-auto-resize]').each(function() {
-        const $textarea = $(this);
-        
-        function resize() {
-            $textarea.css('height', 'auto');
-            $textarea.css('height', $textarea[0].scrollHeight + 'px');
-        }
-        
-        $textarea.on('input', resize);
-        resize(); // Initial resize
-    });
-    
-    // Number input formatting
-    $('input[data-format="currency"]').on('blur', function() {
-        const value = parseFloat($(this).val());
-        if (!isNaN(value)) {
-            $(this).val(BPS.utils.formatCurrency(value));
-        }
-    });
-    
-    // Date picker setup
-    $('input[type="date"]').each(function() {
-        const $input = $(this);
-        if (!$input.val() && $input.data('default') === 'today') {
-            $input.val(new Date().toISOString().split('T')[0]);
-        }
-    });
-    
-    // File upload enhancements
-    $('input[type="file"]').on('change', function() {
-        const $input = $(this);
-        const file = this.files[0];
-        const $feedback = $input.siblings('.file-feedback');
-        
-        if (file) {
-            // Check file size
-            if (file.size > BPS.config.maxFileSize) {
-                $input.addClass('is-invalid');
-                $feedback.text('File size exceeds 10MB limit');
-                return;
-            }
-            
-            // Check file type
-            const extension = '.' + file.name.split('.').pop().toLowerCase();
-            if (!BPS.config.allowedFileTypes.includes(extension)) {
-                $input.addClass('is-invalid');
-                $feedback.text('Invalid file type. Allowed: ' + BPS.config.allowedFileTypes.join(', '));
-                return;
-            }
-            
-            $input.removeClass('is-invalid');
-            $feedback.text(`Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
-        }
-    });
-    
-    // Dependent dropdowns
-    $('[data-depends-on]').each(function() {
-        const $dependent = $(this);
-        const parentSelector = $dependent.data('depends-on');
-        const $parent = $(parentSelector);
-        const url = $dependent.data('url');
-        
-        $parent.on('change', function() {
-            const parentValue = $(this).val();
-            
-            if (!parentValue) {
-                $dependent.empty().append('<option value="">Select...</option>');
-                return;
-            }
-            
-            BPS.utils.showLoading($dependent);
-            
-            $.get(url, { parent_id: parentValue })
-                .done(function(data) {
-                    $dependent.empty().append('<option value="">Select...</option>');
-                    $.each(data, function(index, item) {
-                        $dependent.append(`<option value="${item.id}">${item.name}</option>`);
-                    });
-                })
-                .fail(function() {
-                    BPS.toast.error('Failed to load dependent options');
-                })
-                .always(function() {
-                    BPS.utils.hideLoading($dependent);
-                });
-        });
-    });
-};
-
-// Keyboard Shortcuts
+// Setup keyboard shortcuts
 BPS.setupKeyboardShortcuts = function() {
     $(document).on('keydown', function(e) {
-        // Ctrl+S to save forms
-        if (e.ctrlKey && e.key === 's') {
+        // Ctrl+/ or Cmd+/ for global search
+        if ((e.ctrlKey || e.metaKey) && e.key === '/') {
             e.preventDefault();
-            const $form = $('form:visible').first();
-            if ($form.length) {
-                $form.submit();
-                BPS.toast.info('Form submitted');
-            }
+            $('#global-search-input').focus();
         }
         
         // Escape to close modals
         if (e.key === 'Escape') {
             $('.modal.show').modal('hide');
         }
-        
-        // Ctrl+F to focus search
-        if (e.ctrlKey && e.key === 'f') {
-            e.preventDefault();
-            const $search = $('[data-live-search], input[type="search"]').first();
-            if ($search.length) {
-                $search.focus();
-            }
-        }
     });
 };
-
-// Periodic Tasks
-BPS.startPeriodicTasks = function() {
-    // Refresh notifications every 5 minutes
-    setInterval(function() {
-        BPS.refreshNotifications();
-    }, BPS.config.refreshInterval);
-    
-    // Auto-save form drafts every 30 seconds
-    setInterval(function() {
-        BPS.autoSaveFormDrafts();
-    }, 30000);
-};
-
-// Notification Functions
-BPS.refreshNotifications = function() {
-    $.get('/api/notifications/')
-        .done(function(data) {
-            $('#notification-count').text(data.unread_count);
-            
-            if (data.notifications && data.notifications.length > 0) {
-                let html = '';
-                data.notifications.forEach(function(notification) {
-                    html += `
-                        <div class="notification-item p-2 border-bottom">
-                            <div class="d-flex align-items-start">
-                                <i class="fas fa-${notification.icon} me-2 mt-1 text-${notification.type}"></i>
-                                <div class="flex-grow-1">
-                                    <div class="fw-bold">${notification.title}</div>
-                                    <div class="text-muted small">${notification.message}</div>
-                                    <div class="text-muted small">${notification.time_ago}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                $('#notification-list').html(html);
-            }
-        })
-        .fail(function() {
-            console.warn('Failed to refresh notifications');
-        });
-};
-
-// Auto-save Form Drafts
-BPS.autoSaveFormDrafts = function() {
-    $('form[data-auto-save]').each(function() {
-        const $form = $(this);
-        const formId = $form.data('auto-save');
-        const formData = $form.serialize();
-        
-        // Only save if form has been modified
-        if (formData !== $form.data('last-saved')) {
-            localStorage.setItem(`form_draft_${formId}`, formData);
-            $form.data('last-saved', formData);
-        }
-    });
-};
-
-// Load Form Drafts
-BPS.loadFormDrafts = function() {
-    $('form[data-auto-save]').each(function() {
-        const $form = $(this);
-        const formId = $form.data('auto-save');
-        const savedData = localStorage.getItem(`form_draft_${formId}`);
-        
-        if (savedData) {
-            const params = new URLSearchParams(savedData);
-            params.forEach((value, key) => {
-                const $field = $form.find(`[name="${key}"]`);
-                if ($field.length) {
-                    if ($field.is(':checkbox') || $field.is(':radio')) {
-                        $field.filter(`[value="${value}"]`).prop('checked', true);
-                    } else {
-                        $field.val(value);
-                    }
-                }
-            });
-            
-            BPS.toast.info('Form draft restored');
-        }
-    });
-};
-
-// Clear Form Drafts
-BPS.clearFormDraft = function(formId) {
-    localStorage.removeItem(`form_draft_${formId}`);
-};
-
-// Bulk Actions
-BPS.setupBulkActions = function() {
-    $('.bulk-action-btn').on('click', function(e) {
-        e.preventDefault();
-        const $btn = $(this);
-        const action = $btn.data('action');
-        const $table = $($btn.data('table'));
-        const selectedIds = [];
-        
-        $table.find('tbody input[type="checkbox"]:checked').each(function() {
-            selectedIds.push($(this).val());
-        });
-        
-        if (selectedIds.length === 0) {
-            BPS.toast.warning('Please select at least one item');
-            return;
-        }
-        
-        const message = $btn.data('confirm') || `Are you sure you want to ${action} ${selectedIds.length} item(s)?`;
-        
-        if (confirm(message)) {
-            const url = $btn.data('url');
-            
-            $.post(url, {
-                action: action,
-                selected_ids: selectedIds
-            })
-            .done(function(response) {
-                BPS.toast.success(response.message || 'Bulk action completed successfully');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            })
-            .fail(function() {
-                BPS.toast.error('Bulk action failed');
-            });
-        }
-    });
-};
-
-// Export Functions
-BPS.exportData = function(format, url, params = {}) {
-    const exportUrl = new URL(url, window.location.origin);
-    exportUrl.searchParams.append('export', format);
-    
-    Object.keys(params).forEach(key => {
-        exportUrl.searchParams.append(key, params[key]);
-    });
-    
-    BPS.toast.info(`Preparing ${format.toUpperCase()} export...`);
-    
-    // Create temporary link and click it
-    const link = document.createElement('a');
-    link.href = exportUrl.toString();
-    link.download = '';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-};
-
-// QR Code Functions
-BPS.qr = {
-    generate: function(deviceId, format = 'png') {
-        const url = `/qr/generate/${deviceId}/?format=${format}&download=1`;
-        window.open(url, '_blank');
-    },
-    
-    scan: function(onSuccess, onError) {
-        if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
-            // QR scanning implementation would go here
-            // This is a placeholder for future QR scanning functionality
-            BPS.toast.info('QR scanning feature coming soon!');
-        } else {
-            BPS.toast.error('Camera not supported in this browser');
-            if (onError) onError('Camera not supported');
-        }
-    },
-    
-    verify: function(deviceId) {
-        const url = `/qr/verify/${deviceId}/`;
-        window.open(url, '_blank');
-    }
-};
-
-// Device Functions
-BPS.device = {
-    quickInfo: function(deviceId, callback) {
-        $.get(`/inventory/ajax/device/${deviceId}/info/`)
-            .done(function(data) {
-                if (callback) callback(null, data);
-            })
-            .fail(function() {
-                if (callback) callback('Failed to load device info');
-            });
-    },
-    
-    assign: function(deviceId) {
-        window.location.href = `/inventory/assignments/create/${deviceId}/`;
-    },
-    
-    return: function(assignmentId) {
-        window.location.href = `/inventory/assignments/${assignmentId}/return/`;
-    }
-};
-
-// Initialize when DOM is ready
-$(document).ready(function() {
-    // Load any saved form drafts
-    BPS.loadFormDrafts();
-    
-    // Setup bulk actions
-    BPS.setupBulkActions();
-    
-    // Auto-hide success messages
-    setTimeout(function() {
-        $('.alert-success').fadeOut();
-    }, 5000);
-    
-    console.log('BPS Inventory System ready');
-});

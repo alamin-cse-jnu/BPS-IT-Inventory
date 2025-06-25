@@ -1,0 +1,645 @@
+/* static/css/custom.css - BPS IT Inventory Management Custom Styles */
+
+/* ================================
+   GLOBAL STYLES
+   ================================ */
+
+:root {
+    --bps-primary: #0d6efd;
+    --bps-secondary: #6c757d;
+    --bps-success: #198754;
+    --bps-info: #0dcaf0;
+    --bps-warning: #ffc107;
+    --bps-danger: #dc3545;
+    --bps-light: #f8f9fa;
+    --bps-dark: #212529;
+    --bps-border-radius: 0.375rem;
+    --bps-box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --bps-transition: all 0.15s ease-in-out;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #495057;
+}
+
+/* ================================
+   NAVIGATION ENHANCEMENTS
+   ================================ */
+
+.navbar-brand {
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.navbar-nav .nav-link {
+    font-weight: 500;
+    transition: var(--bps-transition);
+}
+
+.navbar-nav .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: var(--bps-border-radius);
+}
+
+.navbar-nav .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: var(--bps-border-radius);
+}
+
+/* Search Bar Enhancements */
+.navbar .input-group {
+    width: 300px;
+}
+
+@media (max-width: 768px) {
+    .navbar .input-group {
+        width: 100%;
+        margin-top: 1rem;
+    }
+}
+
+/* ================================
+   CARD ENHANCEMENTS
+   ================================ */
+
+.card {
+    border: none;
+    box-shadow: var(--bps-box-shadow);
+    transition: var(--bps-transition);
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    font-weight: 600;
+}
+
+/* Stat Cards */
+.stat-card {
+    transition: var(--bps-transition);
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.2);
+}
+
+.stat-card .card-footer {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* ================================
+   BUTTON ENHANCEMENTS
+   ================================ */
+
+.btn {
+    font-weight: 500;
+    transition: var(--bps-transition);
+    border-radius: var(--bps-border-radius);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+}
+
+.btn-group .btn {
+    transform: none;
+}
+
+.btn-group .btn:hover {
+    transform: none;
+}
+
+/* Action Buttons */
+.btn-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* ================================
+   TABLE ENHANCEMENTS
+   ================================ */
+
+.table {
+    font-size: 0.9rem;
+}
+
+.table th {
+    font-weight: 600;
+    color: var(--bps-dark);
+    border-top: none;
+    background-color: var(--bps-light);
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Responsive Tables */
+.table-responsive {
+    border-radius: var(--bps-border-radius);
+    box-shadow: var(--bps-box-shadow);
+}
+
+/* ================================
+   FORM ENHANCEMENTS
+   ================================ */
+
+.form-control {
+    border-radius: var(--bps-border-radius);
+    transition: var(--bps-transition);
+}
+
+.form-control:focus {
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: #86b7fe;
+}
+
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.form-text {
+    font-size: 0.875em;
+    color: #6c757d;
+}
+
+/* Form Sections */
+.form-section {
+    background-color: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: var(--bps-border-radius);
+    margin-bottom: 1.5rem;
+    border-left: 4px solid var(--bps-primary);
+}
+
+.form-section h5 {
+    color: var(--bps-primary);
+    margin-bottom: 1rem;
+}
+
+/* ================================
+   BADGE ENHANCEMENTS
+   ================================ */
+
+.badge {
+    font-weight: 500;
+    font-size: 0.75em;
+    padding: 0.35em 0.65em;
+}
+
+/* Status Badges */
+.badge-status-available {
+    background-color: var(--bps-success);
+}
+
+.badge-status-assigned {
+    background-color: var(--bps-primary);
+}
+
+.badge-status-maintenance {
+    background-color: var(--bps-warning);
+    color: var(--bps-dark);
+}
+
+.badge-status-disposed {
+    background-color: var(--bps-danger);
+}
+
+.badge-condition-excellent {
+    background-color: #28a745;
+}
+
+.badge-condition-good {
+    background-color: #20c997;
+}
+
+.badge-condition-fair {
+    background-color: #ffc107;
+    color: var(--bps-dark);
+}
+
+.badge-condition-poor {
+    background-color: #fd7e14;
+}
+
+.badge-condition-damaged {
+    background-color: #dc3545;
+}
+
+/* ================================
+   TIMELINE COMPONENT
+   ================================ */
+
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: -22px;
+    top: 20px;
+    width: 2px;
+    height: calc(100% + 10px);
+    background-color: #dee2e6;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -30px;
+    top: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--bps-primary);
+}
+
+.timeline-content {
+    background-color: #f8f9fa;
+    padding: 12px;
+    border-radius: var(--bps-border-radius);
+    border-left: 3px solid var(--bps-primary);
+}
+
+/* ================================
+   ALERT ENHANCEMENTS
+   ================================ */
+
+.alert {
+    border: none;
+    border-radius: var(--bps-border-radius);
+    border-left: 4px solid;
+}
+
+.alert-primary {
+    border-left-color: var(--bps-primary);
+}
+
+.alert-success {
+    border-left-color: var(--bps-success);
+}
+
+.alert-warning {
+    border-left-color: var(--bps-warning);
+}
+
+.alert-danger {
+    border-left-color: var(--bps-danger);
+}
+
+.alert-info {
+    border-left-color: var(--bps-info);
+}
+
+/* ================================
+   PAGINATION ENHANCEMENTS
+   ================================ */
+
+.pagination {
+    margin-bottom: 0;
+}
+
+.page-link {
+    font-weight: 500;
+    color: var(--bps-primary);
+    border-radius: var(--bps-border-radius);
+    margin: 0 2px;
+    border: 1px solid #dee2e6;
+}
+
+.page-link:hover {
+    color: #0a58ca;
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.page-item.active .page-link {
+    background-color: var(--bps-primary);
+    border-color: var(--bps-primary);
+}
+
+/* ================================
+   BREADCRUMB ENHANCEMENTS
+   ================================ */
+
+.breadcrumb {
+    background-color: transparent;
+    margin-bottom: 0;
+}
+
+.breadcrumb-item a {
+    color: var(--bps-primary);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: #0a58ca;
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: #6c757d;
+}
+
+/* ================================
+   MODAL ENHANCEMENTS
+   ================================ */
+
+.modal-content {
+    border: none;
+    border-radius: var(--bps-border-radius);
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+.modal-header {
+    background-color: var(--bps-light);
+    border-bottom: 1px solid #dee2e6;
+    border-radius: var(--bps-border-radius) var(--bps-border-radius) 0 0;
+}
+
+.modal-footer {
+    background-color: var(--bps-light);
+    border-top: 1px solid #dee2e6;
+    border-radius: 0 0 var(--bps-border-radius) var(--bps-border-radius);
+}
+
+/* ================================
+   LOADING STATES
+   ================================ */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.loading-spinner {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* ================================
+   UTILITY CLASSES
+   ================================ */
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.text-truncate-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0c5aa6 100%);
+}
+
+.bg-gradient-success {
+    background: linear-gradient(135deg, #198754 0%, #146843 100%);
+}
+
+.bg-gradient-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+}
+
+.bg-gradient-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+}
+
+/* ================================
+   RESPONSIVE ADJUSTMENTS
+   ================================ */
+
+@media (max-width: 576px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn-group-vertical .btn {
+        margin-bottom: 0.5rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .navbar-nav .dropdown-menu {
+        position: static;
+        float: none;
+        box-shadow: none;
+        border: none;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .timeline {
+        padding-left: 20px;
+    }
+    
+    .timeline-marker {
+        left: -24px;
+    }
+    
+    .timeline-item:not(:last-child)::before {
+        left: -17px;
+    }
+}
+
+/* ================================
+   PRINT STYLES
+   ================================ */
+
+@media print {
+    .navbar,
+    .breadcrumb,
+    .btn,
+    .card-footer,
+    .pagination {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+    }
+    
+    .table {
+        font-size: 0.8rem;
+    }
+    
+    .container-fluid {
+        padding: 0 !important;
+    }
+}
+
+/* ================================
+   CUSTOM ANIMATIONS
+   ================================ */
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(13, 110, 253, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+    }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* ================================
+   QR CODE SPECIFIC STYLES
+   ================================ */
+
+.qr-scanner-container {
+    position: relative;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.qr-scanner-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 2px solid var(--bps-success);
+    border-radius: var(--bps-border-radius);
+    pointer-events: none;
+}
+
+.qr-scanner-corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--bps-success);
+}
+
+.qr-scanner-corner.top-left {
+    top: 10px;
+    left: 10px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.qr-scanner-corner.top-right {
+    top: 10px;
+    right: 10px;
+    border-left: none;
+    border-bottom: none;
+}
+
+.qr-scanner-corner.bottom-left {
+    bottom: 10px;
+    left: 10px;
+    border-right: none;
+    border-top: none;
+}
+
+.qr-scanner-corner.bottom-right {
+    bottom: 10px;
+    right: 10px;
+    border-left: none;
+    border-top: none;
+}
+
+/* ================================
+   DARK MODE SUPPORT (Optional)
+   ================================ */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bps-light: #343a40;
+        --bps-dark: #f8f9fa;
+    }
+    
+    body {
+        background-color: #121212;
+        color: #e9ecef;
+    }
+    
+    .card {
+        background-color: #1e1e1e;
+        color: #e9ecef;
+    }
+    
+    .table {
+        color: #e9ecef;
+    }
+    
+    .table th {
+        background-color: #2d3436;
+        color: #e9ecef;
+    }
+    
+    .form-control {
+        background-color: #2d3436;
+        border-color: #495057;
+        color: #e9ecef;
+    }
+    
+    .form-control:focus {
+        background-color: #2d3436;
+        border-color: #86b7fe;
+        color: #e9ecef;
+    }
+}
