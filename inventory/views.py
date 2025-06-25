@@ -129,15 +129,7 @@ class DepartmentForm(forms.ModelForm):
     """Simple form for departments"""
     class Meta:
         model = Department
-        fields = ['name', 'code', 'floor', 'head_of_department', 'contact_phone', 'contact_email']
-        widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'floor': forms.Select(attrs={'class': 'form-control'}),
-            'head_of_department': forms.TextInput(attrs={'class': 'form-control'}),
-            'contact_phone': forms.TextInput(attrs={'class': 'form-control'}),
-            'contact_email': forms.EmailInput(attrs={'class': 'form-control'}),
-        }
+        fields = ['name', 'code', ]
 
 # Alias the correctly named forms
 MaintenanceForm = MaintenanceScheduleForm
@@ -404,20 +396,34 @@ def device_detail(request, device_id):
         return redirect('inventory:device_list')
 
 @login_required
-def device_add(request):
-    """Add new device"""
+@permission_required('inventory.add_device', raise_exception=True)
+def device_create(request):
+    """Create a new device with comprehensive validation"""
     if request.method == 'POST':
-        form = DeviceForm(request.POST)
+        form = DeviceForm(request.POST, request.FILES)
         if form.is_valid():
             try:
-                device = form.save(commit=False)
-                device.created_by = request.user
-                device.updated_by = request.user
-                device.save()
-                messages.success(request, f'Device "{device.device_name}" added successfully.')
-                return redirect('inventory:device_detail', device_id=device.device_id)
+                with transaction.atomic():
+                    device = form.save(commit=False)
+                    device.created_by = request.user
+                    device.updated_by = request.user
+                    device.save()
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='CREATE',
+                        model_name='Device',
+                        object_id=device.device_id,
+                        object_repr=str(device),
+                        changes={'created': 'New device added'},
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Device "{device.device_name}" ({device.device_id}) created successfully.')
+                    return redirect('inventory:device_detail', device_id=device.device_id)
             except Exception as e:
-                messages.error(request, f'Error adding device: {str(e)}')
+                messages.error(request, f'Error creating device: {str(e)}')
     else:
         form = DeviceForm()
     
@@ -425,6 +431,7 @@ def device_add(request):
         'form': form,
         'title': 'Add New Device',
         'action': 'Create',
+        'submit_text': 'Create Device'
     }
     return render(request, 'inventory/device_form.html', context)
 
@@ -534,20 +541,6 @@ def device_delete(request, device_id):
     except Exception as e:
         messages.error(request, f"Error processing request: {str(e)}")
         return redirect('inventory:device_list')
-
-@login_required
-def device_bulk_actions(request):
-    """Bulk device actions"""
-    # Simple stub implementation
-    messages.info(request, "Bulk actions feature coming soon!")
-    return redirect('inventory:device_list')
-
-@login_required
-def device_export_csv(request):
-    """Export devices to CSV"""
-    # Simple stub implementation  
-    messages.info(request, "CSV export feature coming soon!")
-    return redirect('inventory:device_list')
 
 # ================================
 # ASSIGNMENT MANAGEMENT VIEWS
@@ -3076,22 +3069,78 @@ def generate_qr_codes_bulk(request):
 # AJAX VIEWS  
 # ================================
 
+@require_http_methods(["GET"])
 def ajax_get_subcategories(request):
     """AJAX: Get subcategories for category"""
-    return JsonResponse({'subcategories': []})
+    try:
+        category_id = request.GET.get('category_id')
+        if category_id:
+            from .models import DeviceSubCategory
+            subcategories = DeviceSubCategory.objects.filter(
+                category_id=category_id, is_active=True
+            ).values('id', 'name')
+            return JsonResponse({'subcategories': list(subcategories)})
+        return JsonResponse({'subcategories': []})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
+@require_http_methods(["GET"])
 def ajax_get_device_types(request):
     """AJAX: Get device types for subcategory"""
-    return JsonResponse({'device_types': []})
+    try:
+        subcategory_id = request.GET.get('subcategory_id')
+        if subcategory_id:
+            device_types = DeviceType.objects.filter(
+                subcategory_id=subcategory_id, is_active=True
+            ).values('id', 'name')
+            return JsonResponse({'device_types': list(device_types)})
+        return JsonResponse({'device_types': []})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
+@require_http_methods(["GET"])
 def ajax_device_quick_info(request, device_id):
     """AJAX: Get quick device info"""
-    return JsonResponse({'device_info': {}})
+    try:
+        device = get_object_or_404(Device, device_id=device_id)
+        data = {
+            'device_id': device.device_id,
+            'device_name': device.device_name,
+            'status': device.status,
+            'brand': device.brand,
+            'model': device.model,
+        }
+        return JsonResponse(data)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
+@require_http_methods(["GET"])
 def ajax_get_locations_by_room(request):
     """AJAX: Get locations by room"""
-    return JsonResponse({'locations': []})
+    try:
+        room_id = request.GET.get('room_id')
+        if room_id:
+            locations = Location.objects.filter(
+                room_id=room_id, is_active=True
+            ).values('id', 'name')
+            return JsonResponse({'locations': list(locations)})
+        return JsonResponse({'locations': []})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
+@require_http_methods(["POST"])
 def ajax_assignment_quick_actions(request, assignment_id):
     """AJAX: Assignment quick actions"""
-    return JsonResponse({'actions': []})
+    try:
+        assignment = get_object_or_404(Assignment, assignment_id=assignment_id)
+        action = request.POST.get('action')
+        
+        if action == 'return':
+            assignment.is_active = False
+            assignment.actual_return_date = timezone.now().date()
+            assignment.save()
+            return JsonResponse({'success': True, 'message': 'Device returned successfully'})
+        
+        return JsonResponse({'error': 'Invalid action'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
