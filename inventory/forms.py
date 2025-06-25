@@ -690,3 +690,384 @@ class DeviceTypeForm(forms.ModelForm):
             'subcategory': forms.Select(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
         }
+# ================================
+# IMPORT/EXPORT FORMS
+# ================================
+
+class CSVImportForm(forms.Form):
+    """Form for CSV file upload"""
+    csv_file = forms.FileField(
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv,.xlsx,.xls'
+        }),
+        help_text="Upload CSV, Excel (.xlsx) or Excel (.xls) file"
+    )
+    skip_header = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Skip the first row if it contains headers"
+    )
+    update_existing = forms.BooleanField(
+        initial=False,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Update existing records if they match"
+    )
+
+# ================================
+# ADVANCED SEARCH FORMS
+# ================================
+
+class AdvancedSearchForm(forms.Form):
+    """Advanced search form"""
+    
+    SEARCH_TYPE_CHOICES = [
+        ('all', 'All Items'),
+        ('devices', 'Devices Only'),
+        ('assignments', 'Assignments Only'),
+        ('staff', 'Staff Only'),
+        ('locations', 'Locations Only'),
+        ('maintenance', 'Maintenance Only'),
+    ]
+    
+    query = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search devices, assignments, staff, locations...',
+            'autocomplete': 'off'
+        }),
+        help_text="Enter keywords to search across all fields"
+    )
+    
+    search_type = forms.ChoiceField(
+        choices=SEARCH_TYPE_CHOICES,
+        initial='all',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    category = forms.ModelChoiceField(
+        queryset=DeviceCategory.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Categories",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All Statuses')] + Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="All Departments",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Filter by date range (from)"
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Filter by date range (to)"
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        date_from = cleaned_data.get('date_from')
+        date_to = cleaned_data.get('date_to')
+        
+        if date_from and date_to and date_from > date_to:
+            raise ValidationError("Start date cannot be after end date.")
+        
+        return cleaned_data
+
+# ================================
+# DEVICE TYPE MANAGEMENT FORMS
+# ================================
+
+class DeviceCategoryForm(forms.ModelForm):
+    """Form for device categories"""
+    
+    class Meta:
+        model = DeviceCategory
+        fields = ['name', 'category_type', 'description', 'icon', 'is_active']
+        
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'category_type': forms.Select(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'icon': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., fas fa-laptop'
+            }),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+        }
+
+class DeviceSubCategoryForm(forms.ModelForm):
+    """Form for device subcategories"""
+    
+    class Meta:
+        model = DeviceSubCategory
+        fields = ['category', 'name', 'code', 'description', 'is_active']
+        
+        widgets = {
+            'category': forms.Select(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+        }
+    
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        category = self.cleaned_data.get('category')
+        
+        if code and category:
+            # Check for duplicate codes within the same category
+            existing = DeviceSubCategory.objects.filter(
+                category=category,
+                code=code
+            )
+            
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"Code '{code}' already exists in this category.")
+        
+        return code
+
+# ================================
+# BACKUP & RECOVERY FORMS
+# ================================
+
+class DatabaseBackupForm(forms.Form):
+    """Form for database backup options"""
+    
+    BACKUP_TYPE_CHOICES = [
+        ('full', 'Full Database Backup'),
+        ('data_only', 'Data Only (No Schema)'),
+        ('schema_only', 'Schema Only (No Data)'),
+    ]
+    
+    backup_type = forms.ChoiceField(
+        choices=BACKUP_TYPE_CHOICES,
+        initial='full',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Select the type of backup to create"
+    )
+    
+    include_media = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Include uploaded media files (QR codes, documents, etc.)"
+    )
+    
+    include_logs = forms.BooleanField(
+        initial=False,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Include system logs and audit trails"
+    )
+    
+    description = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Optional description for this backup...'
+        }),
+        help_text="Add a description to identify this backup"
+    )
+
+class DatabaseRestoreForm(forms.Form):
+    """Form for database restore options"""
+    
+    backup_file = forms.FileField(
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.zip,.sql,.json'
+        }),
+        help_text="Upload backup file (.zip, .sql, or .json)"
+    )
+    
+    restore_data = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Restore data (WARNING: This will overwrite existing data)"
+    )
+    
+    restore_media = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Restore media files"
+    )
+    
+    create_backup_before_restore = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Create a backup of current data before restoring"
+    )
+    
+    confirm_restore = forms.BooleanField(
+        required=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="I understand that this operation will overwrite existing data"
+    )
+
+# ================================
+# BULK OPERATION FORMS
+# ================================
+
+class BulkDeviceActionForm(forms.Form):
+    """Form for bulk device actions"""
+    
+    ACTION_CHOICES = [
+        ('update_status', 'Update Status'),
+        ('update_condition', 'Update Condition'),
+        ('update_location', 'Update Location'),
+        ('assign_devices', 'Assign Devices'),
+        ('generate_qr', 'Generate QR Codes'),
+        ('export_selected', 'Export Selected'),
+    ]
+    
+    action = forms.ChoiceField(
+        choices=ACTION_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Select action to perform on selected devices"
+    )
+    
+    # Fields for status update
+    new_status = forms.ChoiceField(
+        choices=Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Fields for condition update
+    new_condition = forms.ChoiceField(
+        choices=Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Fields for location update
+    new_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Fields for assignment
+    assign_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assign_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assignment_purpose = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
+        
+        # Validate required fields based on action
+        if action == 'update_status' and not cleaned_data.get('new_status'):
+            raise ValidationError("New status is required for status update action.")
+        
+        if action == 'update_condition' and not cleaned_data.get('new_condition'):
+            raise ValidationError("New condition is required for condition update action.")
+        
+        if action == 'update_location' and not cleaned_data.get('new_location'):
+            raise ValidationError("New location is required for location update action.")
+        
+        if action == 'assign_devices':
+            if not cleaned_data.get('assign_to_staff') and not cleaned_data.get('assign_to_department'):
+                raise ValidationError("Must assign to either staff or department.")
+        
+        return cleaned_data
+
+# ================================
+# NOTIFICATION FORMS
+# ================================
+
+class NotificationPreferencesForm(forms.Form):
+    """Form for user notification preferences"""
+    
+    email_notifications = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Receive email notifications"
+    )
+    
+    overdue_assignments = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Notify about overdue assignments"
+    )
+    
+    warranty_alerts = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Notify about expiring warranties"
+    )
+    
+    maintenance_reminders = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Notify about upcoming maintenance"
+    )
+    
+    assignment_updates = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Notify about assignment changes"
+    )
+    
+    notification_frequency = forms.ChoiceField(
+        choices=[
+            ('immediate', 'Immediate'),
+            ('daily', 'Daily Digest'),
+            ('weekly', 'Weekly Summary'),
+        ],
+        initial='daily',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="How often to receive notifications"
+    )

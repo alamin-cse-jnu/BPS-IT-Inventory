@@ -1,3 +1,6 @@
+# inventory/urls.py - Updated with new views
+# Location: inventory/urls.py
+
 from django.urls import path
 from . import views
 
@@ -20,6 +23,13 @@ urlpatterns = [
     path('devices/export/csv/', views.export_devices_csv, name='export_devices_csv'),
     path('devices/bulk/update/', views.bulk_device_update, name='bulk_device_update'),
     path('devices/qr/bulk-generate/', views.generate_qr_codes_bulk, name='generate_qr_codes_bulk'),
+    
+    # ================================
+    # IMPORT/EXPORT - HIGH PRIORITY
+    # ================================
+    path('import/devices/', views.import_devices_csv, name='import_devices_csv'),
+    path('import/staff/', views.import_staff_csv, name='import_staff_csv'),
+    path('export/maintenance/', views.export_maintenance_csv, name='export_maintenance_csv'),
     
     # ================================
     # ASSIGNMENT MANAGEMENT
@@ -79,10 +89,39 @@ urlpatterns = [
     path('maintenance/<int:maintenance_id>/complete/', views.maintenance_complete, name='maintenance_complete'),
     
     # ================================
-    # DEVICE TYPE MANAGEMENT
+    # DEVICE TYPE MANAGEMENT - MEDIUM PRIORITY
     # ================================
     path('device-types/', views.device_type_list, name='device_type_list'),
     path('device-types/create/', views.device_type_create, name='device_type_create'),
+    path('device-types/<int:type_id>/', views.device_type_detail, name='device_type_detail'),
+    path('device-types/<int:type_id>/edit/', views.device_type_edit, name='device_type_edit'),
+    path('device-types/<int:type_id>/delete/', views.device_type_delete, name='device_type_delete'),
+    
+    # ================================
+    # ADVANCED SEARCH - MEDIUM PRIORITY
+    # ================================
+    path('search/', views.advanced_search, name='advanced_search'),
+    path('api/search/', views.global_search_api, name='global_search_api'),
+    
+    # ================================
+    # DASHBOARD ANALYTICS API - MEDIUM PRIORITY
+    # ================================
+    path('api/dashboard/stats/', views.ajax_dashboard_stats, name='ajax_dashboard_stats'),
+    path('api/notifications/', views.ajax_notification_list, name='ajax_notification_list'),
+    path('api/device-stats/', views.ajax_device_stats, name='ajax_device_stats'),
+    
+    # ================================
+    # AJAX ENDPOINTS FOR DYNAMIC FORMS
+    # ================================
+    path('api/subcategories/', views.ajax_subcategories_by_category, name='ajax_subcategories_by_category'),
+    path('api/device-types/', views.ajax_device_types_by_subcategory, name='ajax_device_types_by_subcategory'),
+    
+    # ================================
+    # BACKUP & RECOVERY - LOW PRIORITY
+    # ================================
+    path('backup/', views.database_backup, name='database_backup'),
+    path('restore/', views.database_restore, name='database_restore'),
+    path('backup/delete/<str:backup_filename>/', views.delete_backup, name='delete_backup'),
     
     # ================================
     # REPORTING VIEWS
@@ -90,27 +129,8 @@ urlpatterns = [
     path('reports/summary/', views.inventory_summary_report, name='inventory_summary_report'),
     path('reports/utilization/', views.asset_utilization_report, name='asset_utilization_report'),
     path('reports/lifecycle/', views.device_lifecycle_report, name='device_lifecycle_report'),
-    path('reports/warranty/', views.warranty_management_report, name='warranty_management_report'),
-    
-    # ================================
-    # SYSTEM ADMINISTRATION
-    # ================================
-    path('admin/statistics/', views.system_statistics, name='system_statistics'),
-    path('admin/audit-logs/', views.audit_log_list, name='audit_log_list'),
-    path('admin/data-cleanup/', views.data_cleanup_tools, name='data_cleanup_tools'),
-    
-    # ================================
-    # AJAX ENDPOINTS
-    # ================================
-    path('ajax/device-info/<str:device_id>/', views.get_device_info, name='get_device_info'),
-    path('ajax/quick-assign/', views.quick_assign_device, name='quick_assign_device'),
-    path('ajax/search-suggestions/', views.search_suggestions, name='search_suggestions'),
-    path('ajax/device-availability/', views.device_availability_check, name='device_availability_check'),
-    path('ajax/staff-by-department/<int:department_id>/', views.get_staff_by_department, name='get_staff_by_department'),
-    path('ajax/rooms-by-building/<int:building_id>/', views.get_rooms_by_building, name='get_rooms_by_building'),
-    path('ajax/locations-by-room/<int:room_id>/', views.get_locations_by_room, name='get_locations_by_room'),
-    path('ajax/subcategories/', views.ajax_get_subcategories, name='ajax_get_subcategories'),
-    path('ajax/device-types/', views.ajax_get_device_types, name='ajax_get_device_types'),
-    path('ajax/device-quick-info/<str:device_id>/', views.ajax_device_quick_info, name='ajax_device_quick_info'),
-    path('ajax/assignment-actions/<str:assignment_id>/', views.ajax_assignment_quick_actions, name='ajax_assignment_quick_actions'),
+    path('reports/maintenance/', views.maintenance_report, name='maintenance_report'),
+    path('reports/warranty/', views.warranty_report, name='warranty_report'),
+    path('reports/assignment/', views.assignment_report, name='assignment_report'),
+    path('reports/audit/', views.audit_report, name='audit_report'),
 ]

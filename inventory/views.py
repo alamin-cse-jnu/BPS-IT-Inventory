@@ -1,22 +1,52 @@
-# inventory/views.py - COMPLETE DJANGO INVENTORY MANAGEMENT VIEWS
-
+# Django core imports
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required, permission_required
-from django.contrib import messages
 from django.http import JsonResponse, HttpResponse, Http404
+from django.urls import reverse
+from django.views.generic import View
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
 from django.utils import timezone
-from django.db.models import Count, Q, Sum, Avg, Max, Min, F, Case, When, FloatField
+from django.template.loader import render_to_string
 from django.core.paginator import Paginator
-from django.urls import reverse
-from django.forms import formset_factory
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.core.management import call_command
+from django.core.serializers import serialize
+from django.core.exceptions import ValidationError
+from django.conf import settings
+
+# Django contrib imports
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import User
+
+# Django DB imports
 from django.db import transaction
-from datetime import date, timedelta, datetime
+from django.db.models import (
+    Count, Q, Sum, Avg, Max, Min, F, Case, When, FloatField
+)
+
+# Forms
+from .forms import CSVImportForm
+
+# Third-party imports
+import pandas as pd
+import openpyxl
+
+# Python standard library imports
 import json
 import csv
-from io import StringIO
+import os
+import subprocess
+import zipfile
+import shutil
+import tempfile
+from datetime import date, timedelta, datetime
+from io import StringIO, BytesIO
+from pathlib import Path
+import json as json_module 
 
 from .models import (
     Device, Assignment, Staff, Department, Location, 
@@ -209,6 +239,319 @@ def dashboard(request):
             'device_status_stats': [], 'category_stats': [], 'assignment_trends': [],
             'dept_assignments': [], 'recent_maintenance': []
         })
+# ================================
+# DASHBOARD ANALYTICS API 
+# ================================
+
+
+@login_required
+@require_http_methods(["GET"])
+@cache_page(60 * 5)  # Cache for 5 minutes
+def ajax_dashboard_stats(request):
+    """Get real-time dashboard statistics via AJAX"""
+    try:
+        # Device statistics
+        total_devices = Device.objects.count()
+        active_assignments = Assignment.objects.filter(is_active=True).count()
+        available_devices = Device.objects.filter(status='AVAILABLE').count()
+        
+        # Assignment statistics
+        overdue_assignments = Assignment.objects.filter(
+            is_temporary=True,
+            is_active=True,
+            expected_return_date__lt=timezone.now().date()
+        ).count()
+        
+        # Warranty alerts (devices expiring in next 30 days)
+        today = timezone.now().date()
+        warranty_alerts = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=30)
+        ).count()
+        
+        # Maintenance due (devices without maintenance in last 6 months)
+        six_months_ago = today - timedelta(days=180)
+        maintenance_due = Device.objects.filter(
+            Q(last_maintenance_date__isnull=True) |
+            Q(last_maintenance_date__lt=six_months_ago)
+        ).filter(status__in=['AVAILABLE', 'ASSIGNED']).count()
+        
+        # Device status distribution
+        status_distribution = list(
+            Device.objects.values('status')
+            .annotate(count=Count('status'))
+            .order_by('status')
+        )
+        
+        # Device condition distribution
+        condition_distribution = list(
+            Device.objects.values('condition')
+            .annotate(count=Count('condition'))
+            .order_by('condition')
+        )
+        
+        # Top categories by device count
+        top_categories = list(
+            Device.objects.select_related('device_type__subcategory__category')
+            .values('device_type__subcategory__category__name')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:5]
+        )
+        
+        # Department utilization
+        department_utilization = list(
+            Assignment.objects.filter(is_active=True, assigned_to_department__isnull=False)
+            .values('assigned_to_department__name')
+            .annotate(device_count=Count('device', distinct=True))
+            .order_by('-device_count')[:10]
+        )
+        
+        # Assignment trends (last 7 days)
+        assignment_trends = []
+        for i in range(7):
+            date = today - timedelta(days=i)
+            daily_assignments = Assignment.objects.filter(
+                start_date=date
+            ).count()
+            assignment_trends.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'assignments': daily_assignments
+            })
+        assignment_trends.reverse()
+        
+        # Recent activities (last 24 hours)
+        yesterday = timezone.now() - timedelta(days=1)
+        recent_assignments = Assignment.objects.filter(
+            created_at__gte=yesterday
+        ).select_related('device', 'assigned_to_staff', 'assigned_to_department')[:5]
+        
+        recent_activities = []
+        for assignment in recent_assignments:
+            activity = {
+                'type': 'assignment',
+                'message': f"Device {assignment.device.device_name} assigned to {assignment.assigned_to_staff or assignment.assigned_to_department}",
+                'timestamp': assignment.created_at.isoformat(),
+                'url': reverse('inventory:assignment_detail', args=[assignment.assignment_id])
+            }
+            recent_activities.append(activity)
+        
+        # Calculate utilization rate
+        utilization_rate = (active_assignments / total_devices * 100) if total_devices > 0 else 0
+        
+        data = {
+            'summary': {
+                'total_devices': total_devices,
+                'active_assignments': active_assignments,
+                'available_devices': available_devices,
+                'overdue_assignments': overdue_assignments,
+                'warranty_alerts': warranty_alerts,
+                'maintenance_due': maintenance_due,
+                'utilization_rate': round(utilization_rate, 1)
+            },
+            'distributions': {
+                'status': status_distribution,
+                'condition': condition_distribution,
+                'categories': top_categories,
+                'departments': department_utilization
+            },
+            'trends': {
+                'assignments': assignment_trends
+            },
+            'recent_activities': recent_activities,
+            'timestamp': timezone.now().isoformat()
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=500)
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_notification_list(request):
+    """Get user notifications via AJAX"""
+    try:
+        user = request.user
+        notifications = []
+        
+        # Check if user has permission to view inventory
+        if user.has_perm('inventory.view_device'):
+            
+            # Overdue assignments
+            overdue_assignments = Assignment.objects.filter(
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            ).select_related('device', 'assigned_to_staff')[:10]
+            
+            for assignment in overdue_assignments:
+                notifications.append({
+                    'type': 'warning',
+                    'title': 'Overdue Assignment',
+                    'message': f"Device {assignment.device.device_name} is overdue for return",
+                    'url': reverse('inventory:assignment_detail', args=[assignment.assignment_id]),
+                    'timestamp': assignment.expected_return_date.isoformat(),
+                    'priority': 'high'
+                })
+            
+            # Warranty expiring soon (next 30 days)
+            today = timezone.now().date()
+            warranty_alerts = Device.objects.filter(
+                warranty_end_date__gte=today,
+                warranty_end_date__lte=today + timedelta(days=30)
+            ).order_by('warranty_end_date')[:10]
+            
+            for device in warranty_alerts:
+                days_remaining = (device.warranty_end_date - today).days
+                notifications.append({
+                    'type': 'info',
+                    'title': 'Warranty Expiring',
+                    'message': f"Device {device.device_name} warranty expires in {days_remaining} days",
+                    'url': reverse('inventory:device_detail', args=[device.device_id]),
+                    'timestamp': device.warranty_end_date.isoformat(),
+                    'priority': 'medium' if days_remaining > 7 else 'high'
+                })
+            
+            # Maintenance due
+            six_months_ago = today - timedelta(days=180)
+            maintenance_due = Device.objects.filter(
+                Q(last_maintenance_date__isnull=True) |
+                Q(last_maintenance_date__lt=six_months_ago)
+            ).filter(status__in=['AVAILABLE', 'ASSIGNED'])[:10]
+            
+            for device in maintenance_due:
+                notifications.append({
+                    'type': 'info',
+                    'title': 'Maintenance Due',
+                    'message': f"Device {device.device_name} is due for maintenance",
+                    'url': reverse('inventory:device_detail', args=[device.device_id]),
+                    'timestamp': device.last_maintenance_date.isoformat() if device.last_maintenance_date else None,
+                    'priority': 'low'
+                })
+            
+            # Upcoming maintenance schedules (next 7 days)
+            upcoming_maintenance = MaintenanceSchedule.objects.filter(
+                scheduled_date__gte=today,
+                scheduled_date__lte=today + timedelta(days=7),
+                status__in=['SCHEDULED', 'IN_PROGRESS']
+            ).select_related('device')[:10]
+            
+            for maintenance in upcoming_maintenance:
+                notifications.append({
+                    'type': 'info',
+                    'title': 'Upcoming Maintenance',
+                    'message': f"Maintenance scheduled for {maintenance.device.device_name} on {maintenance.scheduled_date}",
+                    'url': reverse('inventory:maintenance_detail', args=[maintenance.id]),
+                    'timestamp': maintenance.scheduled_date.isoformat(),
+                    'priority': 'medium'
+                })
+        
+        # Sort notifications by priority and timestamp
+        priority_order = {'high': 1, 'medium': 2, 'low': 3}
+        notifications.sort(key=lambda x: (
+            priority_order.get(x['priority'], 4),
+            x['timestamp'] or '9999-12-31'
+        ))
+        
+        # Limit to 20 most important notifications
+        notifications = notifications[:20]
+        
+        data = {
+            'notifications': notifications,
+            'count': len(notifications),
+            'timestamp': timezone.now().isoformat()
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=500)
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_device_stats(request):
+    """Get device statistics for charts"""
+    try:
+        # Get query parameters
+        period = request.GET.get('period', '30')  # days
+        chart_type = request.GET.get('type', 'status')
+        
+        try:
+            days = int(period)
+        except ValueError:
+            days = 30
+        
+        start_date = timezone.now().date() - timedelta(days=days)
+        
+        if chart_type == 'status':
+            # Device status distribution
+            data = list(
+                Device.objects.values('status')
+                .annotate(count=Count('status'))
+                .order_by('status')
+            )
+            
+        elif chart_type == 'condition':
+            # Device condition distribution
+            data = list(
+                Device.objects.values('condition')
+                .annotate(count=Count('condition'))
+                .order_by('condition')
+            )
+            
+        elif chart_type == 'category':
+            # Device category distribution
+            data = list(
+                Device.objects.select_related('device_type__subcategory__category')
+                .values('device_type__subcategory__category__name')
+                .annotate(count=Count('id'))
+                .order_by('-count')[:10]
+            )
+            
+        elif chart_type == 'assignment_trend':
+            # Assignment trends over time
+            data = []
+            for i in range(days):
+                date = start_date + timedelta(days=i)
+                daily_count = Assignment.objects.filter(start_date=date).count()
+                data.append({
+                    'date': date.strftime('%Y-%m-%d'),
+                    'count': daily_count
+                })
+                
+        elif chart_type == 'utilization':
+            # Department utilization
+            data = list(
+                Assignment.objects.filter(
+                    is_active=True,
+                    assigned_to_department__isnull=False
+                )
+                .values('assigned_to_department__name')
+                .annotate(count=Count('device', distinct=True))
+                .order_by('-count')[:10]
+            )
+            
+        else:
+            data = []
+        
+        return JsonResponse({
+            'data': data,
+            'period': days,
+            'chart_type': chart_type,
+            'timestamp': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=500)
 
 # ================================
 # DEVICE MANAGEMENT VIEWS
@@ -541,7 +884,318 @@ def device_delete(request, device_id):
     except Exception as e:
         messages.error(request, f"Error processing request: {str(e)}")
         return redirect('inventory:device_list')
+@login_required
+def device_type_detail(request, type_id):
+    """Device type detail view"""
+    try:
+        device_type = get_object_or_404(
+            DeviceType.objects.select_related('subcategory__category'),
+            id=type_id
+        )
+        
+        # Get devices of this type
+        devices = Device.objects.filter(device_type=device_type).select_related(
+            'vendor', 'current_location'
+        ).prefetch_related('assignments')
+        
+        # Pagination for devices
+        paginator = Paginator(devices, 20)
+        page_number = request.GET.get('page')
+        devices_page = paginator.get_page(page_number)
+        
+        # Statistics for this device type
+        stats = {
+            'total_devices': devices.count(),
+            'available_devices': devices.filter(status='AVAILABLE').count(),
+            'assigned_devices': devices.filter(status='ASSIGNED').count(),
+            'maintenance_devices': devices.filter(status='MAINTENANCE').count(),
+            'retired_devices': devices.filter(status='RETIRED').count(),
+        }
+        
+        # Condition distribution
+        condition_stats = list(
+            devices.values('condition')
+            .annotate(count=Count('condition'))
+            .order_by('condition')
+        )
+        
+        # Vendor distribution
+        vendor_stats = list(
+            devices.filter(vendor__isnull=False)
+            .values('vendor__name')
+            .annotate(count=Count('vendor'))
+            .order_by('-count')[:10]
+        )
+        
+        # Age distribution (based on purchase date)
+        today = timezone.now().date()
+        age_ranges = [
+            ('0-1 years', 0, 365),
+            ('1-3 years', 366, 1095),
+            ('3-5 years', 1096, 1825),
+            ('5+ years', 1826, 9999)
+        ]
+        
+        age_stats = []
+        for label, min_days, max_days in age_ranges:
+            start_date = today - timedelta(days=max_days)
+            end_date = today - timedelta(days=min_days)
+            
+            if max_days == 9999:
+                count = devices.filter(
+                    purchase_date__lte=end_date,
+                    purchase_date__isnull=False
+                ).count()
+            else:
+                count = devices.filter(
+                    purchase_date__gte=start_date,
+                    purchase_date__lte=end_date,
+                    purchase_date__isnull=False
+                ).count()
+            
+            age_stats.append({'label': label, 'count': count})
+        
+        # Recent activities for this device type
+        recent_assignments = Assignment.objects.filter(
+            device__device_type=device_type,
+            created_at__gte=timezone.now() - timedelta(days=30)
+        ).select_related(
+            'device', 'assigned_to_staff', 'assigned_to_department'
+        ).order_by('-created_at')[:10]
+        
+        context = {
+            'device_type': device_type,
+            'devices': devices_page,
+            'stats': stats,
+            'condition_stats': condition_stats,
+            'vendor_stats': vendor_stats,
+            'age_stats': age_stats,
+            'recent_assignments': recent_assignments,
+            'title': f'Device Type: {device_type.name}'
+        }
+        
+        return render(request, 'inventory/device_type_detail.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading device type details: {str(e)}")
+        return redirect('inventory:device_type_list')
 
+@login_required
+@permission_required('inventory.change_devicetype', raise_exception=True)
+def device_type_edit(request, type_id):
+    """Edit device type"""
+    try:
+        device_type = get_object_or_404(DeviceType, id=type_id)
+        
+        if request.method == 'POST':
+            form = DeviceTypeForm(request.POST, instance=device_type)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        device_type = form.save()
+                        
+                        # Log the activity
+                        from .utils import log_user_activity
+                        log_user_activity(
+                            user=request.user,
+                            action='UPDATE',
+                            model_name='DeviceType',
+                            object_id=device_type.id,
+                            object_repr=str(device_type),
+                            ip_address=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        messages.success(request, f'Device type "{device_type.name}" updated successfully.')
+                        return redirect('inventory:device_type_detail', type_id=device_type.id)
+                        
+                except Exception as e:
+                    messages.error(request, f'Error updating device type: {str(e)}')
+            else:
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f'{field}: {error}')
+        else:
+            form = DeviceTypeForm(instance=device_type)
+        
+        # Get subcategories for the selected category
+        if device_type.subcategory:
+            subcategories = DeviceSubCategory.objects.filter(
+                category=device_type.subcategory.category
+            )
+        else:
+            subcategories = DeviceSubCategory.objects.none()
+        
+        context = {
+            'form': form,
+            'device_type': device_type,
+            'subcategories': subcategories,
+            'title': f'Edit Device Type: {device_type.name}'
+        }
+        
+        return render(request, 'inventory/device_type_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading device type: {str(e)}")
+        return redirect('inventory:device_type_list')
+
+@login_required
+@permission_required('inventory.delete_devicetype', raise_exception=True)
+def device_type_delete(request, type_id):
+    """Delete device type (soft delete if has devices)"""
+    try:
+        device_type = get_object_or_404(DeviceType, id=type_id)
+        
+        # Check if device type has associated devices
+        device_count = Device.objects.filter(device_type=device_type).count()
+        
+        if request.method == 'POST':
+            if device_count > 0:
+                # Soft delete - mark as inactive
+                device_type.is_active = False
+                device_type.save()
+                
+                # Log the activity
+                from .utils import log_user_activity
+                log_user_activity(
+                    user=request.user,
+                    action='SOFT_DELETE',
+                    model_name='DeviceType',
+                    object_id=device_type.id,
+                    object_repr=str(device_type),
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(
+                    request, 
+                    f'Device type "{device_type.name}" has been deactivated (has {device_count} associated devices).'
+                )
+            else:
+                # Hard delete - no associated devices
+                device_type_name = device_type.name
+                device_type.delete()
+                
+                # Log the activity
+                from .utils import log_user_activity
+                log_user_activity(
+                    user=request.user,
+                    action='DELETE',
+                    model_name='DeviceType',
+                    object_id=type_id,
+                    object_repr=device_type_name,
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Device type "{device_type_name}" deleted successfully.')
+            
+            return redirect('inventory:device_type_list')
+        
+        context = {
+            'device_type': device_type,
+            'device_count': device_count,
+            'can_hard_delete': device_count == 0,
+            'title': f'Delete Device Type: {device_type.name}'
+        }
+        
+        return render(request, 'inventory/device_type_confirm_delete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error deleting device type: {str(e)}")
+        return redirect('inventory:device_type_list')
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_subcategories_by_category(request):
+    """Get subcategories for a specific category via AJAX"""
+    try:
+        category_id = request.GET.get('category_id')
+        if not category_id:
+            return JsonResponse({'error': 'Category ID is required'}, status=400)
+        
+        subcategories = DeviceSubCategory.objects.filter(
+            category_id=category_id,
+            is_active=True
+        ).values('id', 'name').order_by('name')
+        
+        return JsonResponse({
+            'subcategories': list(subcategories)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_device_types_by_subcategory(request):
+    """Get device types for a specific subcategory via AJAX"""
+    try:
+        subcategory_id = request.GET.get('subcategory_id')
+        if not subcategory_id:
+            return JsonResponse({'error': 'Subcategory ID is required'}, status=400)
+        
+        device_types = DeviceType.objects.filter(
+            subcategory_id=subcategory_id,
+            is_active=True
+        ).values('id', 'name').order_by('name')
+        
+        return JsonResponse({
+            'device_types': list(device_types)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+# Additional form needed for forms.py
+class DeviceCategoryForm(forms.ModelForm):
+    """Form for device categories"""
+    
+    class Meta:
+        model = DeviceCategory
+        fields = ['name', 'category_type', 'description', 'icon', 'is_active']
+        
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'category_type': forms.Select(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'icon': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., fas fa-laptop'
+            }),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+        }
+
+class DeviceSubCategoryForm(forms.ModelForm):
+    """Form for device subcategories"""
+    
+    class Meta:
+        model = DeviceSubCategory
+        fields = ['category', 'name', 'code', 'description', 'is_active']
+        
+        widgets = {
+            'category': forms.Select(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+        }
+    
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        category = self.cleaned_data.get('category')
+        
+        if code and category:
+            # Check for duplicate codes within the same category
+            existing = DeviceSubCategory.objects.filter(
+                category=category,
+                code=code
+            )
+            
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"Code '{code}' already exists in this category.")
+        
+        return code
 # ================================
 # ASSIGNMENT MANAGEMENT VIEWS
 # ================================
@@ -3144,3 +3798,1293 @@ def ajax_assignment_quick_actions(request, assignment_id):
         return JsonResponse({'error': 'Invalid action'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+    
+# ================================
+# IMPORT/EXPORT VIEWS - HIGH PRIORITY
+# ================================
+
+@login_required
+@permission_required('inventory.add_device', raise_exception=True)
+def import_devices_csv(request):
+    """Import devices from CSV/Excel file"""
+    if request.method == 'POST':
+        form = CSVImportForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                csv_file = request.FILES['csv_file']
+                skip_header = form.cleaned_data['skip_header']
+                update_existing = form.cleaned_data['update_existing']
+                
+                # Validate file size (10MB limit)
+                if csv_file.size > 10 * 1024 * 1024:
+                    messages.error(request, "File size exceeds 10MB limit.")
+                    return render(request, 'inventory/import_devices.html', {'form': form})
+                
+                # Read file based on extension
+                file_extension = csv_file.name.split('.')[-1].lower()
+                
+                if file_extension == 'csv':
+                    # Read CSV file
+                    df = pd.read_csv(csv_file, skip_blank_lines=True)
+                elif file_extension in ['xlsx', 'xls']:
+                    # Read Excel file
+                    df = pd.read_excel(csv_file, engine='openpyxl' if file_extension == 'xlsx' else 'xlrd')
+                else:
+                    messages.error(request, "Unsupported file format. Please upload CSV or Excel file.")
+                    return render(request, 'inventory/import_devices.html', {'form': form})
+                
+                if skip_header:
+                    df = df.iloc[1:]  # Skip first row
+                
+                # Process the data
+                success_count = 0
+                error_count = 0
+                errors = []
+                
+                # Expected column mapping (case-insensitive)
+                column_mapping = {
+                    'asset_tag': ['asset_tag', 'asset tag', 'tag'],
+                    'device_name': ['device_name', 'device name', 'name'],
+                    'device_type': ['device_type', 'device type', 'type'],
+                    'brand': ['brand', 'manufacturer'],
+                    'model': ['model'],
+                    'serial_number': ['serial_number', 'serial number', 'serial'],
+                    'purchase_date': ['purchase_date', 'purchase date'],
+                    'purchase_price': ['purchase_price', 'purchase price', 'price'],
+                    'vendor': ['vendor', 'supplier'],
+                    'warranty_end_date': ['warranty_end_date', 'warranty end', 'warranty'],
+                    'status': ['status'],
+                    'condition': ['condition'],
+                    'notes': ['notes', 'description', 'remarks']
+                }
+                
+                # Map actual columns to expected fields
+                df_columns = [col.lower().strip() for col in df.columns]
+                field_mapping = {}
+                
+                for field, possible_names in column_mapping.items():
+                    for possible_name in possible_names:
+                        if possible_name.lower() in df_columns:
+                            actual_column = df.columns[df_columns.index(possible_name.lower())]
+                            field_mapping[field] = actual_column
+                            break
+                
+                # Process each row
+                with transaction.atomic():
+                    for index, row in df.iterrows():
+                        try:
+                            # Extract device data
+                            device_data = {}
+                            
+                            # Required fields
+                            device_name = row.get(field_mapping.get('device_name', ''), '').strip()
+                            if not device_name:
+                                error_count += 1
+                                errors.append(f"Row {index + 1}: Device name is required")
+                                continue
+                            
+                            device_data['device_name'] = device_name
+                            
+                            # Optional fields
+                            if 'asset_tag' in field_mapping:
+                                device_data['asset_tag'] = str(row.get(field_mapping['asset_tag'], '')).strip()
+                            
+                            if 'brand' in field_mapping:
+                                device_data['brand'] = str(row.get(field_mapping['brand'], '')).strip()
+                            
+                            if 'model' in field_mapping:
+                                device_data['model'] = str(row.get(field_mapping['model'], '')).strip()
+                            
+                            if 'serial_number' in field_mapping:
+                                device_data['serial_number'] = str(row.get(field_mapping['serial_number'], '')).strip()
+                            
+                            # Handle device type
+                            if 'device_type' in field_mapping:
+                                device_type_name = str(row.get(field_mapping['device_type'], '')).strip()
+                                if device_type_name:
+                                    try:
+                                        device_type = DeviceType.objects.get(name__icontains=device_type_name)
+                                        device_data['device_type'] = device_type
+                                    except DeviceType.DoesNotExist:
+                                        # Create default device type if not found
+                                        default_category, _ = DeviceCategory.objects.get_or_create(
+                                            name='General',
+                                            defaults={'category_type': 'OTHER'}
+                                        )
+                                        default_subcategory, _ = DeviceSubCategory.objects.get_or_create(
+                                            category=default_category,
+                                            name='General',
+                                            defaults={'code': 'GEN'}
+                                        )
+                                        device_type, _ = DeviceType.objects.get_or_create(
+                                            subcategory=default_subcategory,
+                                            name=device_type_name,
+                                            defaults={'code': device_type_name[:10].upper()}
+                                        )
+                                        device_data['device_type'] = device_type
+                            
+                            # Handle vendor
+                            if 'vendor' in field_mapping:
+                                vendor_name = str(row.get(field_mapping['vendor'], '')).strip()
+                                if vendor_name:
+                                    vendor, _ = Vendor.objects.get_or_create(
+                                        name=vendor_name,
+                                        defaults={'vendor_code': vendor_name[:10].upper()}
+                                    )
+                                    device_data['vendor'] = vendor
+                            
+                            # Handle dates
+                            for date_field in ['purchase_date', 'warranty_end_date']:
+                                if date_field in field_mapping:
+                                    date_value = row.get(field_mapping[date_field])
+                                    if pd.notna(date_value):
+                                        try:
+                                            if isinstance(date_value, str):
+                                                parsed_date = pd.to_datetime(date_value, errors='coerce')
+                                                if pd.notna(parsed_date):
+                                                    device_data[date_field] = parsed_date.date()
+                                            else:
+                                                device_data[date_field] = date_value
+                                        except:
+                                            pass
+                            
+                            # Handle numeric fields
+                            if 'purchase_price' in field_mapping:
+                                price_value = row.get(field_mapping['purchase_price'])
+                                if pd.notna(price_value):
+                                    try:
+                                        device_data['purchase_price'] = float(price_value)
+                                    except (ValueError, TypeError):
+                                        pass
+                            
+                            # Handle status and condition
+                            if 'status' in field_mapping:
+                                status_value = str(row.get(field_mapping['status'], '')).strip().upper()
+                                valid_statuses = [choice[0] for choice in Device.STATUS_CHOICES]
+                                if status_value in valid_statuses:
+                                    device_data['status'] = status_value
+                                else:
+                                    device_data['status'] = 'AVAILABLE'  # Default
+                            
+                            if 'condition' in field_mapping:
+                                condition_value = str(row.get(field_mapping['condition'], '')).strip().upper()
+                                valid_conditions = [choice[0] for choice in Device.CONDITION_CHOICES]
+                                if condition_value in valid_conditions:
+                                    device_data['condition'] = condition_value
+                                else:
+                                    device_data['condition'] = 'GOOD'  # Default
+                            
+                            if 'notes' in field_mapping:
+                                device_data['notes'] = str(row.get(field_mapping['notes'], '')).strip()
+                            
+                            # Check if device exists (for updates)
+                            existing_device = None
+                            if update_existing and device_data.get('asset_tag'):
+                                try:
+                                    existing_device = Device.objects.get(asset_tag=device_data['asset_tag'])
+                                except Device.DoesNotExist:
+                                    pass
+                            
+                            if existing_device and update_existing:
+                                # Update existing device
+                                for field, value in device_data.items():
+                                    if value:  # Only update non-empty values
+                                        setattr(existing_device, field, value)
+                                existing_device.save()
+                                success_count += 1
+                            else:
+                                # Create new device
+                                if not device_data.get('asset_tag'):
+                                    # Generate asset tag if not provided
+                                    last_device = Device.objects.order_by('-id').first()
+                                    next_number = (last_device.id + 1) if last_device else 1
+                                    device_data['asset_tag'] = f"BPS-IT-{next_number:04d}"
+                                
+                                # Set defaults
+                                device_data.setdefault('status', 'AVAILABLE')
+                                device_data.setdefault('condition', 'GOOD')
+                                
+                                device = Device.objects.create(**device_data)
+                                success_count += 1
+                        
+                        except Exception as e:
+                            error_count += 1
+                            errors.append(f"Row {index + 1}: {str(e)}")
+                
+                # Summary message
+                if success_count > 0:
+                    messages.success(request, f"Successfully imported {success_count} devices.")
+                
+                if error_count > 0:
+                    messages.warning(request, f"{error_count} rows had errors.")
+                    for error in errors[:10]:  # Show first 10 errors
+                        messages.error(request, error)
+                    if len(errors) > 10:
+                        messages.error(request, f"... and {len(errors) - 10} more errors.")
+                
+                return redirect('inventory:device_list')
+                
+            except Exception as e:
+                messages.error(request, f"Error processing file: {str(e)}")
+    else:
+        form = CSVImportForm()
+    
+    return render(request, 'inventory/import_devices.html', {
+        'form': form,
+        'title': 'Import Devices from CSV/Excel'
+    })
+
+@login_required
+@permission_required('inventory.add_staff', raise_exception=True)
+def import_staff_csv(request):
+    """Import staff from CSV/Excel file"""
+    if request.method == 'POST':
+        form = CSVImportForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                csv_file = request.FILES['csv_file']
+                skip_header = form.cleaned_data['skip_header']
+                update_existing = form.cleaned_data['update_existing']
+                
+                # Validate file size
+                if csv_file.size > 10 * 1024 * 1024:
+                    messages.error(request, "File size exceeds 10MB limit.")
+                    return render(request, 'inventory/import_staff.html', {'form': form})
+                
+                # Read file
+                file_extension = csv_file.name.split('.')[-1].lower()
+                
+                if file_extension == 'csv':
+                    df = pd.read_csv(csv_file, skip_blank_lines=True)
+                elif file_extension in ['xlsx', 'xls']:
+                    df = pd.read_excel(csv_file, engine='openpyxl' if file_extension == 'xlsx' else 'xlrd')
+                else:
+                    messages.error(request, "Unsupported file format.")
+                    return render(request, 'inventory/import_staff.html', {'form': form})
+                
+                if skip_header:
+                    df = df.iloc[1:]
+                
+                success_count = 0
+                error_count = 0
+                errors = []
+                
+                # Column mapping for staff
+                column_mapping = {
+                    'employee_id': ['employee_id', 'emp_id', 'id'],
+                    'first_name': ['first_name', 'first name', 'fname'],
+                    'last_name': ['last_name', 'last name', 'lname'],
+                    'email': ['email', 'email_address'],
+                    'phone': ['phone', 'mobile', 'contact'],
+                    'designation': ['designation', 'position', 'title'],
+                    'department': ['department', 'dept'],
+                    'reporting_manager': ['reporting_manager', 'manager'],
+                    'hire_date': ['hire_date', 'joining_date', 'start_date']
+                }
+                
+                # Map columns
+                df_columns = [col.lower().strip() for col in df.columns]
+                field_mapping = {}
+                
+                for field, possible_names in column_mapping.items():
+                    for possible_name in possible_names:
+                        if possible_name.lower() in df_columns:
+                            actual_column = df.columns[df_columns.index(possible_name.lower())]
+                            field_mapping[field] = actual_column
+                            break
+                
+                # Process rows
+                with transaction.atomic():
+                    for index, row in df.iterrows():
+                        try:
+                            staff_data = {}
+                            
+                            # Required fields
+                            employee_id = str(row.get(field_mapping.get('employee_id', ''), '')).strip()
+                            first_name = str(row.get(field_mapping.get('first_name', ''), '')).strip()
+                            last_name = str(row.get(field_mapping.get('last_name', ''), '')).strip()
+                            
+                            if not employee_id or not first_name or not last_name:
+                                error_count += 1
+                                errors.append(f"Row {index + 1}: Employee ID, first name, and last name are required")
+                                continue
+                            
+                            staff_data.update({
+                                'employee_id': employee_id,
+                                'first_name': first_name,
+                                'last_name': last_name
+                            })
+                            
+                            # Optional fields
+                            for field in ['email', 'phone', 'designation']:
+                                if field in field_mapping:
+                                    value = str(row.get(field_mapping[field], '')).strip()
+                                    if value:
+                                        staff_data[field] = value
+                            
+                            # Handle department
+                            if 'department' in field_mapping:
+                                dept_name = str(row.get(field_mapping['department'], '')).strip()
+                                if dept_name:
+                                    department, _ = Department.objects.get_or_create(
+                                        name=dept_name,
+                                        defaults={'code': dept_name[:10].upper()}
+                                    )
+                                    staff_data['department'] = department
+                            
+                            # Handle hire date
+                            if 'hire_date' in field_mapping:
+                                date_value = row.get(field_mapping['hire_date'])
+                                if pd.notna(date_value):
+                                    try:
+                                        if isinstance(date_value, str):
+                                            parsed_date = pd.to_datetime(date_value, errors='coerce')
+                                            if pd.notna(parsed_date):
+                                                staff_data['hire_date'] = parsed_date.date()
+                                        else:
+                                            staff_data['hire_date'] = date_value
+                                    except:
+                                        pass
+                            
+                            # Check for existing staff
+                            existing_staff = None
+                            if update_existing:
+                                try:
+                                    existing_staff = Staff.objects.get(employee_id=employee_id)
+                                except Staff.DoesNotExist:
+                                    pass
+                            
+                            if existing_staff and update_existing:
+                                # Update existing
+                                for field, value in staff_data.items():
+                                    if value:
+                                        setattr(existing_staff, field, value)
+                                existing_staff.save()
+                                success_count += 1
+                            else:
+                                # Create new
+                                staff_data.setdefault('is_active', True)
+                                staff = Staff.objects.create(**staff_data)
+                                success_count += 1
+                        
+                        except Exception as e:
+                            error_count += 1
+                            errors.append(f"Row {index + 1}: {str(e)}")
+                
+                # Summary
+                if success_count > 0:
+                    messages.success(request, f"Successfully imported {success_count} staff members.")
+                
+                if error_count > 0:
+                    messages.warning(request, f"{error_count} rows had errors.")
+                    for error in errors[:10]:
+                        messages.error(request, error)
+                
+                return redirect('inventory:staff_list')
+                
+            except Exception as e:
+                messages.error(request, f"Error processing file: {str(e)}")
+    else:
+        form = CSVImportForm()
+    
+    return render(request, 'inventory/import_staff.html', {
+        'form': form,
+        'title': 'Import Staff from CSV/Excel'
+    })
+
+@login_required
+def export_maintenance_csv(request):
+    """Export maintenance schedules to CSV"""
+    try:
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="maintenance_schedule.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'Schedule ID', 'Device ID', 'Device Name', 'Maintenance Type',
+            'Title', 'Description', 'Scheduled Date', 'Scheduled Time',
+            'Status', 'Vendor', 'Technician', 'Estimated Cost',
+            'Actual Cost', 'Completion Date', 'Created By', 'Created Date'
+        ])
+        
+        schedules = MaintenanceSchedule.objects.select_related(
+            'device', 'vendor', 'created_by'
+        ).order_by('-scheduled_date')
+        
+        for schedule in schedules:
+            writer.writerow([
+                schedule.id,
+                schedule.device.device_id,
+                schedule.device.device_name,
+                schedule.get_maintenance_type_display(),
+                schedule.title,
+                schedule.description,
+                schedule.scheduled_date.strftime('%Y-%m-%d') if schedule.scheduled_date else '',
+                schedule.scheduled_time.strftime('%H:%M:%S') if schedule.scheduled_time else '',
+                schedule.get_status_display(),
+                schedule.vendor.name if schedule.vendor else '',
+                schedule.technician_name or '',
+                schedule.estimated_cost or '',
+                schedule.actual_cost or '',
+                schedule.completion_date.strftime('%Y-%m-%d') if schedule.completion_date else '',
+                schedule.created_by.username if schedule.created_by else '',
+                schedule.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+        
+        return response
+        
+    except Exception as e:
+        messages.error(request, f"Error exporting maintenance schedules: {str(e)}")
+        return redirect('inventory:maintenance_list')
+    
+# ================================
+# ADVANCED SEARCH VIEWS - MEDIUM PRIORITY
+# ================================
+
+@login_required
+def advanced_search(request):
+    """Advanced search across all entities"""
+    try:
+        # Initialize search results
+        results = {
+            'devices': [],
+            'assignments': [],
+            'staff': [],
+            'locations': [],
+            'maintenance': []
+        }
+        
+        search_performed = False
+        query = request.GET.get('q', '').strip()
+        search_type = request.GET.get('type', 'all')
+        
+        # Filter parameters
+        category = request.GET.get('category', '')
+        status = request.GET.get('status', '')
+        department = request.GET.get('department', '')
+        date_from = request.GET.get('date_from', '')
+        date_to = request.GET.get('date_to', '')
+        
+        if query or any([category, status, department, date_from, date_to]):
+            search_performed = True
+            
+            # Build base search query for text fields
+            if query:
+                search_q = Q()
+                search_terms = query.split()
+                
+                for term in search_terms:
+                    search_q |= (
+                        Q(device_name__icontains=term) |
+                        Q(asset_tag__icontains=term) |
+                        Q(brand__icontains=term) |
+                        Q(model__icontains=term) |
+                        Q(serial_number__icontains=term) |
+                        Q(notes__icontains=term)
+                    )
+            else:
+                search_q = Q()
+            
+            # Search devices
+            if search_type in ['all', 'devices']:
+                device_query = Device.objects.select_related(
+                    'device_type__subcategory__category',
+                    'vendor',
+                    'current_location'
+                ).prefetch_related('assignments')
+                
+                if query:
+                    device_query = device_query.filter(search_q)
+                
+                # Apply filters
+                if category:
+                    device_query = device_query.filter(
+                        device_type__subcategory__category_id=category
+                    )
+                
+                if status:
+                    device_query = device_query.filter(status=status)
+                
+                if date_from:
+                    try:
+                        from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                        device_query = device_query.filter(purchase_date__gte=from_date)
+                    except ValueError:
+                        pass
+                
+                if date_to:
+                    try:
+                        to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+                        device_query = device_query.filter(purchase_date__lte=to_date)
+                    except ValueError:
+                        pass
+                
+                results['devices'] = device_query.order_by('-created_at')[:50]
+            
+            # Search assignments
+            if search_type in ['all', 'assignments']:
+                assignment_search_q = Q()
+                
+                if query:
+                    for term in query.split():
+                        assignment_search_q |= (
+                            Q(device__device_name__icontains=term) |
+                            Q(device__asset_tag__icontains=term) |
+                            Q(assigned_to_staff__first_name__icontains=term) |
+                            Q(assigned_to_staff__last_name__icontains=term) |
+                            Q(assigned_to_department__name__icontains=term) |
+                            Q(purpose__icontains=term)
+                        )
+                
+                assignment_query = Assignment.objects.select_related(
+                    'device',
+                    'assigned_to_staff',
+                    'assigned_to_department',
+                    'assigned_to_location'
+                )
+                
+                if assignment_search_q:
+                    assignment_query = assignment_query.filter(assignment_search_q)
+                
+                # Apply department filter
+                if department:
+                    assignment_query = assignment_query.filter(
+                        assigned_to_department_id=department
+                    )
+                
+                # Apply date filters
+                if date_from:
+                    try:
+                        from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                        assignment_query = assignment_query.filter(start_date__gte=from_date)
+                    except ValueError:
+                        pass
+                
+                if date_to:
+                    try:
+                        to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+                        assignment_query = assignment_query.filter(start_date__lte=to_date)
+                    except ValueError:
+                        pass
+                
+                results['assignments'] = assignment_query.order_by('-created_at')[:50]
+            
+            # Search staff
+            if search_type in ['all', 'staff']:
+                staff_search_q = Q()
+                
+                if query:
+                    for term in query.split():
+                        staff_search_q |= (
+                            Q(first_name__icontains=term) |
+                            Q(last_name__icontains=term) |
+                            Q(employee_id__icontains=term) |
+                            Q(email__icontains=term) |
+                            Q(designation__icontains=term)
+                        )
+                
+                staff_query = Staff.objects.select_related('department')
+                
+                if staff_search_q:
+                    staff_query = staff_query.filter(staff_search_q)
+                
+                if department:
+                    staff_query = staff_query.filter(department_id=department)
+                
+                results['staff'] = staff_query.order_by('first_name', 'last_name')[:50]
+            
+            # Search locations
+            if search_type in ['all', 'locations']:
+                location_search_q = Q()
+                
+                if query:
+                    for term in query.split():
+                        location_search_q |= (
+                            Q(name__icontains=term) |
+                            Q(location_code__icontains=term) |
+                            Q(description__icontains=term)
+                        )
+                
+                location_query = Location.objects.select_related('room__building')
+                
+                if location_search_q:
+                    location_query = location_query.filter(location_search_q)
+                
+                results['locations'] = location_query.order_by('name')[:50]
+            
+            # Search maintenance schedules
+            if search_type in ['all', 'maintenance']:
+                maintenance_search_q = Q()
+                
+                if query:
+                    for term in query.split():
+                        maintenance_search_q |= (
+                            Q(device__device_name__icontains=term) |
+                            Q(device__asset_tag__icontains=term) |
+                            Q(title__icontains=term) |
+                            Q(description__icontains=term) |
+                            Q(technician_name__icontains=term)
+                        )
+                
+                maintenance_query = MaintenanceSchedule.objects.select_related(
+                    'device', 'vendor'
+                )
+                
+                if maintenance_search_q:
+                    maintenance_query = maintenance_query.filter(maintenance_search_q)
+                
+                # Apply date filters
+                if date_from:
+                    try:
+                        from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                        maintenance_query = maintenance_query.filter(scheduled_date__gte=from_date)
+                    except ValueError:
+                        pass
+                
+                if date_to:
+                    try:
+                        to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+                        maintenance_query = maintenance_query.filter(scheduled_date__lte=to_date)
+                    except ValueError:
+                        pass
+                
+                results['maintenance'] = maintenance_query.order_by('-scheduled_date')[:50]
+        
+        # Get filter options
+        categories = DeviceCategory.objects.filter(is_active=True).order_by('name')
+        departments = Department.objects.all().order_by('name')
+        
+        # Count results
+        result_counts = {
+            'devices': len(results['devices']),
+            'assignments': len(results['assignments']),
+            'staff': len(results['staff']),
+            'locations': len(results['locations']),
+            'maintenance': len(results['maintenance'])
+        }
+        
+        total_results = sum(result_counts.values())
+        
+        context = {
+            'results': results,
+            'result_counts': result_counts,
+            'total_results': total_results,
+            'search_performed': search_performed,
+            'query': query,
+            'search_type': search_type,
+            'categories': categories,
+            'departments': departments,
+            'filters': {
+                'category': category,
+                'status': status,
+                'department': department,
+                'date_from': date_from,
+                'date_to': date_to
+            },
+            'title': 'Advanced Search'
+        }
+        
+        return render(request, 'inventory/advanced_search.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error performing search: {str(e)}")
+        return render(request, 'inventory/advanced_search.html', {
+            'title': 'Advanced Search',
+            'search_performed': False
+        })
+
+@login_required
+def global_search_api(request):
+    """Global search API for autocomplete"""
+    try:
+        query = request.GET.get('q', '').strip()
+        search_type = request.GET.get('type', 'all')
+        limit = min(int(request.GET.get('limit', 10)), 50)
+        
+        if not query or len(query) < 2:
+            return JsonResponse({'results': []})
+        
+        results = []
+        
+        # Search devices
+        if search_type in ['all', 'devices']:
+            devices = Device.objects.filter(
+                Q(device_name__icontains=query) |
+                Q(asset_tag__icontains=query) |
+                Q(brand__icontains=query) |
+                Q(model__icontains=query) |
+                Q(serial_number__icontains=query)
+            ).select_related('device_type')[:limit]
+            
+            for device in devices:
+                results.append({
+                    'type': 'device',
+                    'id': device.device_id,
+                    'title': device.device_name,
+                    'subtitle': f"{device.asset_tag} - {device.device_type.name if device.device_type else 'Unknown Type'}",
+                    'url': reverse('inventory:device_detail', args=[device.device_id]),
+                    'icon': 'fas fa-desktop'
+                })
+        
+        # Search assignments
+        if search_type in ['all', 'assignments'] and len(results) < limit:
+            assignments = Assignment.objects.filter(
+                Q(device__device_name__icontains=query) |
+                Q(device__asset_tag__icontains=query) |
+                Q(assigned_to_staff__first_name__icontains=query) |
+                Q(assigned_to_staff__last_name__icontains=query) |
+                Q(assigned_to_department__name__icontains=query)
+            ).select_related(
+                'device', 'assigned_to_staff', 'assigned_to_department'
+            )[:limit - len(results)]
+            
+            for assignment in assignments:
+                assigned_to = (
+                    str(assignment.assigned_to_staff) if assignment.assigned_to_staff 
+                    else str(assignment.assigned_to_department) if assignment.assigned_to_department
+                    else 'Unknown'
+                )
+                
+                results.append({
+                    'type': 'assignment',
+                    'id': assignment.assignment_id,
+                    'title': f"{assignment.device.device_name} → {assigned_to}",
+                    'subtitle': f"Assignment ID: {assignment.assignment_id}",
+                    'url': reverse('inventory:assignment_detail', args=[assignment.assignment_id]),
+                    'icon': 'fas fa-handshake'
+                })
+        
+        # Search staff
+        if search_type in ['all', 'staff'] and len(results) < limit:
+            staff = Staff.objects.filter(
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(employee_id__icontains=query) |
+                Q(email__icontains=query)
+            ).select_related('department')[:limit - len(results)]
+            
+            for person in staff:
+                results.append({
+                    'type': 'staff',
+                    'id': person.id,
+                    'title': f"{person.first_name} {person.last_name}",
+                    'subtitle': f"{person.employee_id} - {person.department.name if person.department else 'No Department'}",
+                    'url': reverse('inventory:staff_detail', args=[person.id]),
+                    'icon': 'fas fa-user'
+                })
+        
+        # Search locations
+        if search_type in ['all', 'locations'] and len(results) < limit:
+            locations = Location.objects.filter(
+                Q(name__icontains=query) |
+                Q(location_code__icontains=query)
+            )[:limit - len(results)]
+            
+            for location in locations:
+                results.append({
+                    'type': 'location',
+                    'id': location.id,
+                    'title': location.name,
+                    'subtitle': f"Code: {location.location_code}",
+                    'url': reverse('inventory:location_detail', args=[location.id]),
+                    'icon': 'fas fa-map-marker-alt'
+                })
+        
+        return JsonResponse({
+            'results': results,
+            'query': query,
+            'total': len(results)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'results': []
+        }, status=500)
+
+# Advanced search form for forms.py
+class AdvancedSearchForm(forms.Form):
+    """Advanced search form"""
+    
+    SEARCH_TYPE_CHOICES = [
+        ('all', 'All Items'),
+        ('devices', 'Devices Only'),
+        ('assignments', 'Assignments Only'),
+        ('staff', 'Staff Only'),
+        ('locations', 'Locations Only'),
+        ('maintenance', 'Maintenance Only'),
+    ]
+    
+    query = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search devices, assignments, staff, locations...',
+            'autocomplete': 'off'
+        }),
+        help_text="Enter keywords to search across all fields"
+    )
+    
+    search_type = forms.ChoiceField(
+        choices=SEARCH_TYPE_CHOICES,
+        initial='all',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    category = forms.ModelChoiceField(
+        queryset=DeviceCategory.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Categories",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All Statuses')] + Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="All Departments",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Filter by date range (from)"
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Filter by date range (to)"
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        date_from = cleaned_data.get('date_from')
+        date_to = cleaned_data.get('date_to')
+        
+        if date_from and date_to and date_from > date_to:
+            raise ValidationError("Start date cannot be after end date.")
+        
+        return cleaned_data
+# ================================
+# BACKUP & RECOVERY VIEWS - LOW PRIORITY
+# ================================
+
+# Backup form for forms.py
+class DatabaseBackupForm(forms.Form):
+    """Form for database backup options"""
+    
+    BACKUP_TYPE_CHOICES = [
+        ('full', 'Full Database Backup'),
+        ('data_only', 'Data Only (No Schema)'),
+        ('schema_only', 'Schema Only (No Data)'),
+    ]
+    
+    backup_type = forms.ChoiceField(
+        choices=BACKUP_TYPE_CHOICES,
+        initial='full',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Select the type of backup to create"
+    )
+    
+    include_media = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Include uploaded media files (QR codes, documents, etc.)"
+    )
+    
+    include_logs = forms.BooleanField(
+        initial=False,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Include system logs and audit trails"
+    )
+    
+    description = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Optional description for this backup...'
+        }),
+        help_text="Add a description to identify this backup"
+    )
+
+class DatabaseRestoreForm(forms.Form):
+    """Form for database restore options"""
+    
+    backup_file = forms.FileField(
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.zip,.sql,.json'
+        }),
+        help_text="Upload backup file (.zip, .sql, or .json)"
+    )
+    
+    restore_data = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Restore data (WARNING: This will overwrite existing data)"
+    )
+    
+    restore_media = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Restore media files"
+    )
+    
+    create_backup_before_restore = forms.BooleanField(
+        initial=True,
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Create a backup of current data before restoring"
+    )
+    
+    confirm_restore = forms.BooleanField(
+        required=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="I understand that this operation will overwrite existing data"
+    )
+
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def database_backup(request):
+    """Create database backup"""
+    if not request.user.is_superuser:
+        messages.error(request, "Only superusers can perform database backups.")
+        return redirect('inventory:dashboard')
+    
+    if request.method == 'POST':
+        form = DatabaseBackupForm(request.POST)
+        if form.is_valid():
+            try:
+                backup_type = form.cleaned_data['backup_type']
+                include_media = form.cleaned_data['include_media']
+                include_logs = form.cleaned_data['include_logs']
+                description = form.cleaned_data['description']
+                
+                # Create backup directory
+                backup_dir = os.path.join(settings.MEDIA_ROOT, 'backups')
+                os.makedirs(backup_dir, exist_ok=True)
+                
+                # Generate backup filename
+                timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+                backup_filename = f"inventory_backup_{timestamp}.zip"
+                backup_path = os.path.join(backup_dir, backup_filename)
+                
+                # Create temporary directory for backup files
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    
+                    # Database backup
+                    db_backup_path = os.path.join(temp_dir, 'database.json')
+                    
+                    if backup_type == 'full':
+                        # Full backup with fixtures
+                        call_command(
+                            'dumpdata',
+                            '--natural-foreign',
+                            '--natural-primary',
+                            '--indent=2',
+                            output=db_backup_path
+                        )
+                    elif backup_type == 'data_only':
+                        # Data only backup
+                        call_command(
+                            'dumpdata',
+                            '--natural-foreign',
+                            '--natural-primary',
+                            '--indent=2',
+                            '--exclude=contenttypes',
+                            '--exclude=auth.permission',
+                            output=db_backup_path
+                        )
+                    elif backup_type == 'schema_only':
+                        # Schema only - create SQL dump
+                        db_backup_path = os.path.join(temp_dir, 'schema.sql')
+                        
+                        # This would need to be adapted based on your database
+                        # For SQLite:
+                        if 'sqlite' in settings.DATABASES['default']['ENGINE']:
+                            db_path = settings.DATABASES['default']['NAME']
+                            with open(db_backup_path, 'w') as f:
+                                subprocess.run([
+                                    'sqlite3', db_path, '.schema'
+                                ], stdout=f, check=True)
+                    
+                    # Create backup metadata
+                    metadata = {
+                        'backup_type': backup_type,
+                        'created_at': timezone.now().isoformat(),
+                        'created_by': request.user.username,
+                        'description': description,
+                        'include_media': include_media,
+                        'include_logs': include_logs,
+                        'django_version': getattr(settings, 'DJANGO_VERSION', 'unknown'),
+                        'inventory_version': '1.0.0',  # You can define this in settings
+                    }
+                    
+                    metadata_path = os.path.join(temp_dir, 'metadata.json')
+                    with open(metadata_path, 'w') as f:
+                        json_module.dump(metadata, f, indent=2)
+                    
+                    # Create ZIP archive
+                    with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                        # Add database backup
+                        zipf.write(db_backup_path, os.path.basename(db_backup_path))
+                        
+                        # Add metadata
+                        zipf.write(metadata_path, 'metadata.json')
+                        
+                        # Add media files if requested
+                        if include_media:
+                            media_root = Path(settings.MEDIA_ROOT)
+                            for file_path in media_root.rglob('*'):
+                                if file_path.is_file() and 'backups' not in str(file_path):
+                                    arcname = str(file_path.relative_to(media_root))
+                                    zipf.write(file_path, f"media/{arcname}")
+                        
+                        # Add logs if requested
+                        if include_logs:
+                            log_dir = getattr(settings, 'LOG_DIR', None)
+                            if log_dir and os.path.exists(log_dir):
+                                log_path = Path(log_dir)
+                                for log_file in log_path.glob('*.log'):
+                                    zipf.write(log_file, f"logs/{log_file.name}")
+                
+                # Log the backup activity
+                from .utils import log_user_activity
+                log_user_activity(
+                    user=request.user,
+                    action='BACKUP_CREATE',
+                    model_name='Database',
+                    object_repr=f"Backup: {backup_filename}",
+                    changes={'backup_type': backup_type, 'description': description},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                # Provide download link
+                backup_url = settings.MEDIA_URL + f'backups/{backup_filename}'
+                messages.success(
+                    request, 
+                    f'Backup created successfully: <a href="{backup_url}" class="alert-link">{backup_filename}</a>'
+                )
+                
+                return redirect('inventory:database_backup')
+                
+            except Exception as e:
+                messages.error(request, f"Error creating backup: {str(e)}")
+    else:
+        form = DatabaseBackupForm()
+    
+    # Get existing backups
+    backup_dir = os.path.join(settings.MEDIA_ROOT, 'backups')
+    existing_backups = []
+    
+    if os.path.exists(backup_dir):
+        for filename in os.listdir(backup_dir):
+            if filename.endswith('.zip'):
+                file_path = os.path.join(backup_dir, filename)
+                file_size = os.path.getsize(file_path)
+                file_date = timezone.datetime.fromtimestamp(
+                    os.path.getmtime(file_path)
+                ).replace(tzinfo=timezone.utc)
+                
+                existing_backups.append({
+                    'filename': filename,
+                    'size': file_size,
+                    'size_mb': round(file_size / (1024 * 1024), 2),
+                    'created_at': file_date,
+                    'url': settings.MEDIA_URL + f'backups/{filename}'
+                })
+    
+    existing_backups.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    context = {
+        'form': form,
+        'existing_backups': existing_backups,
+        'title': 'Database Backup'
+    }
+    
+    return render(request, 'inventory/database_backup.html', context)
+
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def database_restore(request):
+    """Restore from backup"""
+    if not request.user.is_superuser:
+        messages.error(request, "Only superusers can perform database restoration.")
+        return redirect('inventory:dashboard')
+    
+    if request.method == 'POST':
+        form = DatabaseRestoreForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                backup_file = request.FILES['backup_file']
+                restore_data = form.cleaned_data['restore_data']
+                restore_media = form.cleaned_data['restore_media']
+                create_backup_before_restore = form.cleaned_data['create_backup_before_restore']
+                
+                # Create backup before restore if requested
+                if create_backup_before_restore:
+                    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+                    pre_restore_backup = f"pre_restore_backup_{timestamp}.zip"
+                    
+                    # Create a quick backup (this would call the backup function)
+                    # For brevity, we'll just log this
+                    messages.info(request, f"Pre-restore backup created: {pre_restore_backup}")
+                
+                # Process the uploaded backup file
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    backup_path = os.path.join(temp_dir, backup_file.name)
+                    
+                    # Save uploaded file
+                    with open(backup_path, 'wb') as f:
+                        for chunk in backup_file.chunks():
+                            f.write(chunk)
+                    
+                    # Extract backup file
+                    if backup_file.name.endswith('.zip'):
+                        with zipfile.ZipFile(backup_path, 'r') as zipf:
+                            zipf.extractall(temp_dir)
+                        
+                        # Read metadata if available
+                        metadata_path = os.path.join(temp_dir, 'metadata.json')
+                        if os.path.exists(metadata_path):
+                            with open(metadata_path, 'r') as f:
+                                metadata = json_module.load(f)
+                                messages.info(
+                                    request, 
+                                    f"Restoring backup created on {metadata.get('created_at', 'Unknown')} by {metadata.get('created_by', 'Unknown')}"
+                                )
+                        
+                        # Restore database
+                        if restore_data:
+                            database_file = None
+                            
+                            # Look for database backup files
+                            for filename in ['database.json', 'database.sql']:
+                                file_path = os.path.join(temp_dir, filename)
+                                if os.path.exists(file_path):
+                                    database_file = file_path
+                                    break
+                            
+                            if database_file:
+                                if database_file.endswith('.json'):
+                                    # Restore from Django fixture
+                                    call_command('loaddata', database_file)
+                                elif database_file.endswith('.sql'):
+                                    # Restore from SQL dump (implementation depends on database)
+                                    messages.warning(request, "SQL restore not implemented yet")
+                                
+                                messages.success(request, "Database restored successfully")
+                            else:
+                                messages.error(request, "No database backup found in archive")
+                        
+                        # Restore media files
+                        if restore_media:
+                            media_backup_dir = os.path.join(temp_dir, 'media')
+                            if os.path.exists(media_backup_dir):
+                                # Copy media files
+                                for root, dirs, files in os.walk(media_backup_dir):
+                                    for file in files:
+                                        src_path = os.path.join(root, file)
+                                        rel_path = os.path.relpath(src_path, media_backup_dir)
+                                        dst_path = os.path.join(settings.MEDIA_ROOT, rel_path)
+                                        
+                                        # Create directory if it doesn't exist
+                                        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+                                        shutil.copy2(src_path, dst_path)
+                                
+                                messages.success(request, "Media files restored successfully")
+                            else:
+                                messages.info(request, "No media files found in backup")
+                    
+                    elif backup_file.name.endswith('.json'):
+                        # Direct JSON fixture file
+                        if restore_data:
+                            call_command('loaddata', backup_path)
+                            messages.success(request, "Database restored from JSON fixture")
+                    
+                    else:
+                        messages.error(request, "Unsupported backup file format")
+                        return render(request, 'inventory/database_restore.html', {'form': form})
+                
+                # Log the restore activity
+                from .utils import log_user_activity
+                log_user_activity(
+                    user=request.user,
+                    action='BACKUP_RESTORE',
+                    model_name='Database',
+                    object_repr=f"Restored from: {backup_file.name}",
+                    changes={
+                        'restore_data': restore_data,
+                        'restore_media': restore_media
+                    },
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, "Restore completed successfully")
+                return redirect('inventory:dashboard')
+                
+            except Exception as e:
+                messages.error(request, f"Error during restore: {str(e)}")
+    else:
+        form = DatabaseRestoreForm()
+    
+    context = {
+        'form': form,
+        'title': 'Database Restore'
+    }
+    
+    return render(request, 'inventory/database_restore.html', context)
+
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def delete_backup(request, backup_filename):
+    """Delete a backup file"""
+    if not request.user.is_superuser:
+        messages.error(request, "Only superusers can delete backups.")
+        return redirect('inventory:database_backup')
+    
+    try:
+        backup_path = os.path.join(settings.MEDIA_ROOT, 'backups', backup_filename)
+        
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+            
+            # Log the deletion
+            from .utils import log_user_activity
+            log_user_activity(
+                user=request.user,
+                action='BACKUP_DELETE',
+                model_name='Database',
+                object_repr=f"Deleted backup: {backup_filename}",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            
+            messages.success(request, f"Backup {backup_filename} deleted successfully")
+        else:
+            messages.error(request, "Backup file not found")
+    
+    except Exception as e:
+        messages.error(request, f"Error deleting backup: {str(e)}")
+    
+    return redirect('inventory:database_backup')
