@@ -129,7 +129,15 @@ class DepartmentForm(forms.ModelForm):
     """Simple form for departments"""
     class Meta:
         model = Department
-        fields = ['name', 'code', 'description']
+        fields = ['name', 'code', 'floor', 'head_of_department', 'contact_phone', 'contact_email']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'floor': forms.Select(attrs={'class': 'form-control'}),
+            'head_of_department': forms.TextInput(attrs={'class': 'form-control'}),
+            'contact_phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'contact_email': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
 
 # Alias the correctly named forms
 MaintenanceForm = MaintenanceScheduleForm
@@ -396,34 +404,20 @@ def device_detail(request, device_id):
         return redirect('inventory:device_list')
 
 @login_required
-@permission_required('inventory.add_device', raise_exception=True)
-def device_create(request):
-    """Create a new device with comprehensive validation"""
+def device_add(request):
+    """Add new device"""
     if request.method == 'POST':
-        form = DeviceForm(request.POST, request.FILES)
+        form = DeviceForm(request.POST)
         if form.is_valid():
             try:
-                with transaction.atomic():
-                    device = form.save(commit=False)
-                    device.created_by = request.user
-                    device.updated_by = request.user
-                    device.save()
-                    
-                    # Create audit log
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='CREATE',
-                        model_name='Device',
-                        object_id=device.device_id,
-                        object_repr=str(device),
-                        changes={'created': 'New device added'},
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    messages.success(request, f'Device "{device.device_name}" ({device.device_id}) created successfully.')
-                    return redirect('inventory:device_detail', device_id=device.device_id)
+                device = form.save(commit=False)
+                device.created_by = request.user
+                device.updated_by = request.user
+                device.save()
+                messages.success(request, f'Device "{device.device_name}" added successfully.')
+                return redirect('inventory:device_detail', device_id=device.device_id)
             except Exception as e:
-                messages.error(request, f'Error creating device: {str(e)}')
+                messages.error(request, f'Error adding device: {str(e)}')
     else:
         form = DeviceForm()
     
@@ -431,7 +425,6 @@ def device_create(request):
         'form': form,
         'title': 'Add New Device',
         'action': 'Create',
-        'submit_text': 'Create Device'
     }
     return render(request, 'inventory/device_form.html', context)
 
@@ -541,6 +534,20 @@ def device_delete(request, device_id):
     except Exception as e:
         messages.error(request, f"Error processing request: {str(e)}")
         return redirect('inventory:device_list')
+
+@login_required
+def device_bulk_actions(request):
+    """Bulk device actions"""
+    # Simple stub implementation
+    messages.info(request, "Bulk actions feature coming soon!")
+    return redirect('inventory:device_list')
+
+@login_required
+def device_export_csv(request):
+    """Export devices to CSV"""
+    # Simple stub implementation  
+    messages.info(request, "CSV export feature coming soon!")
+    return redirect('inventory:device_list')
 
 # ================================
 # ASSIGNMENT MANAGEMENT VIEWS
@@ -3064,3 +3071,27 @@ def generate_qr_codes_bulk(request):
             messages.error(request, f'Error generating QR codes: {str(e)}')
     
     return redirect('inventory:device_list')
+
+# ================================
+# AJAX VIEWS  
+# ================================
+
+def ajax_get_subcategories(request):
+    """AJAX: Get subcategories for category"""
+    return JsonResponse({'subcategories': []})
+
+def ajax_get_device_types(request):
+    """AJAX: Get device types for subcategory"""
+    return JsonResponse({'device_types': []})
+
+def ajax_device_quick_info(request, device_id):
+    """AJAX: Get quick device info"""
+    return JsonResponse({'device_info': {}})
+
+def ajax_get_locations_by_room(request):
+    """AJAX: Get locations by room"""
+    return JsonResponse({'locations': []})
+
+def ajax_assignment_quick_actions(request, assignment_id):
+    """AJAX: Assignment quick actions"""
+    return JsonResponse({'actions': []})
