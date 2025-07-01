@@ -10,7 +10,7 @@ import json
 from .models import (
     Device, DeviceCategory, DeviceSubCategory, DeviceType,
     Vendor, Assignment, Staff, Department, Location, Room,
-    Building, Floor, User
+    Building, Floor, User, MaintenanceSchedule
 )
 # ================================
 # DEVICE FORMS

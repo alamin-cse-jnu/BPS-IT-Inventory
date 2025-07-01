@@ -364,12 +364,13 @@ class Device(models.Model):
 
 class Assignment(models.Model):
     """Device assignment tracking"""
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assignments')
+    assignment_id = models.CharField(max_length=20, unique=True, editable=False)  # Auto-generated
+    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='assignments')
     
     # Assignment targets (at least one must be specified)
-    assigned_to_staff = models.ForeignKey(Staff, on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
-    assigned_to_department = models.ForeignKey(Department, on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
-    assigned_to_location = models.ForeignKey(Location, on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
+    assigned_to_staff = models.ForeignKey('Staff', on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
+    assigned_to_department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
+    assigned_to_location = models.ForeignKey('Location', on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
     
     # Assignment details
     is_temporary = models.BooleanField(default=False, help_text="Is this a temporary assignment?")
@@ -385,6 +386,7 @@ class Assignment(models.Model):
     conditions = models.TextField(blank=True, help_text="Special conditions or requirements")
     notes = models.TextField(blank=True)
     return_notes = models.TextField(blank=True, help_text="Notes when device is returned")
+    return_condition = models.CharField(max_length=50, blank=True, help_text="Device condition when returned")
     
     # Status tracking
     is_active = models.BooleanField(default=True)
@@ -393,6 +395,9 @@ class Assignment(models.Model):
     assigned_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_made')
     assigned_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_created')
+    updated_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_updated')
+    requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_requested')
 
     class Meta:
         ordering = ['-assigned_at']
@@ -400,6 +405,29 @@ class Assignment(models.Model):
     def __str__(self):
         target = self.assigned_to_staff or self.assigned_to_department or self.assigned_to_location
         return f"{self.device.device_name} → {target}"
+
+    def save(self, *args, **kwargs):
+        """Override save to auto-generate assignment_id"""
+        if not self.assignment_id:
+            current_year = timezone.now().year
+            # Get the last assignment for the current year
+            last_assignment = Assignment.objects.filter(
+                assignment_id__startswith=f'ASG-{current_year}'
+            ).order_by('-assignment_id').first()
+            
+            if last_assignment:
+                # Extract the sequence number from the last assignment ID
+                try:
+                    last_sequence = int(last_assignment.assignment_id.split('-')[-1])
+                    new_sequence = last_sequence + 1
+                except (ValueError, IndexError):
+                    new_sequence = 1
+            else:
+                new_sequence = 1
+            
+            self.assignment_id = f'ASG-{current_year}-{new_sequence:04d}'
+        
+        super().save(*args, **kwargs)
 
     def clean(self):
         """Validate assignment data"""
@@ -437,8 +465,8 @@ class Assignment(models.Model):
 
 class AssignmentHistory(models.Model):
     """Track assignment changes and history"""
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='history_records')
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assignment_history')
+    assignment = models.ForeignKey('Assignment', on_delete=models.CASCADE, related_name='history_records')
+    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='assignment_history')
     action = models.CharField(max_length=50)  # ASSIGNED, TRANSFERRED, RETURNED, etc.
     changed_by = models.ForeignKey(User, on_delete=models.PROTECT)
     changed_at = models.DateTimeField(auto_now_add=True)
@@ -474,13 +502,13 @@ class MaintenanceSchedule(models.Model):
         ('AS_NEEDED', 'As Needed'),
     ]
 
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='maintenance_schedules')
+    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='maintenance_schedules')
     maintenance_type = models.CharField(max_length=20, choices=MAINTENANCE_TYPES)
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
     description = models.TextField()
     next_due_date = models.DateField()
     last_completed_date = models.DateField(null=True, blank=True)
-    assigned_technician = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_assignments')
+    assigned_technician = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_assignments')
     estimated_duration = models.DurationField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -512,13 +540,13 @@ class MaintenanceRecord(models.Model):
         ('POSTPONED', 'Postponed'),
     ]
 
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='maintenance_records')
+    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='maintenance_records')
     maintenance_schedule = models.ForeignKey(MaintenanceSchedule, on_delete=models.SET_NULL, null=True, blank=True, related_name='records')
     maintenance_type = models.CharField(max_length=20, choices=MaintenanceSchedule.MAINTENANCE_TYPES)
     description = models.TextField()
     scheduled_date = models.DateField()
     completed_date = models.DateField(null=True, blank=True)
-    technician = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
+    technician = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED')
     work_performed = models.TextField(blank=True)
     parts_used = models.TextField(blank=True)
