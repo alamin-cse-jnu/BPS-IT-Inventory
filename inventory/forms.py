@@ -12,554 +12,6 @@ from .models import (
     Vendor, Assignment, Staff, Department, Location, Room,
     Building, Floor, User, MaintenanceSchedule, MaintenanceRecord
 )
-# ================================
-# DEVICE FORMS
-# ================================
-
-class DeviceForm(forms.ModelForm):
-    """Form for adding/editing devices"""
-    
-    # Additional fields for easier data entry
-    category = forms.ModelChoiceField(
-        queryset=DeviceCategory.objects.filter(is_active=True),
-        empty_label="Select Category",
-        widget=forms.Select(attrs={'class': 'form-control', 'id': 'id_category'})
-    )
-    
-    subcategory = forms.ModelChoiceField(
-        queryset=DeviceSubCategory.objects.none(),
-        empty_label="Select Subcategory",
-        widget=forms.Select(attrs={'class': 'form-control', 'id': 'id_subcategory'})
-    )
-    
-    specifications_text = forms.CharField(
-        widget=forms.Textarea(attrs={
-            'class': 'form-control',
-            'rows': 4,
-            'placeholder': 'Enter specifications in JSON format or one per line:\nCPU: Intel Core i7\nRAM: 16GB\nStorage: 512GB SSD'
-        }),
-        required=False,
-        help_text="Enter technical specifications. JSON format or one specification per line."
-    )
-    
-    class Meta:
-        model = Device
-        fields = [
-            'asset_tag', 'device_name', 'device_type', 'brand', 'model', 
-            'serial_number', 'mac_address', 'ip_address', 'status', 'condition',
-            'vendor', 'purchase_date', 'purchase_order_number', 'purchase_price',
-            'warranty_start_date', 'warranty_end_date', 'warranty_type',
-            'support_contract', 'amc_details', 'notes', 'is_critical'
-        ]
-        
-        widgets = {
-            'asset_tag': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'BPS-IT-0001'}),
-            'device_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Finance Dept Laptop'}),
-            'device_type': forms.Select(attrs={'class': 'form-control', 'id': 'id_device_type'}),
-            'brand': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Dell, HP, Lenovo, etc.'}),
-            'model': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'OptiPlex 7090'}),
-            'serial_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'SN123456789'}),
-            'mac_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '00:1B:44:11:3A:B7'}),
-            'ip_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '192.168.1.100'}),
-            'status': forms.Select(attrs={'class': 'form-control'}),
-            'condition': forms.Select(attrs={'class': 'form-control'}),
-            'vendor': forms.Select(attrs={'class': 'form-control'}),
-            'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'purchase_order_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'PO-2024-001'}),
-            'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'warranty_start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'warranty_end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'warranty_type': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Standard, Extended, etc.'}),
-            'support_contract': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'amc_details': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'is_critical': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Set initial category and subcategory based on device_type
-        if self.instance and self.instance.pk and self.instance.device_type:
-            self.fields['category'].initial = self.instance.device_type.subcategory.category
-            self.fields['subcategory'].queryset = DeviceSubCategory.objects.filter(
-                category=self.instance.device_type.subcategory.category
-            )
-            self.fields['subcategory'].initial = self.instance.device_type.subcategory
-    
-    def clean_mac_address(self):
-        mac_address = self.cleaned_data.get('mac_address', '').strip()
-        if mac_address:
-            # Validate MAC address format
-            mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
-            if not re.match(mac_pattern, mac_address):
-                raise ValidationError("Enter a valid MAC address (e.g., 00:1B:44:11:3A:B7)")
-        return mac_address
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        purchase_date = cleaned_data.get('purchase_date')
-        warranty_start_date = cleaned_data.get('warranty_start_date')
-        warranty_end_date = cleaned_data.get('warranty_end_date')
-        
-        # Purchase date should not be in the future
-        if purchase_date and purchase_date > date.today():
-            raise ValidationError("Purchase date cannot be in the future.")
-        
-        # Warranty start date should be after or equal to purchase date
-        if purchase_date and warranty_start_date:
-            if warranty_start_date < purchase_date:
-                raise ValidationError("Warranty start date should be after or equal to purchase date.")
-        
-        # Warranty end date should be after start date
-        if warranty_start_date and warranty_end_date:
-            if warranty_end_date <= warranty_start_date:
-                raise ValidationError("Warranty end date must be after warranty start date.")
-        
-        return cleaned_data
-    
-    def save(self, commit=True):
-        """Override save to handle specifications conversion"""
-        instance = super().save(commit=False)
-        
-        # Convert specifications text to JSON
-        specs_text = self.cleaned_data.get('specifications_text', '')
-        if specs_text:
-            specs_dict = {}
-            for line in specs_text.split('\n'):
-                line = line.strip()
-                if ':' in line:
-                    key, value = line.split(':', 1)
-                    specs_dict[key.strip()] = value.strip()
-            instance.specifications = specs_dict
-        else:
-            instance.specifications = {}
-        
-        if commit:
-            instance.save()
-        return instance
-
-class DeviceSearchForm(forms.Form):
-    """Form for searching and filtering devices"""
-    search = forms.CharField(
-        max_length=200,
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Search by Device ID, Name, Asset Tag, Brand, Model, or Serial Number...'
-        })
-    )
-    
-    category = forms.ModelChoiceField(
-        queryset=DeviceCategory.objects.filter(is_active=True),
-        required=False,
-        empty_label="All Categories",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    # FIXED: Using correct choice field names
-    status = forms.ChoiceField(
-        choices=[('', 'All Statuses')] + Device.STATUS_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    location = forms.ModelChoiceField(
-        queryset=Location.objects.filter(is_active=True),
-        required=False,
-        empty_label="All Locations",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    vendor = forms.ModelChoiceField(
-        queryset=Vendor.objects.filter(is_active=True),
-        required=False,
-        empty_label="All Vendors",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    warranty_status = forms.ChoiceField(
-        choices=[
-            ('', 'All'),
-            ('active', 'Active Warranty'),
-            ('expired', 'Expired Warranty'),
-            ('expiring', 'Expiring Soon (30 days)')
-        ],
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    assignment_status = forms.ChoiceField(
-        choices=[
-            ('', 'All'),
-            ('assigned', 'Assigned'),
-            ('unassigned', 'Unassigned')
-        ],
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    # FIXED: Using correct choice field names
-    condition = forms.ChoiceField(
-        choices=[('', 'All Conditions')] + Device.CONDITION_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    purchase_date_from = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
-    )
-    
-    purchase_date_to = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
-    )
-
-# ================================
-# ASSIGNMENT FORMS
-# ================================
-
-class AssignmentForm(forms.ModelForm):
-    """Form for creating/editing assignments"""
-    
-    class Meta:
-        model = Assignment
-        fields = [
-            'device', 'assigned_to_staff', 'assigned_to_department', 
-            'assigned_to_location', 'is_temporary', 'expected_return_date',
-            'start_date', 'purpose', 'conditions', 'notes'
-        ]
-        
-        widgets = {
-            'device': forms.Select(attrs={'class': 'form-control'}),
-            'assigned_to_staff': forms.Select(attrs={'class': 'form-control'}),
-            'assigned_to_department': forms.Select(attrs={'class': 'form-control'}),
-            'assigned_to_location': forms.Select(attrs={'class': 'form-control'}),
-            'is_temporary': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'expected_return_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'purpose': forms.TextInput(attrs={'class': 'form-control'}),
-            'conditions': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-        }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Filter devices to only show available ones for new assignments
-        if not self.instance.pk:
-            self.fields['device'].queryset = Device.objects.filter(status='AVAILABLE')
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        is_temporary = cleaned_data.get('is_temporary')
-        expected_return_date = cleaned_data.get('expected_return_date')
-        start_date = cleaned_data.get('start_date')
-        
-        if is_temporary and not expected_return_date:
-            raise ValidationError("Expected return date is required for temporary assignments.")
-        
-        if start_date and start_date < date.today():
-            raise ValidationError("Start date cannot be in the past.")
-        
-        if expected_return_date and start_date and expected_return_date <= start_date:
-            raise ValidationError("Expected return date must be after start date.")
-        
-        return cleaned_data
-
-class AssignmentSearchForm(forms.Form):
-    """Form for searching assignments"""
-    
-    search = forms.CharField(
-        max_length=200,
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Search by device, staff, or department...'
-        })
-    )
-    
-    status = forms.ChoiceField(
-        choices=[('', 'All'), ('active', 'Active'), ('inactive', 'Inactive')],
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    assignment_type = forms.ChoiceField(
-        choices=[('', 'All'), ('permanent', 'Permanent'), ('temporary', 'Temporary')],
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    department = forms.ModelChoiceField(
-        queryset=Department.objects.all(),
-        required=False,
-        empty_label="All Departments",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    date_from = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
-    )
-    
-    date_to = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
-    )
-
-class BulkAssignmentForm(forms.Form):
-    """Form for bulk device assignment"""
-    devices = forms.ModelMultipleChoiceField(
-        queryset=Device.objects.filter(status='AVAILABLE'),
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
-        help_text="Select devices to assign"
-    )
-    
-    assigned_to_staff = forms.ModelChoiceField(
-        queryset=Staff.objects.filter(is_active=True),
-        required=False,
-        empty_label="Select Staff Member",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    assigned_to_department = forms.ModelChoiceField(
-        queryset=Department.objects.all(),
-        required=False,
-        empty_label="Select Department",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    assigned_to_location = forms.ModelChoiceField(
-        queryset=Location.objects.filter(is_active=True),
-        required=False,
-        empty_label="Select Location",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    is_temporary = forms.BooleanField(
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    
-    expected_return_date = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
-    )
-    
-    purpose = forms.CharField(
-        max_length=500,
-        required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
-    )
-    
-    conditions = forms.CharField(
-        max_length=500,
-        required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
-    )
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        assigned_to_staff = cleaned_data.get('assigned_to_staff')
-        assigned_to_department = cleaned_data.get('assigned_to_department')
-        assigned_to_location = cleaned_data.get('assigned_to_location')
-        is_temporary = cleaned_data.get('is_temporary')
-        expected_return_date = cleaned_data.get('expected_return_date')
-        
-        # Must assign to at least one target
-        if not any([assigned_to_staff, assigned_to_department, assigned_to_location]):
-            raise ValidationError("Must assign to at least one of: Staff, Department, or Location.")
-        
-        # Temporary assignments need return date
-        if is_temporary and not expected_return_date:
-            raise ValidationError("Expected return date is required for temporary assignments.")
-        
-        return cleaned_data
-
-class DeviceTransferForm(forms.Form):
-    """Form for transferring device assignments"""
-    new_staff = forms.ModelChoiceField(
-        queryset=Staff.objects.filter(is_active=True),
-        required=False,
-        empty_label="Select New Staff Member",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    new_department = forms.ModelChoiceField(
-        queryset=Department.objects.all(),
-        required=False,
-        empty_label="Select New Department",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    new_location = forms.ModelChoiceField(
-        queryset=Location.objects.filter(is_active=True),
-        required=False,
-        empty_label="Select New Location",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    transfer_reason = forms.CharField(
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-        help_text="Reason for transfer"
-    )
-    
-    conditions = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-        help_text="Any special conditions for the transfer"
-    )
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        new_staff = cleaned_data.get('new_staff')
-        new_department = cleaned_data.get('new_department')
-        new_location = cleaned_data.get('new_location')
-        
-        # Must assign to at least one new target
-        if not any([new_staff, new_department, new_location]):
-            raise ValidationError("Must transfer to at least one of: Staff, Department, or Location.")
-        
-        return cleaned_data
-
-class ReturnForm(forms.Form):
-    """Form for returning devices"""
-    
-    return_date = forms.DateField(
-        initial=timezone.now().date,
-        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
-    )
-    
-    return_condition = forms.CharField(
-        max_length=200, 
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text="Condition of device when returned"
-    )
-    
-    return_notes = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-        help_text="Any notes about the device condition or return process"
-    )
-    
-    device_condition = forms.ChoiceField(
-        choices=Device.CONDITION_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        help_text="Update device condition"
-    )
-    
-    def clean_return_date(self):
-        return_date = self.cleaned_data.get('return_date')
-        if return_date and return_date > date.today():
-            raise ValidationError("Return date cannot be in the future.")
-        return return_date
-
-# ================================
-# STAFF FORMS
-# ================================
-
-class StaffForm(forms.ModelForm):
-    """Form for staff members - Updated to match your models"""
-    
-    # Create User fields
-    first_name = forms.CharField(
-        max_length=30, 
-        widget=forms.TextInput(attrs={'class': 'form-control'})
-    )
-    last_name = forms.CharField(
-        max_length=30, 
-        widget=forms.TextInput(attrs={'class': 'form-control'})
-    )
-    username = forms.CharField(
-        max_length=150, 
-        widget=forms.TextInput(attrs={'class': 'form-control'})
-    )
-    email = forms.EmailField(
-        widget=forms.EmailInput(attrs={'class': 'form-control'})
-    )
-    
-    class Meta:
-        model = Staff
-        fields = [
-            'employee_id', 'department', 'designation', 'phone', 
-            'extension', 'supervisor', 'joining_date', 'is_active'
-        ]
-        widgets = {
-            'employee_id': forms.TextInput(attrs={'class': 'form-control'}),
-            'department': forms.Select(attrs={'class': 'form-control'}),
-            'designation': forms.TextInput(attrs={'class': 'form-control'}),
-            'phone': forms.TextInput(attrs={'class': 'form-control'}),
-            'extension': forms.TextInput(attrs={'class': 'form-control'}),
-            'supervisor': forms.Select(attrs={'class': 'form-control'}),
-            'joining_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Filter supervisors to only show active staff
-        self.fields['supervisor'].queryset = Staff.objects.filter(is_active=True)
-        
-        # If editing existing staff, populate User fields
-        if self.instance and self.instance.pk and hasattr(self.instance, 'user'):
-            self.fields['first_name'].initial = self.instance.user.first_name
-            self.fields['last_name'].initial = self.instance.user.last_name
-            self.fields['username'].initial = self.instance.user.username
-            self.fields['email'].initial = self.instance.user.email
-    
-    def clean_username(self):
-        username = self.cleaned_data.get('username')
-        if username:
-            # Check if username is unique (excluding current user if editing)
-            user_query = User.objects.filter(username=username)
-            if self.instance and hasattr(self.instance, 'user'):
-                user_query = user_query.exclude(pk=self.instance.user.pk)
-            
-            if user_query.exists():
-                raise ValidationError("Username already exists.")
-        return username
-    
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
-        if email:
-            # Check if email is unique (excluding current user if editing)
-            user_query = User.objects.filter(email=email)
-            if self.instance and hasattr(self.instance, 'user'):
-                user_query = user_query.exclude(pk=self.instance.user.pk)
-            
-            if user_query.exists():
-                raise ValidationError("Email already exists.")
-        return email
-    
-    def save(self, commit=True):
-        """Override save to handle User creation/update"""
-        staff = super().save(commit=False)
-        
-        # Create or update User
-        if hasattr(staff, 'user') and staff.user:
-            # Update existing user
-            user = staff.user
-            user.first_name = self.cleaned_data['first_name']
-            user.last_name = self.cleaned_data['last_name']
-            user.username = self.cleaned_data['username']
-            user.email = self.cleaned_data['email']
-            if commit:
-                user.save()
-        else:
-            # Create new user
-            user = User.objects.create_user(
-                username=self.cleaned_data['username'],
-                email=self.cleaned_data['email'],
-                first_name=self.cleaned_data['first_name'],
-                last_name=self.cleaned_data['last_name']
-            )
-            staff.user = user
-        
-        if commit:
-            staff.save()
-        return staff
 
 # ================================
 # DEPARTMENT FORMS
@@ -742,6 +194,54 @@ class DeviceTypeForm(forms.ModelForm):
             'typical_specifications': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+
+class DeviceCategoryForm(forms.ModelForm):
+    """Form for device categories"""
+    
+    class Meta:
+        model = DeviceCategory
+        fields = ['name', 'category_type', 'description', 'icon', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'category_type': forms.Select(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'icon': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'fa-laptop'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+class DeviceSubCategoryForm(forms.ModelForm):
+    """Form for device subcategories"""
+    
+    class Meta:
+        model = DeviceSubCategory
+        fields = ['category', 'name', 'code', 'description', 'is_active']
+        widgets = {
+            'category': forms.Select(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'code': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        category = self.cleaned_data.get('category')
+        
+        if code and category:
+            # Check for duplicate codes within the same category
+            existing = DeviceSubCategory.objects.filter(
+                category=category,
+                code=code
+            )
+            
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"Code '{code}' already exists in this category.")
+        
+        return code
+
 # ================================
 # IMPORT/EXPORT FORMS
 # ================================
@@ -914,8 +414,7 @@ class AdvancedSearchForm(forms.Form):
             raise ValidationError("Start date cannot be after end date.")
         
         return cleaned_data
-    
-    
+
 class GlobalSearchForm(forms.Form):
     """Global search form"""
     q = forms.CharField(
@@ -939,56 +438,86 @@ class GlobalSearchForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+
 # ================================
-# DEVICE TYPE MANAGEMENT FORMS
+# BULK OPERATION FORMS
 # ================================
 
-class DeviceCategoryForm(forms.ModelForm):
-    """Form for device categories"""
+class BulkDeviceActionForm(forms.Form):
+    """Form for bulk device actions"""
     
-    class Meta:
-        model = DeviceCategory
-        fields = ['name', 'category_type', 'description', 'icon', 'is_active']
-        widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'category_type': forms.Select(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'icon': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'fa-laptop'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
-
-class DeviceSubCategoryForm(forms.ModelForm):
-    """Form for device subcategories"""
+    ACTION_CHOICES = [
+        ('update_status', 'Update Status'),
+        ('update_condition', 'Update Condition'),
+        ('update_location', 'Update Location'),
+        ('assign_devices', 'Assign Devices'),
+        ('generate_qr', 'Generate QR Codes'),
+        ('export_selected', 'Export Selected'),
+    ]
     
-    class Meta:
-        model = DeviceSubCategory
-        fields = ['category', 'name', 'code', 'description', 'is_active']
-        widgets = {
-            'category': forms.Select(attrs={'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
+    action = forms.ChoiceField(
+        choices=ACTION_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Select action to perform on selected devices"
+    )
     
-    def clean_code(self):
-        code = self.cleaned_data.get('code')
-        category = self.cleaned_data.get('category')
+    new_status = forms.ChoiceField(
+        choices=Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_condition = forms.ChoiceField(
+        choices=Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Fields for location update
+    new_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Fields for assignment
+    assign_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assign_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assignment_purpose = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
         
-        if code and category:
-            # Check for duplicate codes within the same category
-            existing = DeviceSubCategory.objects.filter(
-                category=category,
-                code=code
-            )
-            
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError(f"Code '{code}' already exists in this category.")
+        # Validate required fields based on action
+        if action == 'update_status' and not cleaned_data.get('new_status'):
+            raise ValidationError("New status is required for status update action.")
         
-        return code
+        if action == 'update_condition' and not cleaned_data.get('new_condition'):
+            raise ValidationError("New condition is required for condition update action.")
+        
+        if action == 'update_location' and not cleaned_data.get('new_location'):
+            raise ValidationError("New location is required for location update action.")
+        
+        if action == 'assign_devices':
+            if not cleaned_data.get('assign_to_staff') and not cleaned_data.get('assign_to_department'):
+                raise ValidationError("Must assign to either staff or department.")
+        
+        return cleaned_data
 
 # ================================
 # BACKUP & RECOVERY FORMS
@@ -1074,88 +603,6 @@ class DatabaseRestoreForm(forms.Form):
     )
 
 # ================================
-# BULK OPERATION FORMS
-# ================================
-
-class BulkDeviceActionForm(forms.Form):
-    """Form for bulk device actions"""
-    
-    ACTION_CHOICES = [
-        ('update_status', 'Update Status'),
-        ('update_condition', 'Update Condition'),
-        ('update_location', 'Update Location'),
-        ('assign_devices', 'Assign Devices'),
-        ('generate_qr', 'Generate QR Codes'),
-        ('export_selected', 'Export Selected'),
-    ]
-    
-    action = forms.ChoiceField(
-        choices=ACTION_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        help_text="Select action to perform on selected devices"
-    )
-    
-    # FIXED: Using correct choice field names
-    new_status = forms.ChoiceField(
-        choices=Device.STATUS_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    # FIXED: Using correct choice field names
-    new_condition = forms.ChoiceField(
-        choices=Device.CONDITION_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    # Fields for location update
-    new_location = forms.ModelChoiceField(
-        queryset=Location.objects.filter(is_active=True),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    # Fields for assignment
-    assign_to_staff = forms.ModelChoiceField(
-        queryset=Staff.objects.filter(is_active=True),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    assign_to_department = forms.ModelChoiceField(
-        queryset=Department.objects.all(),
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    assignment_purpose = forms.CharField(
-        max_length=500,
-        required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
-    )
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        action = cleaned_data.get('action')
-        
-        # Validate required fields based on action
-        if action == 'update_status' and not cleaned_data.get('new_status'):
-            raise ValidationError("New status is required for status update action.")
-        
-        if action == 'update_condition' and not cleaned_data.get('new_condition'):
-            raise ValidationError("New condition is required for condition update action.")
-        
-        if action == 'update_location' and not cleaned_data.get('new_location'):
-            raise ValidationError("New location is required for location update action.")
-        
-        if action == 'assign_devices':
-            if not cleaned_data.get('assign_to_staff') and not cleaned_data.get('assign_to_department'):
-                raise ValidationError("Must assign to either staff or department.")
-        
-        return cleaned_data
-
-# ================================
 # NOTIFICATION FORMS
 # ================================
 
@@ -1207,3 +654,549 @@ class NotificationPreferencesForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-control'}),
         help_text="How often to receive notifications"
     )
+# ================================
+
+class DeviceForm(forms.ModelForm):
+    """Form for adding/editing devices"""
+    
+    # Additional fields for easier data entry
+    category = forms.ModelChoiceField(
+        queryset=DeviceCategory.objects.filter(is_active=True),
+        empty_label="Select Category",
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'id_category'})
+    )
+    
+    subcategory = forms.ModelChoiceField(
+        queryset=DeviceSubCategory.objects.none(),
+        empty_label="Select Subcategory",
+        widget=forms.Select(attrs={'class': 'form-control', 'id': 'id_subcategory'})
+    )
+    
+    specifications_text = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 4,
+            'placeholder': 'Enter specifications in JSON format or one per line:\nCPU: Intel Core i7\nRAM: 16GB\nStorage: 512GB SSD'
+        }),
+        required=False,
+        help_text="Enter technical specifications. JSON format or one specification per line."
+    )
+    
+    class Meta:
+        model = Device
+        fields = [
+            'asset_tag', 'device_name', 'device_type', 'brand', 'model', 
+            'serial_number', 'mac_address', 'ip_address', 'status', 'condition',
+            'vendor', 'purchase_date', 'purchase_order_number', 'purchase_price',
+            'warranty_start_date', 'warranty_end_date', 'warranty_type',
+            'support_contract', 'amc_details', 'notes', 'is_critical'
+        ]
+        
+        widgets = {
+            'asset_tag': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'BPS-IT-0001'}),
+            'device_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Finance Dept Laptop'}),
+            'device_type': forms.Select(attrs={'class': 'form-control', 'id': 'id_device_type'}),
+            'brand': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Dell, HP, Lenovo, etc.'}),
+            'model': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'OptiPlex 7090'}),
+            'serial_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'SN123456789'}),
+            'mac_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '00:1B:44:11:3A:B7'}),
+            'ip_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '192.168.1.100'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'condition': forms.Select(attrs={'class': 'form-control'}),
+            'vendor': forms.Select(attrs={'class': 'form-control'}),
+            'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'purchase_order_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'PO-2024-001'}),
+            'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'warranty_start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'warranty_end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'warranty_type': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Standard, Extended, etc.'}),
+            'support_contract': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'amc_details': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'is_critical': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set initial category and subcategory based on device_type
+        if self.instance and self.instance.pk and self.instance.device_type:
+            self.fields['category'].initial = self.instance.device_type.subcategory.category
+            self.fields['subcategory'].queryset = DeviceSubCategory.objects.filter(
+                category=self.instance.device_type.subcategory.category
+            )
+            self.fields['subcategory'].initial = self.instance.device_type.subcategory
+    
+    def clean_mac_address(self):
+        mac_address = self.cleaned_data.get('mac_address', '').strip()
+        if mac_address:
+            # Validate MAC address format
+            mac_pattern = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+            if not re.match(mac_pattern, mac_address):
+                raise ValidationError("Enter a valid MAC address (e.g., 00:1B:44:11:3A:B7)")
+        return mac_address
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        purchase_date = cleaned_data.get('purchase_date')
+        warranty_start_date = cleaned_data.get('warranty_start_date')
+        warranty_end_date = cleaned_data.get('warranty_end_date')
+        
+        # Purchase date should not be in the future
+        if purchase_date and purchase_date > date.today():
+            raise ValidationError("Purchase date cannot be in the future.")
+        
+        # Warranty start date should be after or equal to purchase date
+        if purchase_date and warranty_start_date:
+            if warranty_start_date < purchase_date:
+                raise ValidationError("Warranty start date should be after or equal to purchase date.")
+        
+        # Warranty end date should be after start date
+        if warranty_start_date and warranty_end_date:
+            if warranty_end_date <= warranty_start_date:
+                raise ValidationError("Warranty end date must be after warranty start date.")
+        
+        return cleaned_data
+    
+    def save(self, commit=True):
+        """Override save to handle specifications conversion"""
+        instance = super().save(commit=False)
+        
+        # Convert specifications text to JSON
+        specs_text = self.cleaned_data.get('specifications_text', '')
+        if specs_text:
+            specs_dict = {}
+            for line in specs_text.split('\n'):
+                line = line.strip()
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    specs_dict[key.strip()] = value.strip()
+            instance.specifications = specs_dict
+        else:
+            instance.specifications = {}
+        
+        if commit:
+            instance.save()
+        return instance
+
+class DeviceSearchForm(forms.Form):
+    """Form for searching and filtering devices"""
+    search = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search by Device ID, Name, Asset Tag, Brand, Model, or Serial Number...'
+        })
+    )
+    
+    category = forms.ModelChoiceField(
+        queryset=DeviceCategory.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Categories",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All Statuses')] + Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Locations",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    vendor = forms.ModelChoiceField(
+        queryset=Vendor.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Vendors",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    warranty_status = forms.ChoiceField(
+        choices=[
+            ('', 'All'),
+            ('active', 'Active Warranty'),
+            ('expired', 'Expired Warranty'),
+            ('expiring', 'Expiring Soon (30 days)')
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assignment_status = forms.ChoiceField(
+        choices=[
+            ('', 'All'),
+            ('assigned', 'Assigned'),
+            ('unassigned', 'Unassigned')
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    condition = forms.ChoiceField(
+        choices=[('', 'All Conditions')] + Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    purchase_date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    
+    purchase_date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+
+# ================================
+# ASSIGNMENT FORMS
+# ================================
+
+class AssignmentForm(forms.ModelForm):
+    """Form for creating/editing assignments"""
+    
+    class Meta:
+        model = Assignment
+        fields = [
+            'device', 'assigned_to_staff', 'assigned_to_department', 
+            'assigned_to_location', 'is_temporary', 'expected_return_date',
+            'start_date', 'purpose', 'conditions', 'notes'
+        ]
+        
+        widgets = {
+            'device': forms.Select(attrs={'class': 'form-control'}),
+            'assigned_to_staff': forms.Select(attrs={'class': 'form-control'}),
+            'assigned_to_department': forms.Select(attrs={'class': 'form-control'}),
+            'assigned_to_location': forms.Select(attrs={'class': 'form-control'}),
+            'is_temporary': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'expected_return_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'purpose': forms.TextInput(attrs={'class': 'form-control'}),
+            'conditions': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter devices to only show available ones for new assignments
+        if not self.instance.pk:
+            self.fields['device'].queryset = Device.objects.filter(status='AVAILABLE')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        is_temporary = cleaned_data.get('is_temporary')
+        expected_return_date = cleaned_data.get('expected_return_date')
+        start_date = cleaned_data.get('start_date')
+        
+        if is_temporary and not expected_return_date:
+            raise ValidationError("Expected return date is required for temporary assignments.")
+        
+        if start_date and start_date < date.today():
+            raise ValidationError("Start date cannot be in the past.")
+        
+        if expected_return_date and start_date and expected_return_date <= start_date:
+            raise ValidationError("Expected return date must be after start date.")
+        
+        return cleaned_data
+
+class AssignmentSearchForm(forms.Form):
+    """Form for searching assignments"""
+    
+    search = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search by device, staff, or department...'
+        })
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All'), ('active', 'Active'), ('inactive', 'Inactive')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assignment_type = forms.ChoiceField(
+        choices=[('', 'All'), ('permanent', 'Permanent'), ('temporary', 'Temporary')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="All Departments",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+
+class BulkAssignmentForm(forms.Form):
+    """Form for bulk device assignment"""
+    devices = forms.ModelMultipleChoiceField(
+        queryset=Device.objects.filter(status='AVAILABLE'),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        help_text="Select devices to assign"
+    )
+    
+    assigned_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Staff Member",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assigned_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="Select Department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assigned_to_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Location",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    is_temporary = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    expected_return_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    
+    purpose = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
+    )
+    
+    conditions = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        assigned_to_staff = cleaned_data.get('assigned_to_staff')
+        assigned_to_department = cleaned_data.get('assigned_to_department')
+        assigned_to_location = cleaned_data.get('assigned_to_location')
+        is_temporary = cleaned_data.get('is_temporary')
+        expected_return_date = cleaned_data.get('expected_return_date')
+        
+        # Must assign to at least one target
+        if not any([assigned_to_staff, assigned_to_department, assigned_to_location]):
+            raise ValidationError("Must assign to at least one of: Staff, Department, or Location.")
+        
+        # Temporary assignments need return date
+        if is_temporary and not expected_return_date:
+            raise ValidationError("Expected return date is required for temporary assignments.")
+        
+        return cleaned_data
+
+class DeviceTransferForm(forms.Form):
+    """Form for transferring device assignments - CORRECTED VERSION"""
+    new_assigned_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select New Staff Member",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_assigned_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="Select New Department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_assigned_to_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select New Location",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    transfer_reason = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        help_text="Reason for transfer"
+    )
+    
+    conditions = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        help_text="Any special conditions for the transfer"
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        new_staff = cleaned_data.get('new_assigned_to_staff')
+        new_department = cleaned_data.get('new_assigned_to_department')
+        new_location = cleaned_data.get('new_assigned_to_location')
+        
+        # Must assign to at least one new target
+        if not any([new_staff, new_department, new_location]):
+            raise ValidationError("Must transfer to at least one of: Staff, Department, or Location.")
+        
+        return cleaned_data
+
+class ReturnForm(forms.Form):
+    """Form for returning devices"""
+    
+    return_date = forms.DateField(
+        initial=timezone.now().date,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    
+    return_condition = forms.CharField(
+        max_length=200, 
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text="Condition of device when returned"
+    )
+    
+    return_notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        help_text="Any notes about the device condition or return process"
+    )
+    
+    device_condition = forms.ChoiceField(
+        choices=Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Update device condition"
+    )
+    
+    def clean_return_date(self):
+        return_date = self.cleaned_data.get('return_date')
+        if return_date and return_date > date.today():
+            raise ValidationError("Return date cannot be in the future.")
+        return return_date
+
+# ================================
+# STAFF FORMS
+# ================================
+
+class StaffForm(forms.ModelForm):
+    """Form for staff members - Updated to match your models"""
+    
+    # Create User fields
+    first_name = forms.CharField(
+        max_length=30, 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    last_name = forms.CharField(
+        max_length=30, 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    username = forms.CharField(
+        max_length=150, 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={'class': 'form-control'})
+    )
+    
+    class Meta:
+        model = Staff
+        fields = [
+            'employee_id', 'department', 'designation', 'phone', 
+            'extension', 'supervisor', 'joining_date', 'is_active'
+        ]
+        widgets = {
+            'employee_id': forms.TextInput(attrs={'class': 'form-control'}),
+            'department': forms.Select(attrs={'class': 'form-control'}),
+            'designation': forms.TextInput(attrs={'class': 'form-control'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'extension': forms.TextInput(attrs={'class': 'form-control'}),
+            'supervisor': forms.Select(attrs={'class': 'form-control'}),
+            'joining_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter supervisors to only show active staff
+        self.fields['supervisor'].queryset = Staff.objects.filter(is_active=True)
+        
+        # If editing existing staff, populate User fields
+        if self.instance and self.instance.pk and hasattr(self.instance, 'user'):
+            self.fields['first_name'].initial = self.instance.user.first_name
+            self.fields['last_name'].initial = self.instance.user.last_name
+            self.fields['username'].initial = self.instance.user.username
+            self.fields['email'].initial = self.instance.user.email
+    
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if username:
+            # Check if username is unique (excluding current user if editing)
+            user_query = User.objects.filter(username=username)
+            if self.instance and hasattr(self.instance, 'user'):
+                user_query = user_query.exclude(pk=self.instance.user.pk)
+            
+            if user_query.exists():
+                raise ValidationError("Username already exists.")
+        return username
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            # Check if email is unique (excluding current user if editing)
+            user_query = User.objects.filter(email=email)
+            if self.instance and hasattr(self.instance, 'user'):
+                user_query = user_query.exclude(pk=self.instance.user.pk)
+            
+            if user_query.exists():
+                raise ValidationError("Email already exists.")
+        return email
+    
+    def save(self, commit=True):
+        """Override save to handle User creation/update"""
+        staff = super().save(commit=False)
+        
+        # Create or update User
+        if hasattr(staff, 'user') and staff.user:
+            # Update existing user
+            user = staff.user
+            user.first_name = self.cleaned_data['first_name']
+            user.last_name = self.cleaned_data['last_name']
+            user.username = self.cleaned_data['username']
+            user.email = self.cleaned_data['email']
+            if commit:
+                user.save()
+        else:
+            # Create new user
+            user = User.objects.create_user(
+                username=self.cleaned_data['username'],
+                email=self.cleaned_data['email'],
+                first_name=self.cleaned_data['first_name'],
+                last_name=self.cleaned_data['last_name']
+            )
+            staff.user = user
+        
+        if commit:
+            staff.save()
+        return staff
+
+# ================================

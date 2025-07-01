@@ -17,7 +17,6 @@ from django.core.serializers import serialize
 from django.core.exceptions import ValidationError
 from django.conf import settings
 
-
 # Django contrib imports
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
@@ -28,9 +27,6 @@ from django.db import transaction
 from django.db.models import (
     Count, Q, Sum, Avg, Max, Min, F, Case, When, FloatField
 )
-
-# Forms
-from .forms import CSVImportForm
 
 # Third-party imports
 import pandas as pd
@@ -49,16 +45,19 @@ from io import StringIO, BytesIO
 from pathlib import Path
 import json as json_module 
 
+# Model imports
 from .models import (
     Device, Assignment, Staff, Department, Location, 
     DeviceCategory, DeviceType, DeviceSubCategory, Vendor,
     MaintenanceSchedule, AuditLog, Room, Building
 )
+
+# CORRECTED: Import the correct DeviceTransferForm
 from .forms import (
     DeviceForm, AssignmentForm, StaffForm, ReturnForm, 
     LocationForm, DeviceSearchForm, BulkDeviceActionForm,  
     BulkAssignmentForm, MaintenanceScheduleForm, DeviceTransferForm, AssignmentSearchForm,
-    VendorForm
+    VendorForm, CSVImportForm, DepartmentForm, DeviceTypeForm
 )
 
 # FIXED: Import with comprehensive error handling and missing form fallbacks
@@ -1540,7 +1539,7 @@ def assignment_return(request, assignment_id):
 @login_required
 @permission_required('inventory.change_assignment', raise_exception=True)
 def assignment_transfer(request, assignment_id):
-    """Transfer assignment to another staff/department"""
+    """Transfer assignment to another staff/department - CORRECTED"""
     try:
         assignment = get_object_or_404(Assignment, assignment_id=assignment_id, is_active=True)
         
@@ -1549,12 +1548,12 @@ def assignment_transfer(request, assignment_id):
             if form.is_valid():
                 try:
                     with transaction.atomic():
-                        # Create new assignment
+                        # Create new assignment using the CORRECTED field names
                         new_assignment = Assignment.objects.create(
                             device=assignment.device,
-                            assigned_to_staff=form.cleaned_data.get('new_staff'),
-                            assigned_to_department=form.cleaned_data.get('new_department'),
-                            assigned_to_location=form.cleaned_data.get('new_location'),
+                            assigned_to_staff=form.cleaned_data.get('new_assigned_to_staff'),
+                            assigned_to_department=form.cleaned_data.get('new_assigned_to_department'),
+                            assigned_to_location=form.cleaned_data.get('new_assigned_to_location'),
                             is_temporary=assignment.is_temporary,
                             expected_return_date=assignment.expected_return_date,
                             purpose=form.cleaned_data.get('transfer_reason', ''),
@@ -3081,7 +3080,7 @@ def get_locations_by_room(request, room_id):
 @login_required
 @permission_required('inventory.change_device', raise_exception=True)
 def bulk_device_update(request):
-    """Handle bulk actions on selected devices - FIXED"""
+    """Handle bulk actions on selected devices - CORRECTED"""
     if request.method == 'POST':
         device_ids = request.POST.getlist('device_ids')
         update_field = request.POST.get('update_field')
@@ -3103,15 +3102,15 @@ def bulk_device_update(request):
                 for device in devices:
                     if hasattr(device, update_field):
                         if update_field == 'status':
-                            # FIXED: Use correct choice field name
-                            if new_value in dict(Device.STATUS_CHOICES):
+                            # CORRECTED: Use correct choice field validation
+                            if new_value in [choice[0] for choice in Device.STATUS_CHOICES]:
                                 setattr(device, update_field, new_value)
                                 device.updated_by = request.user
                                 device.save()
                                 updated_count += 1
                         elif update_field == 'condition':
-                            # FIXED: Use correct choice field name
-                            if new_value in dict(Device.CONDITION_CHOICES):
+                            # CORRECTED: Use correct choice field validation
+                            if new_value in [choice[0] for choice in Device.CONDITION_CHOICES]:
                                 setattr(device, update_field, new_value)
                                 device.updated_by = request.user
                                 device.save()
@@ -3126,9 +3125,8 @@ def bulk_device_update(request):
                             except (Location.DoesNotExist, ValueError):
                                 continue
                 
-                # Create audit log for bulk update - safe
+                # Create audit log for bulk update
                 try:
-                    from .models import AuditLog
                     AuditLog.objects.create(
                         user=request.user,
                         action='BULK_UPDATE',
@@ -3142,7 +3140,7 @@ def bulk_device_update(request):
                         },
                         ip_address=request.META.get('REMOTE_ADDR')
                     )
-                except ImportError:
+                except:
                     pass  # Skip if AuditLog model doesn't exist
                 
                 messages.success(request, f'Successfully updated {updated_count} devices.')
@@ -3216,9 +3214,62 @@ def bulk_assignment_return(request):
     
     return redirect('inventory:assignment_list')
 
+
+
 # ================================
 # EXPORT FUNCTIONS
 # ================================
+
+@login_required
+def bulk_import(request):
+    """Main bulk import page"""
+    return render(request, 'inventory/bulk_import.html', {
+        'title': 'Bulk Import Data'
+    })
+
+@login_required
+def bulk_export(request):
+    """Main bulk export page"""
+    return render(request, 'inventory/bulk_export.html', {
+        'title': 'Bulk Export Data'
+    })
+
+@login_required
+def import_template(request):
+    """Download import template files"""
+    template_type = request.GET.get('type', 'devices')
+    
+    response = HttpResponse(content_type='text/csv')
+    
+    if template_type == 'devices':
+        response['Content-Disposition'] = 'attachment; filename="device_import_template.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'asset_tag', 'device_name', 'device_type', 'brand', 'model',
+            'serial_number', 'mac_address', 'ip_address', 'status', 'condition',
+            'purchase_date', 'purchase_price', 'vendor', 'warranty_end_date',
+            'notes'
+        ])
+        writer.writerow([
+            'BPS-IT-0001', 'Finance Laptop', 'Laptop', 'Dell', 'Latitude 7420',
+            'DL123456', '00:1B:44:11:3A:B7', '192.168.1.100', 'AVAILABLE', 'GOOD',
+            '2024-01-15', '85000', 'Dell Bangladesh', '2027-01-15',
+            'Sample device entry'
+        ])
+        
+    elif template_type == 'staff':
+        response['Content-Disposition'] = 'attachment; filename="staff_import_template.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            'employee_id', 'first_name', 'last_name', 'email', 'phone',
+            'designation', 'department', 'hire_date'
+        ])
+        writer.writerow([
+            'EMP001', 'John', 'Doe', 'john.doe@company.com', '+8801712345678',
+            'Senior Developer', 'IT Department', '2024-01-15'
+        ])
+    
+    return response
 
 @login_required
 def export_devices_csv(request):
@@ -3268,7 +3319,7 @@ def export_devices_csv(request):
     except Exception as e:
         messages.error(request, f"Error exporting devices: {str(e)}")
         return redirect('inventory:device_list')
-
+    
 @login_required
 def export_assignments_csv(request):
     """Export assignments to CSV"""
@@ -3293,7 +3344,7 @@ def export_assignments_csv(request):
                 assignment.assignment_id,
                 assignment.device.device_id,
                 assignment.device.device_name,
-                assignment.assigned_to_staff.full_name if assignment.assigned_to_staff else '',
+                assignment.assigned_to_staff.user.get_full_name() if assignment.assigned_to_staff else '',
                 assignment.assigned_to_department.name if assignment.assigned_to_department else '',
                 'Temporary' if assignment.is_temporary else 'Permanent',
                 assignment.start_date.strftime('%Y-%m-%d') if assignment.start_date else '',
@@ -4421,7 +4472,7 @@ def export_maintenance_csv(request):
                 schedule.device.device_id,
                 schedule.device.device_name,
                 schedule.get_maintenance_type_display(),
-                schedule.title,
+                schedule.title or '',
                 schedule.description,
                 schedule.scheduled_date.strftime('%Y-%m-%d') if schedule.scheduled_date else '',
                 schedule.scheduled_time.strftime('%H:%M:%S') if schedule.scheduled_time else '',
