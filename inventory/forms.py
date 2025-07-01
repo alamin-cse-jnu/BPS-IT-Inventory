@@ -10,7 +10,7 @@ import json
 from .models import (
     Device, DeviceCategory, DeviceSubCategory, DeviceType,
     Vendor, Assignment, Staff, Department, Location, Room,
-    Building, Floor, User, MaintenanceSchedule
+    Building, Floor, User, MaintenanceSchedule, MaintenanceRecord
 )
 # ================================
 # DEVICE FORMS
@@ -482,15 +482,41 @@ class DepartmentForm(forms.ModelForm):
     
     class Meta:
         model = Department
-        fields = ['floor', 'name', 'head_of_department', 'contact_email', 'contact_phone', 'is_active']
+        fields = ['floor', 'name', 'code', 'head_of_department', 'contact_email', 'contact_phone', 'is_active']
         widgets = {
             'floor': forms.Select(attrs={'class': 'form-control'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'code': forms.TextInput(attrs={
+                'class': 'form-control', 
+                'placeholder': 'e.g., IT, HR, FIN',
+                'maxlength': '20'
+            }),
             'head_of_department': forms.TextInput(attrs={'class': 'form-control'}),
             'contact_email': forms.EmailInput(attrs={'class': 'form-control'}),
             'contact_phone': forms.TextInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['floor'].queryset = Floor.objects.filter(is_active=True)
+    
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        floor = self.cleaned_data.get('floor')
+        
+        if code and floor:
+            # Check for uniqueness within the floor
+            queryset = Department.objects.filter(floor=floor, code=code)
+            if self.instance.pk:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            
+            if queryset.exists():
+                raise forms.ValidationError(
+                    f"A department with code '{code}' already exists in {floor.name}."
+                )
+        
+        return code.upper() if code else code
 
 # ================================
 # LOCATION FORMS
@@ -544,7 +570,8 @@ class MaintenanceScheduleForm(forms.ModelForm):
             'device', 'maintenance_type', 'title', 'description',
             'scheduled_date', 'scheduled_time', 'estimated_duration',
             'vendor', 'technician_name', 'technician_contact',
-            'estimated_cost', 'parts_used'
+            'estimated_cost', 'parts_used', 'frequency', 
+            'next_due_date', 'status'
         ]
         
         widgets = {
@@ -554,19 +581,52 @@ class MaintenanceScheduleForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'scheduled_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'scheduled_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
-            'estimated_duration': forms.TextInput(attrs={
-                'class': 'form-control', 
-                'placeholder': 'e.g., 2:30:00 for 2 hours 30 minutes'
-            }),
+            'estimated_duration': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
             'vendor': forms.Select(attrs={'class': 'form-control'}),
             'technician_name': forms.TextInput(attrs={'class': 'form-control'}),
             'technician_contact': forms.TextInput(attrs={'class': 'form-control'}),
-            'estimated_cost': forms.NumberInput(attrs={
-                'class': 'form-control', 
-                'step': '0.01',
-                'min': '0'
-            }),
+            'estimated_cost': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'parts_used': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'frequency': forms.Select(attrs={'class': 'form-control'}),
+            'next_due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['device'].queryset = Device.objects.filter(status__in=['AVAILABLE', 'ASSIGNED', 'IN_USE'])
+        self.fields['vendor'].queryset = Vendor.objects.filter(is_active=True)
+        
+        # Make some fields optional based on maintenance type
+        if self.instance and self.instance.maintenance_type == 'EMERGENCY':
+            self.fields['scheduled_date'].required = False
+            self.fields['scheduled_time'].required = False
+
+class MaintenanceRecordForm(forms.ModelForm):
+    """Form for recording completed maintenance"""
+    
+    class Meta:
+        model = MaintenanceRecord
+        fields = [
+            'device', 'maintenance_schedule', 'maintenance_type', 
+            'description', 'scheduled_date', 'completed_date',
+            'technician', 'status', 'work_performed', 'parts_used',
+            'cost', 'notes'
+        ]
+        
+        widgets = {
+            'device': forms.Select(attrs={'class': 'form-control'}),
+            'maintenance_schedule': forms.Select(attrs={'class': 'form-control'}),
+            'maintenance_type': forms.Select(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'scheduled_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'completed_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'technician': forms.Select(attrs={'class': 'form-control'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'work_performed': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'parts_used': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'cost': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
 # ================================

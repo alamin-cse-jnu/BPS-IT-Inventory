@@ -1,9 +1,15 @@
+from django.core.validators import RegexValidator
+from datetime import date, timedelta
 from django.db import models
 from django.contrib.auth.models import User
-from django.core.validators import RegexValidator
 from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
-from datetime import date
+import qrcode
+from io import BytesIO
+from django.core.files import File
+from PIL import Image
+import json
 
 # ================================
 # 1. ORGANIZATION & LOCATION MODELS
@@ -52,12 +58,16 @@ class Department(models.Model):
     """Department information"""
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name='departments')
     name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20)  # This field was missing!
     head_of_department = models.CharField(max_length=100, blank=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['floor', 'code']
 
     def __str__(self):
         return f"{self.floor.building.name} - {self.name}"
@@ -493,6 +503,14 @@ class MaintenanceSchedule(models.Model):
         ('INSPECTION', 'Routine Inspection'),
     ]
 
+    MAINTENANCE_STATUS = [
+        ('SCHEDULED', 'Scheduled'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+        ('POSTPONED', 'Postponed'),
+    ]
+
     FREQUENCY_CHOICES = [
         ('WEEKLY', 'Weekly'),
         ('MONTHLY', 'Monthly'),
@@ -502,6 +520,7 @@ class MaintenanceSchedule(models.Model):
         ('AS_NEEDED', 'As Needed'),
     ]
 
+    # Existing fields (keep these)
     device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='maintenance_schedules')
     maintenance_type = models.CharField(max_length=20, choices=MAINTENANCE_TYPES)
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
@@ -514,6 +533,20 @@ class MaintenanceSchedule(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Add the missing fields that your forms expect
+    title = models.CharField(max_length=200, blank=True)
+    scheduled_date = models.DateField(null=True, blank=True)
+    scheduled_time = models.TimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=MAINTENANCE_STATUS, default='SCHEDULED')
+    vendor = models.ForeignKey('Vendor', on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_schedules')
+    technician_name = models.CharField(max_length=100, blank=True)
+    technician_contact = models.CharField(max_length=50, blank=True)
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    actual_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    parts_used = models.TextField(blank=True)
+    work_performed = models.TextField(blank=True)
+    completion_date = models.DateField(null=True, blank=True)
+
     class Meta:
         ordering = ['next_due_date']
 
@@ -523,11 +556,15 @@ class MaintenanceSchedule(models.Model):
     @property
     def is_overdue(self):
         """Check if maintenance is overdue"""
+        if self.scheduled_date:
+            return self.scheduled_date < date.today()
         return self.next_due_date < date.today()
 
     @property
     def days_until_due(self):
         """Calculate days until next maintenance"""
+        if self.scheduled_date:
+            return (self.scheduled_date - date.today()).days
         return (self.next_due_date - date.today()).days
     
 class MaintenanceRecord(models.Model):
