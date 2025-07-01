@@ -430,15 +430,24 @@ class ReturnForm(forms.Form):
         widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
     )
     
-    return_condition = forms.ChoiceField(
-        choices=Device.CONDITION_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-control'})
+    return_condition = forms.CharField(
+        max_length=200, 
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text="Condition of device when returned"
     )
     
     return_notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         help_text="Any notes about the device condition or return process"
+    )
+    
+    device_condition = forms.ChoiceField(
+        choices=Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        help_text="Update device condition"
     )
     
     def clean_return_date(self):
@@ -452,16 +461,31 @@ class ReturnForm(forms.Form):
 # ================================
 
 class StaffForm(forms.ModelForm):
-    """Form for staff members"""
+    """Form for staff members - Updated to match your models"""
     
-    first_name = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'class': 'form-control'}))
-    last_name = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'class': 'form-control'}))
-    username = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'class': 'form-control'}))
-    email = forms.EmailField(widget=forms.EmailInput(attrs={'class': 'form-control'}))
+    # Create User fields
+    first_name = forms.CharField(
+        max_length=30, 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    last_name = forms.CharField(
+        max_length=30, 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    username = forms.CharField(
+        max_length=150, 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={'class': 'form-control'})
+    )
     
     class Meta:
         model = Staff
-        fields = ['employee_id', 'department', 'designation', 'phone', 'extension', 'supervisor', 'joining_date', 'is_active']
+        fields = [
+            'employee_id', 'department', 'designation', 'phone', 
+            'extension', 'supervisor', 'joining_date', 'is_active'
+        ]
         widgets = {
             'employee_id': forms.TextInput(attrs={'class': 'form-control'}),
             'department': forms.Select(attrs={'class': 'form-control'}),
@@ -472,6 +496,70 @@ class StaffForm(forms.ModelForm):
             'joining_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter supervisors to only show active staff
+        self.fields['supervisor'].queryset = Staff.objects.filter(is_active=True)
+        
+        # If editing existing staff, populate User fields
+        if self.instance and self.instance.pk and hasattr(self.instance, 'user'):
+            self.fields['first_name'].initial = self.instance.user.first_name
+            self.fields['last_name'].initial = self.instance.user.last_name
+            self.fields['username'].initial = self.instance.user.username
+            self.fields['email'].initial = self.instance.user.email
+    
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if username:
+            # Check if username is unique (excluding current user if editing)
+            user_query = User.objects.filter(username=username)
+            if self.instance and hasattr(self.instance, 'user'):
+                user_query = user_query.exclude(pk=self.instance.user.pk)
+            
+            if user_query.exists():
+                raise ValidationError("Username already exists.")
+        return username
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            # Check if email is unique (excluding current user if editing)
+            user_query = User.objects.filter(email=email)
+            if self.instance and hasattr(self.instance, 'user'):
+                user_query = user_query.exclude(pk=self.instance.user.pk)
+            
+            if user_query.exists():
+                raise ValidationError("Email already exists.")
+        return email
+    
+    def save(self, commit=True):
+        """Override save to handle User creation/update"""
+        staff = super().save(commit=False)
+        
+        # Create or update User
+        if hasattr(staff, 'user') and staff.user:
+            # Update existing user
+            user = staff.user
+            user.first_name = self.cleaned_data['first_name']
+            user.last_name = self.cleaned_data['last_name']
+            user.username = self.cleaned_data['username']
+            user.email = self.cleaned_data['email']
+            if commit:
+                user.save()
+        else:
+            # Create new user
+            user = User.objects.create_user(
+                username=self.cleaned_data['username'],
+                email=self.cleaned_data['email'],
+                first_name=self.cleaned_data['first_name'],
+                last_name=self.cleaned_data['last_name']
+            )
+            staff.user = user
+        
+        if commit:
+            staff.save()
+        return staff
 
 # ================================
 # DEPARTMENT FORMS
@@ -536,6 +624,13 @@ class LocationForm(forms.ModelForm):
             'description': forms.TextInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # You can add dynamic filtering here when implementing AJAX
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+        self.fields['floor'].queryset = Floor.objects.filter(is_active=True)
+        self.fields['room'].queryset = Room.objects.filter(is_active=True)
 
 # ================================
 # VENDOR FORMS
@@ -819,7 +914,31 @@ class AdvancedSearchForm(forms.Form):
             raise ValidationError("Start date cannot be after end date.")
         
         return cleaned_data
-
+    
+    
+class GlobalSearchForm(forms.Form):
+    """Global search form"""
+    q = forms.CharField(
+        max_length=200,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search devices, assignments, staff...',
+            'autocomplete': 'off'
+        })
+    )
+    
+    search_type = forms.ChoiceField(
+        choices=[
+            ('all', 'All'),
+            ('devices', 'Devices'),
+            ('assignments', 'Assignments'),
+            ('staff', 'Staff'),
+            ('locations', 'Locations')
+        ],
+        initial='all',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
 # ================================
 # DEVICE TYPE MANAGEMENT FORMS
 # ================================

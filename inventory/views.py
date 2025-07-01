@@ -560,6 +560,43 @@ def ajax_device_stats(request):
 # ================================
 
 @login_required
+def device_history(request, device_id):
+    """Show device history"""
+    try:
+        device = get_object_or_404(Device, device_id=device_id)
+        
+        # Get assignment history
+        assignment_history = Assignment.objects.filter(
+            device=device
+        ).select_related(
+            'assigned_to_staff', 'assigned_to_department', 'assigned_to_location'
+        ).order_by('-created_at')
+        
+        # Get maintenance history
+        maintenance_history = MaintenanceSchedule.objects.filter(
+            device=device
+        ).order_by('-scheduled_date')
+        
+        # Get audit logs for this device
+        audit_logs = AuditLog.objects.filter(
+            model_name='Device',
+            object_id=device.device_id
+        ).order_by('-timestamp')
+        
+        context = {
+            'device': device,
+            'assignment_history': assignment_history,
+            'maintenance_history': maintenance_history,
+            'audit_logs': audit_logs,
+        }
+        
+        return render(request, 'inventory/device_history.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading device history: {str(e)}")
+        return redirect('inventory:device_detail', device_id=device_id)
+
+@login_required
 def device_list(request):
     """List all devices with search and filtering"""
     devices = Device.objects.select_related(
@@ -1971,6 +2008,51 @@ def staff_assignments(request, staff_id):
         messages.error(request, f"Error loading staff assignments: {str(e)}")
         return redirect('inventory:staff_list')
 
+@login_required
+@permission_required('inventory.delete_staff', raise_exception=True)
+def staff_delete(request, staff_id):
+    """Soft delete staff member"""
+    try:
+        staff = get_object_or_404(Staff, id=staff_id)
+        
+        if request.method == 'POST':
+            # Check for active assignments
+            active_assignments = Assignment.objects.filter(assigned_to_staff=staff, is_active=True)
+            if active_assignments.exists():
+                messages.error(request, 'Cannot delete staff member with active assignments.')
+                return redirect('inventory:staff_detail', staff_id=staff.id)
+            
+            try:
+                # Soft delete by marking as inactive
+                staff.is_active = False
+                staff.save()
+                
+                # Create audit log
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='DELETE',
+                    model_name='Staff',
+                    object_id=str(staff.id),
+                    object_repr=str(staff),
+                    changes={'deactivated': True},
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                messages.success(request, f'Staff member "{staff.user.get_full_name()}" has been deactivated.')
+                return redirect('inventory:staff_list')
+            except Exception as e:
+                messages.error(request, f'Error deactivating staff member: {str(e)}')
+        
+        context = {
+            'staff': staff,
+            'active_assignments': Assignment.objects.filter(assigned_to_staff=staff, is_active=True).count()
+        }
+        return render(request, 'inventory/staff_delete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error processing request: {str(e)}")
+        return redirect('inventory:staff_list')
+    
 # ================================
 # DEPARTMENT MANAGEMENT VIEWS
 # ================================
@@ -2546,7 +2628,7 @@ def maintenance_create(request):
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
                 
-                messages.success(request, f'Maintenance "{maintenance.title}" scheduled successfully.')
+                messages.success(request, f'Maintenance "{maintenance.title or maintenance.description}" scheduled successfully.')
                 return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
             except Exception as e:
                 messages.error(request, f'Error scheduling maintenance: {str(e)}')
@@ -2704,7 +2786,7 @@ def device_type_create(request):
                 )
                 
                 messages.success(request, f'Device type "{device_type.name}" created successfully.')
-                return redirect('inventory:device_type_list')
+                return redirect('inventory:device_type_detail', type_id=device_type.id)
             except Exception as e:
                 messages.error(request, f'Error creating device type: {str(e)}')
     else:
@@ -3802,10 +3884,30 @@ def generate_qr_codes_bulk(request):
     
     return redirect('inventory:device_list')
 
+@login_required
+def device_qr_code(request, device_id):
+    """Generate and display QR code for device"""
+    try:
+        device = get_object_or_404(Device, device_id=device_id)
+        
+        # For now, just show the QR code UUID
+        # You can implement actual QR code generation when qr_management app is ready
+        context = {
+            'device': device,
+            'qr_code': device.qr_code,
+        }
+        
+        return render(request, 'inventory/device_qr_code.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading device QR code: {str(e)}")
+        return redirect('inventory:device_detail', device_id=device_id)
+
 # ================================
 # AJAX VIEWS  
 # ================================
 
+@login_required
 @require_http_methods(["GET"])
 def ajax_get_subcategories(request):
     """AJAX: Get subcategories for category"""
@@ -3821,6 +3923,7 @@ def ajax_get_subcategories(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+@login_required
 @require_http_methods(["GET"])
 def ajax_get_device_types(request):
     """AJAX: Get device types for subcategory"""
@@ -3832,6 +3935,23 @@ def ajax_get_device_types(request):
             ).values('id', 'name')
             return JsonResponse({'device_types': list(device_types)})
         return JsonResponse({'device_types': []})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_device_quick_info(request, device_id):
+    """AJAX: Get quick device info"""
+    try:
+        device = get_object_or_404(Device, device_id=device_id)
+        data = {
+            'device_id': device.device_id,
+            'device_name': device.device_name,
+            'status': device.status,
+            'brand': device.brand,
+            'model': device.model,
+        }
+        return JsonResponse(data)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
@@ -3865,6 +3985,7 @@ def ajax_get_locations_by_room(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+@login_required
 @require_http_methods(["POST"])
 def ajax_assignment_quick_actions(request, assignment_id):
     """AJAX: Assignment quick actions"""
@@ -5171,3 +5292,70 @@ def delete_backup(request, backup_filename):
         messages.error(request, f"Error deleting backup: {str(e)}")
     
     return redirect('inventory:database_backup')
+
+# ================================
+# Global Search VIEW 
+# ================================
+@login_required
+def global_search(request):
+    """Global search function"""
+    try:
+        query = request.GET.get('q', '').strip()
+        
+        if not query:
+            return render(request, 'inventory/search_results.html', {
+                'query': '',
+                'results': {'devices': [], 'assignments': [], 'staff': []},
+                'total_results': 0
+            })
+        
+        # Search devices
+        devices = Device.objects.filter(
+            Q(device_name__icontains=query) |
+            Q(device_id__icontains=query) |
+            Q(asset_tag__icontains=query) |
+            Q(brand__icontains=query) |
+            Q(model__icontains=query) |
+            Q(serial_number__icontains=query)
+        ).select_related('device_type')[:20]
+        
+        # Search assignments
+        assignments = Assignment.objects.filter(
+            Q(device__device_name__icontains=query) |
+            Q(device__device_id__icontains=query) |
+            Q(assigned_to_staff__user__first_name__icontains=query) |
+            Q(assigned_to_staff__user__last_name__icontains=query) |
+            Q(assigned_to_department__name__icontains=query)
+        ).select_related('device', 'assigned_to_staff', 'assigned_to_department')[:20]
+        
+        # Search staff
+        staff = Staff.objects.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query) |
+            Q(employee_id__icontains=query) |
+            Q(user__email__icontains=query)
+        ).select_related('user', 'department')[:20]
+        
+        results = {
+            'devices': devices,
+            'assignments': assignments,
+            'staff': staff
+        }
+        
+        total_results = len(devices) + len(assignments) + len(staff)
+        
+        context = {
+            'query': query,
+            'results': results,
+            'total_results': total_results,
+        }
+        
+        return render(request, 'inventory/search_results.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error performing search: {str(e)}")
+        return render(request, 'inventory/search_results.html', {
+            'query': query,
+            'results': {'devices': [], 'assignments': [], 'staff': []},
+            'total_results': 0
+        })
