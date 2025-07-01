@@ -1,3 +1,5 @@
+# File Location: inventory/admin.py
+
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
@@ -75,13 +77,14 @@ class StaffAssignmentHistoryInline(admin.TabularInline):
 class StaffAdmin(admin.ModelAdmin):
     list_display = [
         'employee_id', 'get_full_name', 'designation', 'department', 
-        'get_phone', 'get_email', 'is_active'  # Fixed: Use methods instead of direct properties
+        'get_phone', 'get_email', 'is_active'
     ]
     list_filter = [
         'department', 'designation', 'is_active', 'joining_date'
     ]
     search_fields = ['employee_id', 'user__first_name', 'user__last_name', 'user__email', 'phone']
     readonly_fields = ['created_at', 'updated_at']
+    inlines = [StaffAssignmentHistoryInline]
     
     fieldsets = (
         ('Basic Information', {
@@ -119,7 +122,7 @@ class StaffAdmin(admin.ModelAdmin):
 class StaffAssignmentHistoryAdmin(admin.ModelAdmin):
     list_display = ['staff', 'department', 'designation', 'start_date', 'end_date']
     list_filter = ['department', 'start_date', 'end_date']
-    search_fields = ['staff__full_name', 'staff__employee_id', 'designation']
+    search_fields = ['staff__user__first_name', 'staff__user__last_name', 'staff__employee_id', 'designation']
     readonly_fields = ['created_at']
 
 # ================================
@@ -129,25 +132,21 @@ class StaffAssignmentHistoryAdmin(admin.ModelAdmin):
 @admin.register(Vendor)
 class VendorAdmin(admin.ModelAdmin):
     list_display = [
-        'vendor_code', 'name', 'vendor_type', 'contact_person', 
-        'phone', 'performance_rating', 'is_active'
+        'name', 'contact_person', 'phone', 'email', 'is_active'
     ]
-    list_filter = ['vendor_type', 'is_active', 'performance_rating']
-    search_fields = ['name', 'vendor_code', 'contact_person', 'email']
+    list_filter = ['is_active']
+    search_fields = ['name', 'contact_person', 'email']
     readonly_fields = ['created_at', 'updated_at']
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'vendor_code', 'vendor_type')
+            'fields': ('name',)
         }),
         ('Contact Information', {
             'fields': ('contact_person', 'phone', 'email', 'address', 'website')
         }),
-        ('Legal Information', {
-            'fields': ('tax_id', 'registration_number')
-        }),
-        ('Performance & Status', {
-            'fields': ('performance_rating', 'is_active')
+        ('Status', {
+            'fields': ('is_active',)
         }),
         ('Audit Information', {
             'fields': ('created_at', 'updated_at'),
@@ -197,9 +196,9 @@ class DeviceTypeAdmin(admin.ModelAdmin):
 class AssignmentInline(admin.TabularInline):
     model = Assignment
     extra = 0
-    readonly_fields = ['assignment_id', 'created_at']
+    readonly_fields = ['assignment_id', 'assigned_at']
     fields = [
-        'assignment_type', 'assigned_to_staff', 'assigned_to_department', 
+        'assignment_id', 'assigned_to_staff', 'assigned_to_department', 
         'assigned_to_location', 'is_active', 'is_temporary'
     ]
 
@@ -213,11 +212,11 @@ class MaintenanceScheduleInline(admin.TabularInline):
 class DeviceAdmin(admin.ModelAdmin):
     list_display = [
         'device_id', 'device_name', 'device_type', 'brand', 'model', 
-        'status', 'condition', 'get_current_assignment', 'get_warranty_status'  # Fixed method names
+        'status', 'condition', 'get_current_assignment', 'get_warranty_status'
     ]
     list_filter = [
         'device_type__subcategory__category', 'device_type__subcategory', 
-        'device_type', 'status', 'condition', 'brand', 'vendor', 'is_critical'
+        'device_type', 'status', 'condition', 'brand', 'vendor'
     ]
     search_fields = [
         'device_id', 'device_name', 'asset_tag', 'serial_number', 
@@ -226,6 +225,7 @@ class DeviceAdmin(admin.ModelAdmin):
     readonly_fields = [
         'device_id', 'qr_code', 'created_at', 'updated_at'
     ]
+    inlines = [AssignmentInline, MaintenanceScheduleInline]
     
     fieldsets = (
         ('Basic Information', {
@@ -243,7 +243,7 @@ class DeviceAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Status & Condition', {
-            'fields': ('status', 'condition', 'is_critical')
+            'fields': ('status', 'condition')
         }),
         ('Procurement Information', {
             'fields': (
@@ -277,23 +277,29 @@ class DeviceAdmin(admin.ModelAdmin):
     )
     
     def get_current_assignment(self, obj):
-        active_assignment = obj.assignments.filter(is_active=True).first()
-        if active_assignment:
-            target = (active_assignment.assigned_to_staff or 
-                     active_assignment.assigned_to_department or 
-                     active_assignment.assigned_to_location)
-            return str(target)
-        return "Unassigned"
+        try:
+            active_assignment = obj.assignments.filter(is_active=True).first()
+            if active_assignment:
+                target = (active_assignment.assigned_to_staff or 
+                         active_assignment.assigned_to_department or 
+                         active_assignment.assigned_to_location)
+                return str(target)
+            return "Unassigned"
+        except:
+            return "Unassigned"
     get_current_assignment.short_description = "Current Assignment"
     
     def get_warranty_status(self, obj):
-        if obj.is_warranty_active:
-            if obj.warranty_expires_soon:
-                return format_html(
-                    '<span style="color: orange;">⚠️ Expires Soon</span>'
-                )
-            return format_html('<span style="color: green;">✅ Active</span>')
-        return format_html('<span style="color: red;">❌ Expired</span>')
+        try:
+            if hasattr(obj, 'is_warranty_active') and obj.is_warranty_active:
+                if hasattr(obj, 'warranty_expires_soon') and obj.warranty_expires_soon:
+                    return format_html(
+                        '<span style="color: orange;">⚠️ Expires Soon</span>'
+                    )
+                return format_html('<span style="color: green;">✅ Active</span>')
+            return format_html('<span style="color: red;">❌ Expired</span>')
+        except:
+            return format_html('<span style="color: gray;">Unknown</span>')
     get_warranty_status.short_description = "Warranty Status"
 
 # ================================
@@ -310,7 +316,7 @@ class AssignmentHistoryInline(admin.TabularInline):
 class AssignmentAdmin(admin.ModelAdmin):
     list_display = [
         'assignment_id', 'device', 'get_assignment_type', 'get_assignment_target',
-        'start_date', 'is_active', 'is_temporary', 'get_overdue_status'  # Fixed method names
+        'start_date', 'is_active', 'is_temporary', 'get_overdue_status'
     ]
     list_filter = [
         'is_active', 'is_temporary', 'start_date',
@@ -322,8 +328,9 @@ class AssignmentAdmin(admin.ModelAdmin):
         'assigned_to_department__name'
     ]
     readonly_fields = [
-        'assignment_id', 'created_at', 'updated_at'
+        'assignment_id', 'assigned_at', 'updated_at'
     ]
+    inlines = [AssignmentHistoryInline]
     
     fieldsets = (
         ('Assignment Information', {
@@ -349,12 +356,12 @@ class AssignmentAdmin(admin.ModelAdmin):
         }),
         ('Approval Workflow', {
             'fields': (
-                'requested_by', 'assigned_by'
+                'assigned_by'
             ),
             'classes': ('collapse',)
         }),
         ('Audit Information', {
-            'fields': ('created_by', 'created_at', 'updated_by', 'updated_at'),
+            'fields': ('created_by', 'assigned_at', 'updated_by', 'updated_at'),
             'classes': ('collapse',)
         })
     )
@@ -372,15 +379,18 @@ class AssignmentAdmin(admin.ModelAdmin):
     get_assignment_target.short_description = "Assigned To"
     
     def get_overdue_status(self, obj):
-        if obj.is_overdue:
-            return format_html('<span style="color: red;">⚠️ Overdue</span>')
-        return "✅ On Time"
+        try:
+            if hasattr(obj, 'is_overdue') and obj.is_overdue:
+                return format_html('<span style="color: red;">⚠️ Overdue</span>')
+            return "✅ On Time"
+        except:
+            return "✅ On Time"
     get_overdue_status.short_description = "Overdue Status"
 
 @admin.register(AssignmentHistory)
 class AssignmentHistoryAdmin(admin.ModelAdmin):
     list_display = [
-        'device', 'action', 'previous_target', 'new_target', 
+        'device', 'action', 'get_previous_target', 'get_new_target', 
         'changed_by', 'changed_at'
     ]
     list_filter = ['action', 'changed_at']
@@ -389,15 +399,21 @@ class AssignmentHistoryAdmin(admin.ModelAdmin):
     ]
     readonly_fields = ['changed_at']
     
-    def previous_target(self, obj):
-        target = obj.previous_staff or obj.previous_department or obj.previous_location
-        return str(target) if target else "None"
-    previous_target.short_description = "From"
+    def get_previous_target(self, obj):
+        try:
+            target = obj.previous_staff or obj.previous_department or obj.previous_location
+            return str(target) if target else "None"
+        except:
+            return "None"
+    get_previous_target.short_description = "From"
     
-    def new_target(self, obj):
-        target = obj.new_staff or obj.new_department or obj.new_location
-        return str(target) if target else "None"
-    new_target.short_description = "To"
+    def get_new_target(self, obj):
+        try:
+            target = obj.new_staff or obj.new_department or obj.new_location
+            return str(target) if target else "None"
+        except:
+            return "None"
+    get_new_target.short_description = "To"
 
 # ================================
 # MAINTENANCE ADMIN
@@ -407,7 +423,7 @@ class AssignmentHistoryAdmin(admin.ModelAdmin):
 class MaintenanceScheduleAdmin(admin.ModelAdmin):
     list_display = [
         'device', 'maintenance_type', 'title', 'scheduled_date', 
-        'status', 'vendor', 'actual_cost'
+        'status', 'vendor', 'get_actual_cost'
     ]
     list_filter = [
         'maintenance_type', 'status', 'scheduled_date', 'vendor'
@@ -454,6 +470,13 @@ class MaintenanceScheduleAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+    
+    def get_actual_cost(self, obj):
+        try:
+            return obj.actual_cost or obj.estimated_cost or "N/A"
+        except:
+            return "N/A"
+    get_actual_cost.short_description = "Actual Cost"
 
 # ================================
 # AUDIT & TRACKING ADMIN
@@ -478,13 +501,20 @@ class AuditLogAdmin(admin.ModelAdmin):
 class DeviceMovementAdmin(admin.ModelAdmin):
     list_display = [
         'device', 'from_location', 'to_location', 'moved_by', 
-        'reason', 'qr_scanned', 'timestamp'
+        'reason', 'get_qr_scanned', 'timestamp'
     ]
-    list_filter = ['qr_scanned', 'timestamp']
+    list_filter = ['timestamp']
     search_fields = [
         'device__device_id', 'device__device_name', 'reason'
     ]
     readonly_fields = ['timestamp']
+    
+    def get_qr_scanned(self, obj):
+        try:
+            return "Yes" if obj.qr_scanned else "No"
+        except:
+            return "Unknown"
+    get_qr_scanned.short_description = "QR Scanned"
 
 # ================================
 # SYSTEM CONFIGURATION ADMIN
@@ -521,7 +551,7 @@ class NotificationAdmin(admin.ModelAdmin):
         'subject', 'recipient', 'status', 'sent_at', 'read_at', 
         'delivery_attempts'
     ]
-    list_filter = ['status', 'sent_at', 'rule__event_type']
+    list_filter = ['status', 'sent_at']
     search_fields = ['subject', 'recipient__username', 'message']
     readonly_fields = ['created_at']
 

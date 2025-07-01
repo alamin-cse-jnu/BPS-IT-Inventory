@@ -1,3 +1,5 @@
+# File Location: authentication/admin.py
+
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
@@ -49,38 +51,44 @@ class UserRoleAdmin(admin.ModelAdmin):
     def permissions_summary(self, obj):
         """Display a summary of key permissions"""
         permissions = []
-        if obj.can_view_all_devices:
-            permissions.append("View All")
-        if obj.can_manage_assignments:
-            permissions.append("Manage Assignments")
-        if obj.can_approve_requests:
-            permissions.append("Approve Requests")
-        if obj.can_manage_users:
-            permissions.append("Manage Users")
-        if obj.can_system_admin:
-            permissions.append("System Admin")
-        
-        return ", ".join(permissions[:3]) + ("..." if len(permissions) > 3 else "")
+        try:
+            if obj.can_view_all_devices:
+                permissions.append("View All")
+            if obj.can_manage_assignments:
+                permissions.append("Manage Assignments")
+            if obj.can_approve_requests:
+                permissions.append("Approve Requests")
+            if obj.can_manage_users:
+                permissions.append("Manage Users")
+            if obj.can_system_admin:
+                permissions.append("System Admin")
+            
+            return ", ".join(permissions[:3]) + ("..." if len(permissions) > 3 else "")
+        except:
+            return "Unknown"
     permissions_summary.short_description = "Key Permissions"
     
     def access_level(self, obj):
         """Display access level based on permissions"""
-        if obj.can_system_admin:
-            return format_html('<span style="color: red; font-weight: bold;">🔴 System Admin</span>')
-        elif obj.can_manage_users:
-            return format_html('<span style="color: orange; font-weight: bold;">🟠 Administrator</span>')
-        elif obj.can_manage_assignments:
-            return format_html('<span style="color: blue; font-weight: bold;">🔵 Manager</span>')
-        elif obj.can_generate_reports:
-            return format_html('<span style="color: green;">🟢 Staff</span>')
-        else:
-            return format_html('<span style="color: gray;">⚪ Limited</span>')
+        try:
+            if obj.can_system_admin:
+                return format_html('<span style="color: red; font-weight: bold;">🔴 System Admin</span>')
+            elif obj.can_manage_users:
+                return format_html('<span style="color: orange; font-weight: bold;">🟠 Administrator</span>')
+            elif obj.can_manage_assignments:
+                return format_html('<span style="color: blue; font-weight: bold;">🔵 Manager</span>')
+            elif obj.can_generate_reports:
+                return format_html('<span style="color: green;">🟢 Staff</span>')
+            else:
+                return format_html('<span style="color: gray;">⚪ Limited</span>')
+        except:
+            return format_html('<span style="color: gray;">⚪ Unknown</span>')
     access_level.short_description = "Access Level"
 
 @admin.register(UserRoleAssignment)
 class UserRoleAssignmentAdmin(admin.ModelAdmin):
     list_display = [
-        'user', 'role', 'department', 'scope_info', 'assignment_period', 
+        'user', 'role', 'department', 'get_scope_info', 'get_assignment_period', 
         'is_active', 'assigned_by'
     ]
     list_filter = [
@@ -99,51 +107,49 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
         ('Assignment Period', {
             'fields': ('start_date', 'end_date', 'is_active')
         }),
-        ('Assignment Audit', {
-            'fields': ('assigned_by', 'assigned_at'),
+        ('Assignment Details', {
+            'fields': ('assigned_by', 'assigned_at', 'notes'),
             'classes': ('collapse',)
         })
     )
     
-    def scope_info(self, obj):
-        """Display scope information for the role assignment"""
-        if obj.department:
-            return f"Department: {obj.department.name}"
-        elif obj.role.restricted_to_own_department:
-            return "Own Department Only"
-        else:
-            return "Organization Wide"
-    scope_info.short_description = "Scope"
+    def get_scope_info(self, obj):
+        """Display scope information"""
+        try:
+            if obj.department:
+                return f"Department: {obj.department.name}"
+            return "Organization-wide"
+        except:
+            return "Unknown"
+    get_scope_info.short_description = "Scope"
     
-    def assignment_period(self, obj):
+    def get_assignment_period(self, obj):
         """Display assignment period"""
-        if obj.end_date:
-            return f"{obj.start_date} to {obj.end_date}"
-        else:
-            return f"From {obj.start_date} (Ongoing)"
-    assignment_period.short_description = "Period"
+        try:
+            if obj.end_date:
+                return f"{obj.start_date} to {obj.end_date}"
+            return f"From {obj.start_date}"
+        except:
+            return "Unknown"
+    get_assignment_period.short_description = "Period"
 
 # ================================
-# EXTENDED USER ADMIN (SIMPLIFIED)
+# EXTENDED USER ADMIN
 # ================================
 
 class UserRoleAssignmentInline(admin.TabularInline):
-    """Inline for managing user role assignments"""
     model = UserRoleAssignment
     extra = 0
+    readonly_fields = ['assigned_at']
     fields = ['role', 'department', 'start_date', 'end_date', 'is_active']
+
+class CustomUserAdmin(BaseUserAdmin):
+    """Extended User admin with role assignments"""
+    inlines = [UserRoleAssignmentInline]
     
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('role', 'department')
+        return super().get_queryset(request).prefetch_related('role_assignments')
 
-# Simple approach - don't extend BaseUserAdmin for now
-# Just register the inline separately if needed
-
-# ================================
-# ADMIN SITE CUSTOMIZATION
-# ================================
-
-# Custom admin site headers and titles
-admin.site.site_header = "BPS IT Inventory Management System"
-admin.site.site_title = "BPS Inventory Admin"
-admin.site.index_title = "Welcome to BPS IT Inventory Management"
+# Unregister the default User admin and register our custom one
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
