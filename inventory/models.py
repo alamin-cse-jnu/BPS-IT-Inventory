@@ -123,8 +123,30 @@ class Staff(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def full_name(self):
+        """Get full name from related User model"""
+        if self.user:
+            return f"{self.user.first_name} {self.user.last_name}".strip()
+        return self.employee_id
+    
+    @property  
+    def first_name(self):
+        """Get first name from related User model"""
+        return self.user.first_name if self.user else ""
+    
+    @property
+    def last_name(self):
+        """Get last name from related User model"""  
+        return self.user.last_name if self.user else ""
+    
+    @property
+    def email(self):
+        """Get email from related User model"""
+        return self.user.email if self.user else ""
+    
     def __str__(self):
-        return f"{self.user.get_full_name()} ({self.employee_id})"
+        return f"{self.full_name} ({self.employee_id})"
 
 class StaffAssignmentHistory(models.Model):
     """Track staff department and designation changes"""
@@ -366,6 +388,19 @@ class Device(models.Model):
             today = date.today()
             return (today - self.purchase_date).days / 365.25
         return 0
+    @property
+    def is_warranty_active(self):
+        """Check if warranty is still active"""
+        if not self.warranty_end_date:
+            return False
+        return self.warranty_end_date >= date.today()
+    
+    @property
+    def warranty_expires_soon(self):
+        """Check if warranty expires within 30 days"""
+        if not self.warranty_end_date:
+            return False
+        return (self.warranty_end_date - date.today()).days <= 30
 
 
 # ================================

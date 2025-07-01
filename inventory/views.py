@@ -1814,12 +1814,13 @@ def overdue_assignments_list(request):
 
 @login_required
 def staff_list(request):
-    """List all staff members"""
+    """List all staff members with device assignment counts"""
     try:
-        staff_members = Staff.objects.select_related(
-            'department', 'reporting_manager'
-        ).prefetch_related(
-            'staff_assignments__device'
+        staff_members = Staff.objects.select_related('department').prefetch_related(
+            'assignments'
+        ).annotate(
+            active_assignments=Count('assignments', filter=Q(assignments__status='ACTIVE')),
+            total_assignments=Count('assignments')
         ).order_by('department__name', 'last_name', 'first_name')
         
         # Search functionality
@@ -1829,7 +1830,8 @@ def staff_list(request):
                 Q(first_name__icontains=search) |
                 Q(last_name__icontains=search) |
                 Q(employee_id__icontains=search) |
-                Q(email__icontains=search)
+                Q(email__icontains=search) |
+                Q(department__name__icontains=search)
             )
         
         # Department filter
@@ -1842,44 +1844,52 @@ def staff_list(request):
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
-        # Get departments for filter
+        # Get departments for filter dropdown
         departments = Department.objects.all().order_by('name')
         
         context = {
             'page_obj': page_obj,
-            'departments': departments,
             'search': search,
+            'departments': departments,
             'selected_department': department_id,
         }
         
         return render(request, 'inventory/staff_list.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading staff: {str(e)}")
+        messages.error(request, f"Error loading staff list: {str(e)}")
         return render(request, 'inventory/staff_list.html', {'page_obj': None})
 
 @login_required
 def staff_detail(request, staff_id):
-    """Display staff member details with assignment history"""
+    """Staff detail view with assignment history"""
     try:
-        staff = get_object_or_404(Staff.objects.select_related(
-            'department', 'reporting_manager'
-        ), id=staff_id)
+        staff = get_object_or_404(Staff.objects.select_related('department'), id=staff_id)
         
-        # Get current assignments
-        current_assignments = Assignment.objects.filter(
-            assigned_to_staff=staff,
-            is_active=True
-        ).select_related('device')
+        # Get assignments with pagination
+        assignments = Assignment.objects.filter(
+            staff=staff
+        ).select_related(
+            'device', 'device__device_type', 'assigned_by', 'returned_by'
+        ).order_by('-assigned_date')
         
-        # Get assignment history
-        assignment_history = Assignment.objects.filter(
-            assigned_to_staff=staff
-        ).select_related('device').order_by('-created_at')[:20]
+        # Current assignments
+        current_assignments = assignments.filter(status='ACTIVE')
         
-        # Calculate statistics
-        total_assignments = assignment_history.count()
+        # Assignment history
+        assignment_history = assignments.filter(status__in=['RETURNED', 'TRANSFERRED'])
+        
+        # Calculate stats
+        total_assignments = assignments.count()
         active_assignments = current_assignments.count()
+        
+        # Calculate total value of current assignments
+        total_value = current_assignments.aggregate(
+            total=Sum('device__purchase_price')
+        )['total'] or 0
+        
+        # Recent activities (last 10)
+        recent_activities = assignment_history[:10]
         
         context = {
             'staff': staff,
@@ -1887,6 +1897,8 @@ def staff_detail(request, staff_id):
             'assignment_history': assignment_history,
             'total_assignments': total_assignments,
             'active_assignments': active_assignments,
+            'total_value': total_value,
+            'recent_activities': recent_activities,
         }
         
         return render(request, 'inventory/staff_detail.html', context)
@@ -1895,7 +1907,6 @@ def staff_detail(request, staff_id):
         messages.error(request, f"Error loading staff details: {str(e)}")
         return redirect('inventory:staff_list')
 
-@login_required
 @permission_required('inventory.add_staff', raise_exception=True)
 def staff_create(request):
     """Create new staff member"""
@@ -1905,18 +1916,18 @@ def staff_create(request):
             try:
                 staff = form.save()
                 
-                # Create audit log
-                AuditLog.objects.create(
+                # Log the activity
+                from .utils import log_user_activity
+                log_user_activity(
                     user=request.user,
                     action='CREATE',
                     model_name='Staff',
-                    object_id=str(staff.id),
+                    object_id=staff.id,
                     object_repr=str(staff),
-                    changes={'created': 'New staff member added'},
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
                 
-                messages.success(request, f'Staff member "{staff.full_name}" created successfully.')
+                messages.success(request, f'Staff member "{staff.get_full_name()}" created successfully.')
                 return redirect('inventory:staff_detail', staff_id=staff.id)
             except Exception as e:
                 messages.error(request, f'Error creating staff member: {str(e)}')
@@ -1933,7 +1944,7 @@ def staff_create(request):
 @login_required
 @permission_required('inventory.change_staff', raise_exception=True)
 def staff_edit(request, staff_id):
-    """Edit staff member details"""
+    """Edit staff details"""
     try:
         staff = get_object_or_404(Staff, id=staff_id)
         
@@ -1941,21 +1952,22 @@ def staff_edit(request, staff_id):
             form = StaffForm(request.POST, instance=staff)
             if form.is_valid():
                 try:
-                    staff = form.save()
-                    
-                    # Create audit log
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='UPDATE',
-                        model_name='Staff',
-                        object_id=str(staff.id),
-                        object_repr=str(staff),
-                        changes={'updated': 'Staff details updated'},
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    messages.success(request, f'Staff member "{staff.full_name}" updated successfully.')
-                    return redirect('inventory:staff_detail', staff_id=staff.id)
+                    with transaction.atomic():
+                        staff = form.save()
+                        
+                        # Log the activity
+                        from .utils import log_user_activity
+                        log_user_activity(
+                            user=request.user,
+                            action='UPDATE',
+                            model_name='Staff',
+                            object_id=staff.id,
+                            object_repr=str(staff),
+                            ip_address=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        messages.success(request, f'Staff member "{staff.get_full_name()}" updated successfully.')
+                        return redirect('inventory:staff_detail', staff_id=staff.id)
                 except Exception as e:
                     messages.error(request, f'Error updating staff member: {str(e)}')
         else:
@@ -1964,93 +1976,122 @@ def staff_edit(request, staff_id):
         context = {
             'form': form,
             'staff': staff,
-            'title': f'Edit {staff.full_name}',
+            'title': f'Edit Staff: {staff.get_full_name()}',
             'action': 'Update',
         }
         return render(request, 'inventory/staff_form.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading staff: {str(e)}")
+        messages.error(request, f"Error loading staff for edit: {str(e)}")
+        return redirect('inventory:staff_list')
+
+@login_required
+@permission_required('inventory.delete_staff', raise_exception=True)
+def staff_delete(request, staff_id):
+    """Delete staff member"""
+    try:
+        staff = get_object_or_404(Staff, id=staff_id)
+        
+        # Check if staff has active assignments
+        active_assignments = Assignment.objects.filter(
+            staff=staff,
+            status='ACTIVE'
+        ).count()
+        
+        if active_assignments > 0:
+            messages.error(
+                request, 
+                f'Cannot delete staff member "{staff.get_full_name()}". They have {active_assignments} active device assignments.'
+            )
+            return redirect('inventory:staff_detail', staff_id=staff.id)
+        
+        if request.method == 'POST':
+            try:
+                with transaction.atomic():
+                    staff_name = staff.get_full_name()
+                    
+                    # Log the activity before deletion
+                    from .utils import log_user_activity
+                    log_user_activity(
+                        user=request.user,
+                        action='DELETE',
+                        model_name='Staff',
+                        object_id=staff.id,
+                        object_repr=str(staff),
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    staff.delete()
+                    messages.success(request, f'Staff member "{staff_name}" deleted successfully.')
+                    return redirect('inventory:staff_list')
+            except Exception as e:
+                messages.error(request, f'Error deleting staff member: {str(e)}')
+                return redirect('inventory:staff_detail', staff_id=staff.id)
+        
+        context = {
+            'staff': staff,
+            'active_assignments': active_assignments,
+            'title': f'Delete Staff: {staff.get_full_name()}',
+        }
+        return render(request, 'inventory/staff_delete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading staff for deletion: {str(e)}")
         return redirect('inventory:staff_list')
 
 @login_required
 def staff_assignments(request, staff_id):
     """View all assignments for a specific staff member"""
     try:
-        staff = get_object_or_404(Staff, id=staff_id)
+        staff = get_object_or_404(Staff.objects.select_related('department'), id=staff_id)
         
+        # Get all assignments for this staff member
         assignments = Assignment.objects.filter(
-            assigned_to_staff=staff
-        ).select_related('device').order_by('-created_at')
+            staff=staff
+        ).select_related(
+            'device', 'device__device_type', 'assigned_by', 'returned_by'
+        ).order_by('-assigned_date')
         
-        # Filter by status
-        status = request.GET.get('status')
-        if status == 'active':
-            assignments = assignments.filter(is_active=True)
-        elif status == 'inactive':
-            assignments = assignments.filter(is_active=False)
+        # Filter by status if specified
+        status_filter = request.GET.get('status')
+        if status_filter:
+            assignments = assignments.filter(status=status_filter)
+        
+        # Search within assignments
+        search = request.GET.get('search')
+        if search:
+            assignments = assignments.filter(
+                Q(device__asset_tag__icontains=search) |
+                Q(device__serial_number__icontains=search) |
+                Q(device__device_type__name__icontains=search)
+            )
         
         # Pagination
         paginator = Paginator(assignments, 20)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
+        # Stats
+        stats = {
+            'total': assignments.count(),
+            'active': assignments.filter(status='ACTIVE').count(),
+            'returned': assignments.filter(status='RETURNED').count(),
+            'transferred': assignments.filter(status='TRANSFERRED').count(),
+        }
+        
         context = {
             'staff': staff,
             'page_obj': page_obj,
-            'status': status,
+            'search': search,
+            'status_filter': status_filter,
+            'stats': stats,
         }
         
         return render(request, 'inventory/staff_assignments.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading staff assignments: {str(e)}")
-        return redirect('inventory:staff_list')
-
-@login_required
-@permission_required('inventory.delete_staff', raise_exception=True)
-def staff_delete(request, staff_id):
-    """Soft delete staff member"""
-    try:
-        staff = get_object_or_404(Staff, id=staff_id)
-        
-        if request.method == 'POST':
-            # Check for active assignments
-            active_assignments = Assignment.objects.filter(assigned_to_staff=staff, is_active=True)
-            if active_assignments.exists():
-                messages.error(request, 'Cannot delete staff member with active assignments.')
-                return redirect('inventory:staff_detail', staff_id=staff.id)
-            
-            try:
-                # Soft delete by marking as inactive
-                staff.is_active = False
-                staff.save()
-                
-                # Create audit log
-                AuditLog.objects.create(
-                    user=request.user,
-                    action='DELETE',
-                    model_name='Staff',
-                    object_id=str(staff.id),
-                    object_repr=str(staff),
-                    changes={'deactivated': True},
-                    ip_address=request.META.get('REMOTE_ADDR')
-                )
-                
-                messages.success(request, f'Staff member "{staff.user.get_full_name()}" has been deactivated.')
-                return redirect('inventory:staff_list')
-            except Exception as e:
-                messages.error(request, f'Error deactivating staff member: {str(e)}')
-        
-        context = {
-            'staff': staff,
-            'active_assignments': Assignment.objects.filter(assigned_to_staff=staff, is_active=True).count()
-        }
-        return render(request, 'inventory/staff_delete.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error processing request: {str(e)}")
-        return redirect('inventory:staff_list')
+        return redirect('inventory:staff_detail', staff_id=staff_id)
     
 # ================================
 # DEPARTMENT MANAGEMENT VIEWS
@@ -2058,60 +2099,94 @@ def staff_delete(request, staff_id):
 
 @login_required
 def department_list(request):
-    """List all departments with assignment statistics"""
+    """List all departments with staff and device counts"""
     try:
         departments = Department.objects.prefetch_related(
-            'staff_members',
-            'department_assignments__device'
+            'staff_members', 'staff_members__assignments'
         ).annotate(
             staff_count=Count('staff_members'),
-            active_assignments=Count('department_assignments', filter=Q(department_assignments__is_active=True))
+            active_assignments=Count(
+                'staff_members__assignments',
+                filter=Q(staff_members__assignments__status='ACTIVE')
+            )
         ).order_by('name')
         
+        # Search functionality
+        search = request.GET.get('search')
+        if search:
+            departments = departments.filter(
+                Q(name__icontains=search) |
+                Q(description__icontains=search) |
+                Q(head_name__icontains=search)
+            )
+        
+        # Pagination
+        paginator = Paginator(departments, 20)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
         context = {
-            'departments': departments,
+            'page_obj': page_obj,
+            'search': search,
         }
         
         return render(request, 'inventory/department_list.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading departments: {str(e)}")
-        return render(request, 'inventory/department_list.html', {'departments': []})
+        messages.error(request, f"Error loading department list: {str(e)}")
+        return render(request, 'inventory/department_list.html', {'page_obj': None})
 
 @login_required
 def department_detail(request, department_id):
-    """Display department details with staff and assignments"""
+    """Department detail view with staff and assignments"""
     try:
         department = get_object_or_404(Department, id=department_id)
         
-        # Get staff members
-        staff_members = Staff.objects.filter(department=department).order_by('last_name', 'first_name')
+        # Get staff members in this department
+        staff_members = Staff.objects.filter(
+            department=department
+        ).annotate(
+            active_assignments=Count('assignments', filter=Q(assignments__status='ACTIVE'))
+        ).order_by('last_name', 'first_name')
         
-        # Get department assignments (both direct and through staff)
-        department_assignments = Assignment.objects.filter(
-            Q(assigned_to_department=department) |
-            Q(assigned_to_staff__department=department)
-        ).select_related('device', 'assigned_to_staff').order_by('-created_at')
+        # Get all active assignments for this department
+        active_assignments = Assignment.objects.filter(
+            staff__department=department,
+            status='ACTIVE'
+        ).select_related(
+            'device', 'device__device_type', 'staff'
+        ).order_by('-assigned_date')
         
-        # Get active assignments
-        active_assignments = department_assignments.filter(is_active=True)
-        
-        # Calculate statistics
+        # Calculate stats
         total_staff = staff_members.count()
-        total_devices = active_assignments.count()
+        total_active_assignments = active_assignments.count()
         
-        # Device categories breakdown
+        # Calculate total value of active assignments
+        total_value = active_assignments.aggregate(
+            total=Sum('device__purchase_price')
+        )['total'] or 0
+        
+        # Device category breakdown
         category_breakdown = active_assignments.values(
             'device__device_type__subcategory__category__name'
         ).annotate(count=Count('id')).order_by('-count')
         
+        # Recent assignment activity
+        recent_assignments = Assignment.objects.filter(
+            staff__department=department
+        ).select_related(
+            'device', 'device__device_type', 'staff'
+        ).order_by('-assigned_date')[:10]
+        
         context = {
             'department': department,
             'staff_members': staff_members,
-            'active_assignments': active_assignments[:10],  # Show latest 10
+            'active_assignments': active_assignments,
             'total_staff': total_staff,
-            'total_devices': total_devices,
+            'total_active_assignments': total_active_assignments,
+            'total_value': total_value,
             'category_breakdown': category_breakdown,
+            'recent_assignments': recent_assignments,
         }
         
         return render(request, 'inventory/department_detail.html', context)
@@ -2130,14 +2205,14 @@ def department_create(request):
             try:
                 department = form.save()
                 
-                # Create audit log
-                AuditLog.objects.create(
+                # Log the activity
+                from .utils import log_user_activity
+                log_user_activity(
                     user=request.user,
                     action='CREATE',
                     model_name='Department',
-                    object_id=str(department.id),
+                    object_id=department.id,
                     object_repr=str(department),
-                    changes={'created': 'New department added'},
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
                 
@@ -2166,21 +2241,22 @@ def department_edit(request, department_id):
             form = DepartmentForm(request.POST, instance=department)
             if form.is_valid():
                 try:
-                    department = form.save()
-                    
-                    # Create audit log
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='UPDATE',
-                        model_name='Department',
-                        object_id=str(department.id),
-                        object_repr=str(department),
-                        changes={'updated': 'Department details updated'},
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    messages.success(request, f'Department "{department.name}" updated successfully.')
-                    return redirect('inventory:department_detail', department_id=department.id)
+                    with transaction.atomic():
+                        department = form.save()
+                        
+                        # Log the activity
+                        from .utils import log_user_activity
+                        log_user_activity(
+                            user=request.user,
+                            action='UPDATE',
+                            model_name='Department',
+                            object_id=department.id,
+                            object_repr=str(department),
+                            ip_address=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        messages.success(request, f'Department "{department.name}" updated successfully.')
+                        return redirect('inventory:department_detail', department_id=department.id)
                 except Exception as e:
                     messages.error(request, f'Error updating department: {str(e)}')
         else:
@@ -2189,13 +2265,13 @@ def department_edit(request, department_id):
         context = {
             'form': form,
             'department': department,
-            'title': f'Edit {department.name}',
+            'title': f'Edit Department: {department.name}',
             'action': 'Update',
         }
         return render(request, 'inventory/department_form.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading department: {str(e)}")
+        messages.error(request, f"Error loading department for edit: {str(e)}")
         return redirect('inventory:department_list')
 
 @login_required
@@ -2204,36 +2280,73 @@ def department_assignments(request, department_id):
     try:
         department = get_object_or_404(Department, id=department_id)
         
+        # Get all assignments for staff in this department
         assignments = Assignment.objects.filter(
-            Q(assigned_to_department=department) |
-            Q(assigned_to_staff__department=department)
+            staff__department=department
         ).select_related(
-            'device', 'assigned_to_staff'
-        ).order_by('-created_at')
+            'device', 'device__device_type', 'staff', 'assigned_by'
+        ).order_by('-assigned_date')
         
-        # Filter by status
-        status = request.GET.get('status')
-        if status == 'active':
-            assignments = assignments.filter(is_active=True)
-        elif status == 'inactive':
-            assignments = assignments.filter(is_active=False)
+        # Filter by status if specified
+        status_filter = request.GET.get('status')
+        if status_filter:
+            assignments = assignments.filter(status=status_filter)
+        
+        # Filter by staff member if specified
+        staff_filter = request.GET.get('staff')
+        if staff_filter:
+            assignments = assignments.filter(staff_id=staff_filter)
+        
+        # Search within assignments
+        search = request.GET.get('search')
+        if search:
+            assignments = assignments.filter(
+                Q(device__asset_tag__icontains=search) |
+                Q(device__serial_number__icontains=search) |
+                Q(device__device_type__name__icontains=search) |
+                Q(staff__first_name__icontains=search) |
+                Q(staff__last_name__icontains=search)
+            )
         
         # Pagination
         paginator = Paginator(assignments, 25)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
+        # Get staff members for filter
+        staff_members = Staff.objects.filter(
+            department=department
+        ).order_by('last_name', 'first_name')
+        
+        # Stats
+        stats = {
+            'total': assignments.count(),
+            'active': assignments.filter(status='ACTIVE').count(),
+            'returned': assignments.filter(status='RETURNED').count(),
+            'transferred': assignments.filter(status='TRANSFERRED').count(),
+        }
+        
+        # Total value of active assignments
+        active_value = assignments.filter(status='ACTIVE').aggregate(
+            total=Sum('device__purchase_price')
+        )['total'] or 0
+        
         context = {
             'department': department,
             'page_obj': page_obj,
-            'status': status,
+            'search': search,
+            'status_filter': status_filter,
+            'staff_filter': staff_filter,
+            'staff_members': staff_members,
+            'stats': stats,
+            'active_value': active_value,
         }
         
         return render(request, 'inventory/department_assignments.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading department assignments: {str(e)}")
-        return redirect('inventory:department_list')
+        return redirect('inventory:department_detail', department_id=department_id)
 
 # ================================
 # LOCATION MANAGEMENT VIEWS
@@ -2373,6 +2486,104 @@ def location_create(request):
         'action': 'Create',
     }
     return render(request, 'inventory/location_form.html', context)
+
+@login_required
+@permission_required('inventory.change_location', raise_exception=True)
+def location_edit(request, location_id):
+    """Edit location details"""
+    try:
+        location = get_object_or_404(Location, id=location_id)
+        
+        if request.method == 'POST':
+            form = LocationForm(request.POST, instance=location)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        location = form.save()
+                        
+                        # Log the activity
+                        from .utils import log_user_activity
+                        log_user_activity(
+                            user=request.user,
+                            action='UPDATE',
+                            model_name='Location',
+                            object_id=location.id,
+                            object_repr=str(location),
+                            ip_address=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        messages.success(request, f'Location "{location.name}" updated successfully.')
+                        return redirect('inventory:location_detail', location_id=location.id)
+                except Exception as e:
+                    messages.error(request, f'Error updating location: {str(e)}')
+        else:
+            form = LocationForm(instance=location)
+        
+        context = {
+            'form': form,
+            'location': location,
+            'title': f'Edit Location: {location.name}',
+            'action': 'Update',
+        }
+        return render(request, 'inventory/location_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading location for edit: {str(e)}")
+        return redirect('inventory:location_list')
+
+@login_required
+@permission_required('inventory.delete_location', raise_exception=True)
+def location_delete(request, location_id):
+    """Delete location"""
+    try:
+        location = get_object_or_404(Location, id=location_id)
+        
+        # Check if location has active assignments
+        active_assignments = Assignment.objects.filter(
+            location=location,
+            status='ACTIVE'
+        ).count()
+        
+        if active_assignments > 0:
+            messages.error(
+                request, 
+                f'Cannot delete location "{location.name}". It has {active_assignments} active device assignments.'
+            )
+            return redirect('inventory:location_detail', location_id=location.id)
+        
+        if request.method == 'POST':
+            try:
+                with transaction.atomic():
+                    location_name = location.name
+                    
+                    # Log the activity before deletion
+                    from .utils import log_user_activity
+                    log_user_activity(
+                        user=request.user,
+                        action='DELETE',
+                        model_name='Location',
+                        object_id=location.id,
+                        object_repr=str(location),
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    location.delete()
+                    messages.success(request, f'Location "{location_name}" deleted successfully.')
+                    return redirect('inventory:location_list')
+            except Exception as e:
+                messages.error(request, f'Error deleting location: {str(e)}')
+                return redirect('inventory:location_detail', location_id=location.id)
+        
+        context = {
+            'location': location,
+            'active_assignments': active_assignments,
+            'title': f'Delete Location: {location.name}',
+        }
+        return render(request, 'inventory/location_delete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading location for deletion: {str(e)}")
+        return redirect('inventory:location_list')
 
 # ================================
 # VENDOR MANAGEMENT VIEWS
@@ -2554,46 +2765,95 @@ def maintenance_list(request):
     """List all maintenance schedules"""
     try:
         maintenance_schedules = MaintenanceSchedule.objects.select_related(
-            'device', 'vendor', 'created_by'
-        ).order_by('-scheduled_date')
+            'device', 'device__device_type', 'vendor', 'assigned_to'
+        ).order_by('scheduled_date', 'priority')
         
-        # Filter by status
-        status = request.GET.get('status')
-        if status:
-            maintenance_schedules = maintenance_schedules.filter(status=status)
+        # Status filter
+        status_filter = request.GET.get('status')
+        if status_filter:
+            maintenance_schedules = maintenance_schedules.filter(status=status_filter)
         
-        # Filter by device
-        device_id = request.GET.get('device')
-        if device_id:
-            maintenance_schedules = maintenance_schedules.filter(device__device_id=device_id)
+        # Priority filter
+        priority_filter = request.GET.get('priority')
+        if priority_filter:
+            maintenance_schedules = maintenance_schedules.filter(priority=priority_filter)
+        
+        # Date range filter
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        if start_date:
+            maintenance_schedules = maintenance_schedules.filter(scheduled_date__gte=start_date)
+        if end_date:
+            maintenance_schedules = maintenance_schedules.filter(scheduled_date__lte=end_date)
+        
+        # Search functionality
+        search = request.GET.get('search')
+        if search:
+            maintenance_schedules = maintenance_schedules.filter(
+                Q(device__asset_tag__icontains=search) |
+                Q(device__serial_number__icontains=search) |
+                Q(device__device_type__name__icontains=search) |
+                Q(description__icontains=search) |
+                Q(vendor__name__icontains=search)
+            )
         
         # Pagination
         paginator = Paginator(maintenance_schedules, 25)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
+        # Stats for dashboard cards
+        total_maintenance = maintenance_schedules.count()
+        pending_maintenance = maintenance_schedules.filter(status='SCHEDULED').count()
+        overdue_maintenance = maintenance_schedules.filter(
+            status='SCHEDULED',
+            scheduled_date__lt=timezone.now().date()
+        ).count()
+        
         context = {
             'page_obj': page_obj,
-            'status': status,
-            'device_id': device_id,
+            'search': search,
+            'status_filter': status_filter,
+            'priority_filter': priority_filter,
+            'start_date': start_date,
+            'end_date': end_date,
+            'total_maintenance': total_maintenance,
+            'pending_maintenance': pending_maintenance,
+            'overdue_maintenance': overdue_maintenance,
         }
         
         return render(request, 'inventory/maintenance_list.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading maintenance schedules: {str(e)}")
+        messages.error(request, f"Error loading maintenance list: {str(e)}")
         return render(request, 'inventory/maintenance_list.html', {'page_obj': None})
 
 @login_required
 def maintenance_detail(request, maintenance_id):
-    """Display maintenance schedule details"""
+    """Maintenance schedule detail view"""
     try:
-        maintenance = get_object_or_404(MaintenanceSchedule.objects.select_related(
-            'device', 'vendor', 'created_by', 'updated_by'
-        ), id=maintenance_id)
+        maintenance = get_object_or_404(
+            MaintenanceSchedule.objects.select_related(
+                'device', 'device__device_type', 'vendor', 'assigned_to', 'created_by'
+            ),
+            id=maintenance_id
+        )
+        
+        # Get device assignment history
+        device_assignments = Assignment.objects.filter(
+            device=maintenance.device
+        ).select_related('staff').order_by('-assigned_date')[:5]
+        
+        # Check if maintenance is overdue
+        is_overdue = (
+            maintenance.status == 'SCHEDULED' and 
+            maintenance.scheduled_date < timezone.now().date()
+        )
         
         context = {
             'maintenance': maintenance,
+            'device_assignments': device_assignments,
+            'is_overdue': is_overdue,
         }
         
         return render(request, 'inventory/maintenance_detail.html', context)
@@ -2606,42 +2866,32 @@ def maintenance_detail(request, maintenance_id):
 @login_required
 @permission_required('inventory.add_maintenanceschedule', raise_exception=True)
 def maintenance_create(request):
-    """Schedule new maintenance"""
+    """Create new maintenance schedule"""
     if request.method == 'POST':
         form = MaintenanceScheduleForm(request.POST)
         if form.is_valid():
             try:
                 maintenance = form.save(commit=False)
                 maintenance.created_by = request.user
-                maintenance.updated_by = request.user
                 maintenance.save()
                 
-                # Create audit log
-                AuditLog.objects.create(
+                # Log the activity
+                from .utils import log_user_activity
+                log_user_activity(
                     user=request.user,
                     action='CREATE',
                     model_name='MaintenanceSchedule',
-                    object_id=str(maintenance.id),
+                    object_id=maintenance.id,
                     object_repr=str(maintenance),
-                    changes={'created': 'New maintenance scheduled'},
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
                 
-                messages.success(request, f'Maintenance "{maintenance.title or maintenance.description}" scheduled successfully.')
+                messages.success(request, f'Maintenance schedule for "{maintenance.device}" created successfully.')
                 return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
             except Exception as e:
-                messages.error(request, f'Error scheduling maintenance: {str(e)}')
+                messages.error(request, f'Error creating maintenance schedule: {str(e)}')
     else:
         form = MaintenanceScheduleForm()
-        
-        # Pre-fill device if provided
-        device_id = request.GET.get('device')
-        if device_id:
-            try:
-                device = Device.objects.get(device_id=device_id)
-                form.fields['device'].initial = device
-            except Device.DoesNotExist:
-                pass
     
     context = {
         'form': form,
@@ -2651,67 +2901,102 @@ def maintenance_create(request):
     return render(request, 'inventory/maintenance_form.html', context)
 
 @login_required
+@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
 def maintenance_edit(request, maintenance_id):
     """Edit maintenance schedule"""
     try:
         maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
         
         if request.method == 'POST':
-            # Handle form submission
-            try:
-                maintenance.maintenance_type = request.POST.get('maintenance_type')
-                maintenance.scheduled_date = request.POST.get('scheduled_date')
-                maintenance.description = request.POST.get('description')
-                maintenance.estimated_cost = request.POST.get('estimated_cost') or None
-                maintenance.vendor_id = request.POST.get('vendor') or None
-                maintenance.updated_by = request.user
-                maintenance.save()
-                
-                messages.success(request, 'Maintenance schedule updated successfully.')
-                return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
-                
-            except Exception as e:
-                messages.error(request, f'Error updating maintenance: {str(e)}')
+            form = MaintenanceScheduleForm(request.POST, instance=maintenance)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        maintenance = form.save()
+                        
+                        # Log the activity
+                        from .utils import log_user_activity
+                        log_user_activity(
+                            user=request.user,
+                            action='UPDATE',
+                            model_name='MaintenanceSchedule',
+                            object_id=maintenance.id,
+                            object_repr=str(maintenance),
+                            ip_address=request.META.get('REMOTE_ADDR')
+                        )
+                        
+                        messages.success(request, f'Maintenance schedule for "{maintenance.device}" updated successfully.')
+                        return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+                except Exception as e:
+                    messages.error(request, f'Error updating maintenance schedule: {str(e)}')
+        else:
+            form = MaintenanceScheduleForm(instance=maintenance)
         
         context = {
+            'form': form,
             'maintenance': maintenance,
-            'vendors': Vendor.objects.filter(is_active=True),
-            'maintenance_types': MaintenanceSchedule.MAINTENANCE_TYPES,
+            'title': f'Edit Maintenance: {maintenance.device}',
+            'action': 'Update',
         }
         return render(request, 'inventory/maintenance_form.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading maintenance: {str(e)}")
+        messages.error(request, f"Error loading maintenance for edit: {str(e)}")
         return redirect('inventory:maintenance_list')
-    
+
 @login_required
+@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
 def maintenance_complete(request, maintenance_id):
     """Mark maintenance as completed"""
     try:
         maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
         
+        if maintenance.status == 'COMPLETED':
+            messages.warning(request, 'This maintenance schedule is already marked as completed.')
+            return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+        
         if request.method == 'POST':
+            completion_notes = request.POST.get('completion_notes', '')
+            actual_cost = request.POST.get('actual_cost')
+            
             try:
-                maintenance.status = 'COMPLETED'
-                maintenance.actual_date = request.POST.get('actual_date') or date.today()
-                maintenance.actual_cost = request.POST.get('actual_cost') or None
-                maintenance.completion_notes = request.POST.get('completion_notes')
-                maintenance.updated_by = request.user
-                maintenance.save()
-                
-                messages.success(request, 'Maintenance marked as completed.')
-                return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
-                
+                with transaction.atomic():
+                    maintenance.status = 'COMPLETED'
+                    maintenance.completed_date = timezone.now().date()
+                    maintenance.completion_notes = completion_notes
+                    
+                    if actual_cost:
+                        try:
+                            maintenance.actual_cost = float(actual_cost)
+                        except ValueError:
+                            messages.warning(request, 'Invalid cost format. Cost not updated.')
+                    
+                    maintenance.save()
+                    
+                    # Log the activity
+                    from .utils import log_user_activity
+                    log_user_activity(
+                        user=request.user,
+                        action='UPDATE',
+                        model_name='MaintenanceSchedule',
+                        object_id=maintenance.id,
+                        object_repr=f'{maintenance} - COMPLETED',
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Maintenance for "{maintenance.device}" marked as completed.')
+                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
             except Exception as e:
                 messages.error(request, f'Error completing maintenance: {str(e)}')
         
         context = {
             'maintenance': maintenance,
+            'title': f'Complete Maintenance: {maintenance.device}',
         }
         return render(request, 'inventory/maintenance_complete.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading maintenance: {str(e)}")
+        messages.error(request, f"Error loading maintenance for completion: {str(e)}")
         return redirect('inventory:maintenance_list')
 
 # ================================

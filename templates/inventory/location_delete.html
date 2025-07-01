@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Location - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+.delete-warning {
+    border-left: 4px solid #dc3545;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+.assignment-item {
+    border-left: 3px solid #007bff;
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:location_list' %}">Locations</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:location_detail' location.id %}">{{ location.name }}</a></li>
+            <li class="breadcrumb-item active">Delete</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            Delete Location
+        </h1>
+        <div>
+            <a href="{% url 'inventory:location_detail' location.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Location
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Warning Card -->
+            <div class="card border-danger shadow">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Confirm Location Deletion
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert delete-warning" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Warning: This action cannot be undone!
+                        </h6>
+                        <p class="mb-0">
+                            You are about to permanently delete the location "{{ location.name }}". 
+                            This will remove all associated data and cannot be reversed.
+                        </p>
+                    </div>
+
+                    <!-- Location Details -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">Location Details</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Name:</strong> {{ location.name }}</p>
+                                    {% if location.description %}
+                                    <p><strong>Description:</strong> {{ location.description }}</p>
+                                    {% endif %}
+                                    {% if location.building %}
+                                    <p><strong>Building:</strong> {{ location.building }}</p>
+                                    {% endif %}
+                                    {% if location.room %}
+                                    <p><strong>Room:</strong> {{ location.room }}</p>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6">
+                                    {% if location.floor %}
+                                    <p><strong>Floor:</strong> {{ location.floor }}</p>
+                                    {% endif %}
+                                    {% if location.contact_person %}
+                                    <p><strong>Contact Person:</strong> {{ location.contact_person }}</p>
+                                    {% endif %}
+                                    {% if location.contact_phone %}
+                                    <p><strong>Contact Phone:</strong> {{ location.contact_phone }}</p>
+                                    {% endif %}
+                                    <p><strong>Created:</strong> {{ location.created_at|date:"M d, Y" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Assignments Check -->
+                    {% if active_assignments > 0 %}
+                    <div class="alert alert-danger" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-ban me-2"></i>
+                            Cannot Delete Location
+                        </h6>
+                        <p class="mb-2">
+                            This location has <strong>{{ active_assignments }}</strong> active device assignment(s). 
+                            You must return or transfer all devices before deleting this location.
+                        </p>
+                        <hr>
+                        <p class="mb-0">
+                            <a href="{% url 'inventory:location_detail' location.id %}" class="btn btn-sm btn-outline-danger">
+                                <i class="fas fa-list me-1"></i>View Active Assignments
+                            </a>
+                        </p>
+                    </div>
+                    {% else %}
+                    <!-- Deletion Form -->
+                    <form method="post" id="deleteForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="confirmDelete" required>
+                                <label class="form-check-label" for="confirmDelete">
+                                    <strong>I understand that this action is permanent and cannot be undone</strong>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="{% url 'inventory:location_detail' location.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger" id="deleteButton" disabled>
+                                <i class="fas fa-trash me-1"></i>Delete Location Permanently
+                            </button>
+                        </div>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="col-lg-4">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-1"></i>Before You Delete
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        <strong>Important Considerations:</strong>
+                    </p>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                            All location data will be permanently removed
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-history text-info me-2"></i>
+                            Assignment history will be preserved but location reference will be removed
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-ban text-danger me-2"></i>
+                            Any reports referencing this location may be affected
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-undo text-success me-2"></i>
+                            Consider deactivating instead of deleting
+                        </li>
+                    </ul>
+                    
+                    <hr>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'inventory:location_edit' location.id %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-edit me-1"></i>Edit Location Instead
+                        </a>
+                        <a href="{% url 'inventory:location_list' %}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-list me-1"></i>View All Locations
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Card -->
+            {% if location %}
+            <div class="card border-info mt-3">
+                <div class="card-header bg-info text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-1"></i>Location Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h4 class="text-primary mb-1">{{ active_assignments }}</h4>
+                                <small class="text-muted">Active Assignments</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h4 class="text-secondary mb-1">{{ location.assignments.count }}</h4>
+                            <small class="text-muted">Total History</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmCheckbox = document.getElementById('confirmDelete');
+    const deleteButton = document.getElementById('deleteButton');
+    const deleteForm = document.getElementById('deleteForm');
+    
+    // Enable/disable delete button based on checkbox
+    if (confirmCheckbox && deleteButton) {
+        confirmCheckbox.addEventListener('change', function() {
+            deleteButton.disabled = !this.checked;
+        });
+    }
+    
+    // Final confirmation on form submit
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            const confirmed = confirm(
+                'Are you absolutely sure you want to delete the location "{{ location.name }}"?\n\n' +
+                'This action is PERMANENT and cannot be undone!'
+            );
+            
+            if (!confirmed) {
+                e.preventDefault();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
