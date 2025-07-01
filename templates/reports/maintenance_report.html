@@ -1,0 +1,328 @@
+<!-- templates/reports/maintenance_report.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Maintenance Analysis Report - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/reports.css' %}">
+<style>
+    .report-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    .chart-container {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1><i class="fas fa-tools me-3"></i>Maintenance Analysis Report</h1>
+                <p class="mb-0">Comprehensive maintenance tracking and performance analysis</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="report-date">
+                    <small>Generated on</small><br>
+                    <strong>{{ report_date|date:"F d, Y" }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-filter me-2"></i>Report Filters</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-2">
+                    <label for="date_from" class="form-label">From Date</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" 
+                           value="{{ filters.date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="date_to" class="form-label">To Date</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" 
+                           value="{{ filters.date_to }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="maintenance_type" class="form-label">Type</label>
+                    <select class="form-select" id="maintenance_type" name="maintenance_type">
+                        <option value="">All Types</option>
+                        {% for type_code, type_name in maintenance_types %}
+                            <option value="{{ type_code }}" 
+                                    {% if filters.maintenance_type == type_code %}selected{% endif %}>
+                                {{ type_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">All Statuses</option>
+                        {% for status_code, status_name in maintenance_statuses %}
+                            <option value="{{ status_code }}" 
+                                    {% if filters.status == status_code %}selected{% endif %}>
+                                {{ status_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="vendor" class="form-label">Vendor</label>
+                    <select class="form-select" id="vendor" name="vendor">
+                        <option value="">All Vendors</option>
+                        {% for vendor in vendors %}
+                            <option value="{{ vendor.id }}" 
+                                    {% if filters.vendor|add:0 == vendor.id %}selected{% endif %}>
+                                {{ vendor.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-search me-1"></i>Filter
+                    </button>
+                    <a href="{% url 'reports:maintenance_report' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics Overview -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon text-primary mb-2">
+                    <i class="fas fa-tasks fa-2x"></i>
+                </div>
+                <h3 class="stat-number">{{ total_maintenance|intcomma }}</h3>
+                <p class="stat-label">Total Maintenance</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon text-success mb-2">
+                    <i class="fas fa-check-circle fa-2x"></i>
+                </div>
+                <h3 class="stat-number">{{ completed_maintenance|intcomma }}</h3>
+                <p class="stat-label">Completed</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon text-warning mb-2">
+                    <i class="fas fa-clock fa-2x"></i>
+                </div>
+                <h3 class="stat-number">{{ pending_maintenance|intcomma }}</h3>
+                <p class="stat-label">Pending</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon text-info mb-2">
+                    <i class="fas fa-dollar-sign fa-2x"></i>
+                </div>
+                <h3 class="stat-number">${{ total_cost|floatformat:2|intcomma }}</h3>
+                <p class="stat-label">Total Cost</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts and Analysis -->
+    <div class="row">
+        <!-- Maintenance Type Breakdown -->
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5><i class="fas fa-chart-pie me-2"></i>Maintenance Type Breakdown</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Count</th>
+                                <th>Total Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in type_breakdown %}
+                            <tr>
+                                <td>{{ item.maintenance_type }}</td>
+                                <td>{{ item.count }}</td>
+                                <td>${{ item.total_cost|default:0|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vendor Performance -->
+        <div class="col-lg-6 mb-4">
+            <div class="chart-container">
+                <h5><i class="fas fa-chart-bar me-2"></i>Vendor Performance</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Maintenance Count</th>
+                                <th>Total Cost</th>
+                                <th>Avg Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for vendor in vendor_performance %}
+                            <tr>
+                                <td>{{ vendor.vendor__name }}</td>
+                                <td>{{ vendor.maintenance_count }}</td>
+                                <td>${{ vendor.total_cost|default:0|floatformat:2|intcomma }}</td>
+                                <td>${{ vendor.avg_cost|default:0|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Maintenance -->
+    {% if upcoming_maintenance %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-calendar-alt me-2"></i>Upcoming Maintenance (Next 30 Days)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Type</th>
+                            <th>Scheduled Date</th>
+                            <th>Vendor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for maintenance in upcoming_maintenance %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'inventory:device_detail' maintenance.device.id %}">
+                                    {{ maintenance.device.device_id }} - {{ maintenance.device.device_name }}
+                                </a>
+                            </td>
+                            <td>{{ maintenance.get_maintenance_type_display }}</td>
+                            <td>{{ maintenance.scheduled_date|date:"M d, Y" }}</td>
+                            <td>{{ maintenance.vendor.name|default:"Internal" }}</td>
+                            <td>
+                                <span class="badge bg-warning">{{ maintenance.get_status_display }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Device Maintenance Frequency -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-chart-line me-2"></i>Top 10 Devices by Maintenance Frequency</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Device ID</th>
+                            <th>Device Name</th>
+                            <th>Maintenance Count</th>
+                            <th>Total Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in device_maintenance_freq %}
+                        <tr>
+                            <td>{{ device.device__device_id }}</td>
+                            <td>{{ device.device__device_name }}</td>
+                            <td>{{ device.maintenance_count }}</td>
+                            <td>${{ device.total_cost|default:0|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    <div class="card">
+        <div class="card-header">
+            <h5><i class="fas fa-download me-2"></i>Export Options</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p>Export this report in various formats:</p>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary">
+                            <i class="fas fa-file-pdf me-1"></i>PDF
+                        </button>
+                        <button type="button" class="btn btn-outline-success">
+                            <i class="fas fa-file-excel me-1"></i>Excel
+                        </button>
+                        <button type="button" class="btn btn-outline-info">
+                            <i class="fas fa-file-csv me-1"></i>CSV
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="fas fa-print me-1"></i>Print Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add any JavaScript for interactive charts or functionality
+</script>
+{% endblock %}

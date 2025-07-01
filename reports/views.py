@@ -22,56 +22,68 @@ from .models import ReportTemplate, ReportGeneration
 @login_required
 def reports_dashboard(request):
     """Main reports dashboard"""
-    
-    # Quick statistics
-    total_devices = Device.objects.count()
-    active_assignments = Assignment.objects.filter(is_active=True).count()
-    overdue_assignments = Assignment.objects.filter(
-        is_temporary=True,
-        is_active=True,
-        expected_return_date__lt=date.today(),
-        actual_return_date__isnull=True
-    ).count()
-    
-    # Recent report generations
-    recent_reports = ReportGeneration.objects.select_related(
-        'template', 'generated_by'
-    ).order_by('-generation_started')[:10]
-    
-    # Available report templates
-    report_templates = ReportTemplate.objects.filter(is_active=True)
-    
-    # Device status distribution
-    device_status_stats = Device.objects.values('status').annotate(
-        count=Count('id')
-    ).order_by('status')
-    
-    # Assignment by department
-    dept_assignment_stats = Assignment.objects.filter(
-        is_active=True
-    ).values(
-        'assigned_to_department__name'
-    ).annotate(
-        count=Count('id')
-    ).order_by('-count')[:10]
-    
-    # Recent QR scans
-    recent_scans = QRCodeScan.objects.select_related(
-        'device', 'scanned_by'
-    ).order_by('-timestamp')[:5]
-    
-    context = {
-        'total_devices': total_devices,
-        'active_assignments': active_assignments,
-        'overdue_assignments': overdue_assignments,
-        'recent_reports': recent_reports,
-        'report_templates': report_templates,
-        'device_status_stats': device_status_stats,
-        'dept_assignment_stats': dept_assignment_stats,
-        'recent_scans': recent_scans,
-    }
-    
-    return render(request, 'reports/dashboard.html', context)
+    try:
+        # Quick statistics for dashboard
+        stats = {
+            'total_devices': Device.objects.count(),
+            'total_assignments': Assignment.objects.count(),
+            'active_assignments': Assignment.objects.filter(is_active=True).count(),
+            'pending_maintenance': MaintenanceSchedule.objects.filter(status='SCHEDULED').count(),
+        }
+        
+        context = {
+            'stats': stats,
+            'report_date': timezone.now().date(),
+        }
+        
+        return render(request, 'reports/dashboard.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading reports dashboard: {str(e)}")
+        return render(request, 'reports/dashboard.html', {})
+
+# Additional report functions would go here...
+@login_required
+def inventory_report(request):
+    """Generate inventory report"""
+    # Implementation here
+    pass
+
+@login_required
+def assignment_report(request):
+    """Generate assignment report"""
+    # Implementation here
+    pass
+
+@login_required
+def audit_report(request):
+    """Generate audit report"""
+    # Implementation here
+    pass
+
+@login_required
+def warranty_report(request):
+    """Generate warranty report"""
+    # Implementation here
+    pass
+
+@login_required
+def department_utilization_report(request):
+    """Generate department utilization report"""
+    # Implementation here
+    pass
+
+@login_required
+def generate_custom_report(request):
+    """Generate custom reports based on user parameters"""
+    # Implementation here
+    pass
+
+@login_required
+def ajax_report_progress(request, report_id):
+    """Check report generation progress"""
+    # Implementation here
+    pass
 
 @login_required
 def inventory_report(request):
@@ -293,99 +305,137 @@ def assignment_report(request):
 
 @login_required
 def maintenance_report(request):
-    """Maintenance analysis report"""
-    
-    # Filters
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    maintenance_type_filter = request.GET.get('maintenance_type')
-    status_filter = request.GET.get('status')
-    vendor_filter = request.GET.get('vendor')
-    
-    maintenance_records = MaintenanceSchedule.objects.select_related(
-        'device', 'vendor'
-    )
-    
-    # Apply filters
-    if date_from:
-        maintenance_records = maintenance_records.filter(scheduled_date__gte=date_from)
-    
-    if date_to:
-        maintenance_records = maintenance_records.filter(scheduled_date__lte=date_to)
-    
-    if maintenance_type_filter:
-        maintenance_records = maintenance_records.filter(maintenance_type=maintenance_type_filter)
-    
-    if status_filter:
-        maintenance_records = maintenance_records.filter(status=status_filter)
-    
-    if vendor_filter:
-        maintenance_records = maintenance_records.filter(vendor_id=vendor_filter)
-    
-    # Statistics
-    total_maintenance = maintenance_records.count()
-    completed_maintenance = maintenance_records.filter(status='COMPLETED').count()
-    pending_maintenance = maintenance_records.filter(status='SCHEDULED').count()
-    total_cost = maintenance_records.filter(
-        actual_cost__isnull=False
-    ).aggregate(Sum('actual_cost'))['actual_cost__sum'] or 0
-    
-    # Maintenance type breakdown
-    type_breakdown = maintenance_records.values('maintenance_type').annotate(
-        count=Count('id'),
-        total_cost=Sum('actual_cost')
-    ).order_by('-count')
-    
-    # Vendor performance
-    vendor_performance = maintenance_records.filter(
-        vendor__isnull=False,
-        status='COMPLETED'
-    ).values(
-        'vendor__name'
-    ).annotate(
-        maintenance_count=Count('id'),
-        total_cost=Sum('actual_cost'),
-        avg_cost=Avg('actual_cost')
-    ).order_by('-maintenance_count')
-    
-    # Upcoming maintenance (next 30 days)
-    upcoming_maintenance = MaintenanceSchedule.objects.filter(
-        scheduled_date__gte=date.today(),
-        scheduled_date__lte=date.today() + timedelta(days=30),
-        status='SCHEDULED'
-    ).select_related('device', 'vendor').order_by('scheduled_date')
-    
-    # Device maintenance frequency
-    device_maintenance_freq = maintenance_records.values(
-        'device__device_id', 'device__device_name'
-    ).annotate(
-        maintenance_count=Count('id'),
-        total_cost=Sum('actual_cost')
-    ).order_by('-maintenance_count')[:10]
-    
-    context = {
-        'maintenance_records': maintenance_records[:50],  # Limited for performance
-        'maintenance_types': MaintenanceSchedule.MAINTENANCE_TYPES,
-        'maintenance_statuses': MaintenanceSchedule.MAINTENANCE_STATUS,
-        'vendors': Vendor.objects.filter(is_active=True),
-        'total_maintenance': total_maintenance,
-        'completed_maintenance': completed_maintenance,
-        'pending_maintenance': pending_maintenance,
-        'total_cost': total_cost,
-        'type_breakdown': type_breakdown,
-        'vendor_performance': vendor_performance,
-        'upcoming_maintenance': upcoming_maintenance,
-        'device_maintenance_freq': device_maintenance_freq,
-        'filters': {
-            'date_from': date_from,
-            'date_to': date_to,
-            'maintenance_type': maintenance_type_filter,
-            'status': status_filter,
-            'vendor': vendor_filter,
+    """Generate comprehensive maintenance analysis report"""
+    try:
+        # Get filter parameters
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        maintenance_type_filter = request.GET.get('maintenance_type')
+        status_filter = request.GET.get('status')
+        vendor_filter = request.GET.get('vendor')
+        
+        # Base queryset
+        maintenance_records = MaintenanceSchedule.objects.select_related(
+            'device', 'vendor', 'created_by'
+        ).order_by('-scheduled_date')
+        
+        # Apply filters
+        if date_from:
+            try:
+                date_from_parsed = timezone.datetime.strptime(date_from, '%Y-%m-%d').date()
+                maintenance_records = maintenance_records.filter(scheduled_date__gte=date_from_parsed)
+            except ValueError:
+                messages.warning(request, 'Invalid date format for "from" date.')
+        
+        if date_to:
+            try:
+                date_to_parsed = timezone.datetime.strptime(date_to, '%Y-%m-%d').date()
+                maintenance_records = maintenance_records.filter(scheduled_date__lte=date_to_parsed)
+            except ValueError:
+                messages.warning(request, 'Invalid date format for "to" date.')
+        
+        if maintenance_type_filter:
+            maintenance_records = maintenance_records.filter(maintenance_type=maintenance_type_filter)
+        
+        if status_filter:
+            maintenance_records = maintenance_records.filter(status=status_filter)
+        
+        if vendor_filter:
+            maintenance_records = maintenance_records.filter(vendor_id=vendor_filter)
+        
+        # Statistics
+        total_maintenance = maintenance_records.count()
+        completed_maintenance = maintenance_records.filter(status='COMPLETED').count()
+        pending_maintenance = maintenance_records.filter(status='SCHEDULED').count()
+        in_progress_maintenance = maintenance_records.filter(status='IN_PROGRESS').count()
+        total_cost = maintenance_records.filter(
+            actual_cost__isnull=False
+        ).aggregate(Sum('actual_cost'))['actual_cost__sum'] or 0
+        
+        # Maintenance type breakdown
+        type_breakdown = maintenance_records.values('maintenance_type').annotate(
+            count=Count('id'),
+            total_cost=Sum('actual_cost')
+        ).order_by('-count')
+        
+        # Vendor performance analysis
+        vendor_performance = maintenance_records.filter(
+            vendor__isnull=False,
+            status='COMPLETED'
+        ).values(
+            'vendor__name'
+        ).annotate(
+            maintenance_count=Count('id'),
+            total_cost=Sum('actual_cost'),
+            avg_cost=Avg('actual_cost')
+        ).order_by('-maintenance_count')
+        
+        # Upcoming maintenance (next 30 days)
+        upcoming_maintenance = MaintenanceSchedule.objects.filter(
+            scheduled_date__gte=date.today(),
+            scheduled_date__lte=date.today() + timedelta(days=30),
+            status='SCHEDULED'
+        ).select_related('device', 'vendor').order_by('scheduled_date')
+        
+        # Device maintenance frequency analysis
+        device_maintenance_freq = maintenance_records.values(
+            'device__device_id', 'device__device_name'
+        ).annotate(
+            maintenance_count=Count('id'),
+            total_cost=Sum('actual_cost')
+        ).order_by('-maintenance_count')[:10]
+        
+        # Monthly maintenance trends (last 12 months)
+        monthly_trends = []
+        for i in range(12):
+            month_start = date.today().replace(day=1) - timedelta(days=i*30)
+            month_end = month_start + timedelta(days=30)
+            month_count = maintenance_records.filter(
+                scheduled_date__gte=month_start,
+                scheduled_date__lt=month_end
+            ).count()
+            monthly_trends.append({
+                'month': month_start.strftime('%B %Y'),
+                'count': month_count
+            })
+        
+        # Overdue maintenance
+        overdue_maintenance = MaintenanceSchedule.objects.filter(
+            scheduled_date__lt=date.today(),
+            status='SCHEDULED'
+        ).select_related('device', 'vendor').order_by('scheduled_date')
+        
+        context = {
+            'maintenance_records': maintenance_records[:50],  # Limited for performance
+            'maintenance_types': MaintenanceSchedule.MAINTENANCE_TYPES,
+            'maintenance_statuses': MaintenanceSchedule.MAINTENANCE_STATUS,
+            'vendors': Vendor.objects.filter(is_active=True),
+            'total_maintenance': total_maintenance,
+            'completed_maintenance': completed_maintenance,
+            'pending_maintenance': pending_maintenance,
+            'in_progress_maintenance': in_progress_maintenance,
+            'total_cost': total_cost,
+            'type_breakdown': type_breakdown,
+            'vendor_performance': vendor_performance,
+            'upcoming_maintenance': upcoming_maintenance,
+            'device_maintenance_freq': device_maintenance_freq,
+            'monthly_trends': monthly_trends,
+            'overdue_maintenance': overdue_maintenance,
+            'filters': {
+                'date_from': date_from,
+                'date_to': date_to,
+                'maintenance_type': maintenance_type_filter,
+                'status': status_filter,
+                'vendor': vendor_filter,
+            },
+            'report_date': timezone.now().date(),
         }
-    }
-    
-    return render(request, 'reports/maintenance_report.html', context)
+        
+        return render(request, 'reports/maintenance_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating maintenance report: {str(e)}")
+        return redirect('reports:dashboard')
 
 @login_required
 def audit_report(request):

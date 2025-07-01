@@ -240,6 +240,7 @@ def dashboard(request):
             'device_status_stats': [], 'category_stats': [], 'assignment_trends': [],
             'dept_assignments': [], 'recent_maintenance': []
         })
+    
 # ================================
 # DASHBOARD ANALYTICS API 
 # ================================
@@ -2519,6 +2520,7 @@ def maintenance_detail(request, maintenance_id):
     except Exception as e:
         messages.error(request, f"Error loading maintenance details: {str(e)}")
         return redirect('inventory:maintenance_list')
+    
 
 @login_required
 @permission_required('inventory.add_maintenanceschedule', raise_exception=True)
@@ -2568,100 +2570,57 @@ def maintenance_create(request):
     return render(request, 'inventory/maintenance_form.html', context)
 
 @login_required
-@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
 def maintenance_edit(request, maintenance_id):
     """Edit maintenance schedule"""
     try:
         maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
         
         if request.method == 'POST':
-            form = MaintenanceScheduleForm(request.POST, instance=maintenance)
-            if form.is_valid():
-                try:
-                    maintenance = form.save(commit=False)
-                    maintenance.updated_by = request.user
-                    maintenance.save()
-                    
-                    # Create audit log
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='UPDATE',
-                        model_name='MaintenanceSchedule',
-                        object_id=str(maintenance.id),
-                        object_repr=str(maintenance),
-                        changes={'updated': 'Maintenance schedule updated'},
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    messages.success(request, f'Maintenance "{maintenance.title}" updated successfully.')
-                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
-                except Exception as e:
-                    messages.error(request, f'Error updating maintenance: {str(e)}')
-        else:
-            form = MaintenanceScheduleForm(instance=maintenance)
+            # Handle form submission
+            try:
+                maintenance.maintenance_type = request.POST.get('maintenance_type')
+                maintenance.scheduled_date = request.POST.get('scheduled_date')
+                maintenance.description = request.POST.get('description')
+                maintenance.estimated_cost = request.POST.get('estimated_cost') or None
+                maintenance.vendor_id = request.POST.get('vendor') or None
+                maintenance.updated_by = request.user
+                maintenance.save()
+                
+                messages.success(request, 'Maintenance schedule updated successfully.')
+                return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+                
+            except Exception as e:
+                messages.error(request, f'Error updating maintenance: {str(e)}')
         
         context = {
-            'form': form,
             'maintenance': maintenance,
-            'title': f'Edit {maintenance.title}',
-            'action': 'Update',
+            'vendors': Vendor.objects.filter(is_active=True),
+            'maintenance_types': MaintenanceSchedule.MAINTENANCE_TYPES,
         }
         return render(request, 'inventory/maintenance_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance: {str(e)}")
         return redirect('inventory:maintenance_list')
-
+    
 @login_required
-@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
 def maintenance_complete(request, maintenance_id):
     """Mark maintenance as completed"""
     try:
         maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
         
         if request.method == 'POST':
-            actual_cost = request.POST.get('actual_cost')
-            completion_notes = request.POST.get('completion_notes', '')
-            
             try:
-                with transaction.atomic():
-                    maintenance.status = 'COMPLETED'
-                    maintenance.actual_date = timezone.now().date()
-                    maintenance.completion_notes = completion_notes
-                    maintenance.updated_by = request.user
-                    
-                    if actual_cost:
-                        try:
-                            maintenance.actual_cost = float(actual_cost)
-                        except ValueError:
-                            pass
-                    
-                    maintenance.save()
-                    
-                    # Update device last maintenance date
-                    device = maintenance.device
-                    device.last_maintenance_date = maintenance.actual_date
-                    device.updated_by = request.user
-                    device.save()
-                    
-                    # Create audit log
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='COMPLETE',
-                        model_name='MaintenanceSchedule',
-                        object_id=str(maintenance.id),
-                        object_repr=str(maintenance),
-                        changes={
-                            'status': 'COMPLETED',
-                            'actual_cost': actual_cost,
-                            'completion_date': str(maintenance.actual_date)
-                        },
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    messages.success(request, f'Maintenance "{maintenance.title}" marked as completed.')
-                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
-                    
+                maintenance.status = 'COMPLETED'
+                maintenance.actual_date = request.POST.get('actual_date') or date.today()
+                maintenance.actual_cost = request.POST.get('actual_cost') or None
+                maintenance.completion_notes = request.POST.get('completion_notes')
+                maintenance.updated_by = request.user
+                maintenance.save()
+                
+                messages.success(request, 'Maintenance marked as completed.')
+                return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+                
             except Exception as e:
                 messages.error(request, f'Error completing maintenance: {str(e)}')
         
@@ -3276,117 +3235,76 @@ def export_assignments_csv(request):
 
 @login_required
 def inventory_summary_report(request):
-    """Generate comprehensive inventory summary report"""
+    """Generate inventory summary report"""
     try:
-        # Device statistics by category
-        category_stats = DeviceCategory.objects.prefetch_related(
-            'subcategories__device_types__devices'
-        ).annotate(
-            total_devices=Count('subcategories__device_types__devices'),
-            assigned_devices=Count(
-                'subcategories__device_types__devices__assignments',
-                filter=Q(subcategories__device_types__devices__assignments__is_active=True)
-            ),
-            total_value=Sum('subcategories__device_types__devices__purchase_price')
-        ).order_by('name')
-        
-        # Device status distribution
-        status_distribution = Device.objects.values('status').annotate(
-            count=Count('id'),
-            total_value=Sum('purchase_price')
-        ).order_by('status')
+        # Device statistics
+        total_devices = Device.objects.count()
+        active_devices = Device.objects.filter(status='ACTIVE').count()
+        inactive_devices = Device.objects.filter(status='INACTIVE').count()
+        maintenance_devices = Device.objects.filter(status='MAINTENANCE').count()
         
         # Assignment statistics
-        assignment_stats = {
-            'total_assignments': Assignment.objects.count(),
-            'active_assignments': Assignment.objects.filter(is_active=True).count(),
-            'temporary_assignments': Assignment.objects.filter(is_temporary=True, is_active=True).count(),
-            'overdue_assignments': Assignment.objects.filter(
-                is_temporary=True,
-                is_active=True,
-                expected_return_date__lt=timezone.now().date()
-            ).count()
-        }
+        total_assignments = Assignment.objects.count()
+        active_assignments = Assignment.objects.filter(is_active=True).count()
+        temporary_assignments = Assignment.objects.filter(is_temporary=True, is_active=True).count()
         
-        # Department statistics
-        department_stats = Department.objects.annotate(
-            total_assignments=Count('department_assignments', filter=Q(department_assignments__is_active=True)),
-            total_staff_assignments=Count('staff_members__staff_assignments', filter=Q(staff_members__staff_assignments__is_active=True))
-        ).order_by('-total_assignments')[:10]
+        # Value statistics
+        total_value = Device.objects.aggregate(Sum('purchase_price'))['purchase_price__sum'] or 0
         
-        # Vendor statistics
-        vendor_stats = Vendor.objects.annotate(
-            device_count=Count('devices'),
-            total_value=Sum('devices__purchase_price')
-        ).order_by('-device_count')[:10]
-        
-        # Warranty expiring soon
-        today = timezone.now().date()
-        warranty_expiring = Device.objects.filter(
-            warranty_end_date__gte=today,
-            warranty_end_date__lte=today + timedelta(days=90)
-        ).order_by('warranty_end_date')[:20]
+        # Category breakdown
+        category_breakdown = Device.objects.values(
+            'device_type__subcategory__category__name'
+        ).annotate(
+            count=Count('id'),
+            total_value=Sum('purchase_price')
+        ).order_by('-count')
         
         context = {
-            'category_stats': category_stats,
-            'status_distribution': status_distribution,
-            'assignment_stats': assignment_stats,
-            'department_stats': department_stats,
-            'vendor_stats': vendor_stats,
-            'warranty_expiring': warranty_expiring,
-            'report_date': today,
+            'total_devices': total_devices,
+            'active_devices': active_devices,
+            'inactive_devices': inactive_devices,
+            'maintenance_devices': maintenance_devices,
+            'total_assignments': total_assignments,
+            'active_assignments': active_assignments,
+            'temporary_assignments': temporary_assignments,
+            'total_value': total_value,
+            'category_breakdown': category_breakdown,
+            'report_date': date.today(),
         }
         
-        return render(request, 'inventory/inventory_summary_report.html', context)
+        return render(request, 'inventory/reports/summary.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error generating report: {str(e)}")
+        messages.error(request, f"Error generating summary report: {str(e)}")
         return redirect('inventory:dashboard')
 
 @login_required
 def asset_utilization_report(request):
     """Generate asset utilization report"""
     try:
-        # Device utilization by department
+        # Device utilization analysis
+        devices_with_assignments = Device.objects.filter(
+            assignments__is_active=True
+        ).distinct().count()
+        
+        devices_without_assignments = Device.objects.filter(
+            assignments__isnull=True
+        ).count()
+        
+        # Department utilization
         dept_utilization = Department.objects.annotate(
-            total_devices=Count('department_assignments', filter=Q(department_assignments__is_active=True)) +
-                         Count('staff_members__staff_assignments', filter=Q(staff_members__staff_assignments__is_active=True)),
-            staff_count=Count('staff_members'),
-            devices_per_staff=Case(
-                When(staff_count=0, then=0),
-                default=F('total_devices') * 1.0 / F('staff_count'),
-                output_field=FloatField()
-            )
-        ).order_by('-total_devices')
-        
-        # Most assigned device types
-        popular_devices = DeviceType.objects.annotate(
-            assignment_count=Count('devices__assignments', filter=Q(devices__assignments__is_active=True))
-        ).order_by('-assignment_count')[:15]
-        
-        # Assignment duration analysis
-        completed_assignments = Assignment.objects.filter(
-            is_active=False,
-            actual_return_date__isnull=False
-        ).annotate(
-            duration=F('actual_return_date') - F('start_date')
-        ).order_by('-created_at')[:100]
-        
-        # Long-term assignments (over 1 year)
-        long_term_assignments = Assignment.objects.filter(
-            is_active=True,
-            start_date__lte=timezone.now().date() - timedelta(days=365)
-        ).select_related('device', 'assigned_to_staff').order_by('start_date')
+            device_count=Count('staff__assignments__device', distinct=True),
+            staff_count=Count('staff', distinct=True)
+        ).order_by('-device_count')
         
         context = {
+            'devices_with_assignments': devices_with_assignments,
+            'devices_without_assignments': devices_without_assignments,
             'dept_utilization': dept_utilization,
-            'popular_devices': popular_devices,
-            'completed_assignments': completed_assignments,
-            'long_term_assignments': long_term_assignments,
-            'report_date': timezone.now().date(),
+            'report_date': date.today(),
         }
         
-        return render(request, 'inventory/asset_utilization_report.html', context)
+        return render(request, 'inventory/reports/utilization.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating utilization report: {str(e)}")
@@ -3452,6 +3370,114 @@ def device_lifecycle_report(request):
         
     except Exception as e:
         messages.error(request, f"Error generating lifecycle report: {str(e)}")
+        return redirect('inventory:dashboard')
+
+@login_required
+def warranty_report(request):
+    """Generate warranty status report"""
+    try:
+        today = date.today()
+        
+        # Warranty statistics
+        active_warranties = Device.objects.filter(warranty_end_date__gte=today)
+        expired_warranties = Device.objects.filter(warranty_end_date__lt=today)
+        expiring_soon = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=90)
+        )
+        
+        # Vendor warranty breakdown
+        vendor_warranties = Vendor.objects.annotate(
+            active_warranties=Count(
+                'devices',
+                filter=Q(devices__warranty_end_date__gte=today)
+            ),
+            expired_warranties=Count(
+                'devices',
+                filter=Q(devices__warranty_end_date__lt=today)
+            )
+        ).order_by('-active_warranties')
+        
+        context = {
+            'active_warranties': active_warranties,
+            'expired_warranties': expired_warranties,
+            'expiring_soon': expiring_soon,
+            'vendor_warranties': vendor_warranties,
+            'report_date': today,
+        }
+        
+        return render(request, 'inventory/reports/warranty.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating warranty report: {str(e)}")
+        return redirect('inventory:dashboard')
+    
+@login_required
+def assignment_report(request):
+    """Generate assignment analysis report"""
+    try:
+        # Assignment statistics
+        total_assignments = Assignment.objects.count()
+        active_assignments = Assignment.objects.filter(is_active=True)
+        overdue_assignments = Assignment.objects.filter(
+            is_temporary=True,
+            is_active=True,
+            expected_return_date__lt=date.today()
+        )
+        
+        # Department assignment breakdown
+        dept_assignments = Department.objects.annotate(
+            assignment_count=Count('staff__assignments'),
+            active_assignment_count=Count(
+                'staff__assignments',
+                filter=Q(staff__assignments__is_active=True)
+            )
+        ).order_by('-assignment_count')
+        
+        context = {
+            'total_assignments': total_assignments,
+            'active_assignments': active_assignments,
+            'overdue_assignments': overdue_assignments,
+            'dept_assignments': dept_assignments,
+            'report_date': date.today(),
+        }
+        
+        return render(request, 'inventory/reports/assignment.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating assignment report: {str(e)}")
+        return redirect('inventory:dashboard')
+
+@login_required
+def audit_report(request):
+    """Generate audit trail report"""
+    try:
+        # Recent audit activities
+        recent_activities = AuditLog.objects.select_related('user').order_by('-timestamp')[:100]
+        
+        # Activity breakdown by action
+        action_breakdown = AuditLog.objects.values('action').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # User activity summary
+        user_activity = AuditLog.objects.values(
+            'user__username'
+        ).annotate(
+            activity_count=Count('id')
+        ).order_by('-activity_count')[:10]
+        
+        context = {
+            'recent_activities': recent_activities,
+            'action_breakdown': action_breakdown,
+            'user_activity': user_activity,
+            'report_date': date.today(),
+        }
+        
+        return render(request, 'inventory/reports/audit.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating audit report: {str(e)}")
         return redirect('inventory:dashboard')
 
 @login_required
