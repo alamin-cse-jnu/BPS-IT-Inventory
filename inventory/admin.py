@@ -7,7 +7,7 @@ from .models import (
     Staff, StaffAssignmentHistory, Vendor, DeviceCategory, 
     DeviceSubCategory, DeviceType, Device, Assignment, 
     AssignmentHistory, MaintenanceSchedule, AuditLog, 
-    DeviceMovementLog, SystemConfiguration, NotificationRule, 
+    DeviceMovement, SystemConfiguration, NotificationRule,
     Notification, APIAccessLog, DataImportLog
 )
 
@@ -460,8 +460,8 @@ class AuditLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
-@admin.register(DeviceMovementLog)
-class DeviceMovementLogAdmin(admin.ModelAdmin):
+@admin.register(DeviceMovement)
+class DeviceMovementAdmin(admin.ModelAdmin):
     list_display = [
         'device', 'from_location', 'to_location', 'moved_by', 
         'reason', 'qr_scanned', 'timestamp'
