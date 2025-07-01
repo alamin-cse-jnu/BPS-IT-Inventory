@@ -29,10 +29,25 @@ def reports_dashboard(request):
             'total_assignments': Assignment.objects.count(),
             'active_assignments': Assignment.objects.filter(is_active=True).count(),
             'pending_maintenance': MaintenanceSchedule.objects.filter(status='SCHEDULED').count(),
+            'overdue_assignments': Assignment.objects.filter(
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            ).count(),
+            'warranty_expiring': Device.objects.filter(
+                warranty_end_date__gte=timezone.now().date(),
+                warranty_end_date__lte=timezone.now().date() + timedelta(days=30)
+            ).count(),
         }
+        
+        # Recent report generations
+        recent_reports = ReportGeneration.objects.filter(
+            generated_by=request.user
+        ).order_by('-created_at')[:5]
         
         context = {
             'stats': stats,
+            'recent_reports': recent_reports,
             'report_date': timezone.now().date(),
         }
         
@@ -42,272 +57,307 @@ def reports_dashboard(request):
         messages.error(request, f"Error loading reports dashboard: {str(e)}")
         return render(request, 'reports/dashboard.html', {})
 
-# Additional report functions would go here...
 @login_required
 def inventory_report(request):
-    """Generate inventory report"""
-    # Implementation here
-    pass
-
-@login_required
-def assignment_report(request):
-    """Generate assignment report"""
-    # Implementation here
-    pass
-
-@login_required
-def audit_report(request):
-    """Generate audit report"""
-    # Implementation here
-    pass
-
-@login_required
-def warranty_report(request):
-    """Generate warranty report"""
-    # Implementation here
-    pass
-
-@login_required
-def department_utilization_report(request):
-    """Generate department utilization report"""
-    # Implementation here
-    pass
-
-@login_required
-def generate_custom_report(request):
-    """Generate custom reports based on user parameters"""
-    # Implementation here
-    pass
-
-@login_required
-def ajax_report_progress(request, report_id):
-    """Check report generation progress"""
-    # Implementation here
-    pass
-
-@login_required
-def inventory_report(request):
-    """Comprehensive inventory report"""
-    
-    # Filters
-    category_filter = request.GET.get('category')
-    department_filter = request.GET.get('department')
-    status_filter = request.GET.get('status')
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    export_format = request.GET.get('export')
-    
-    devices = Device.objects.select_related(
-        'device_type__subcategory__category', 'vendor'
-    ).prefetch_related('assignments')
-    
-    # Apply filters
-    if category_filter:
-        devices = devices.filter(device_type__subcategory__category_id=category_filter)
-    
-    if status_filter:
-        devices = devices.filter(status=status_filter)
-    
-    if date_from:
-        devices = devices.filter(purchase_date__gte=date_from)
-    
-    if date_to:
-        devices = devices.filter(purchase_date__lte=date_to)
-    
-    if department_filter:
-        devices = devices.filter(
-            assignments__assigned_to_department_id=department_filter,
-            assignments__is_active=True
-        )
-    
-    # Export functionality
-    if export_format == 'csv':
-        return export_inventory_csv(devices)
-    elif export_format == 'pdf':
-        return export_inventory_pdf(devices)
-    
-    # Statistics
-    total_devices = devices.count()
-    total_value = devices.aggregate(Sum('purchase_price'))['purchase_price__sum'] or 0
-    avg_device_age = devices.aggregate(
-        avg_age=Avg(timezone.now().date() - F('purchase_date'))
-    )
-    
-    # Category breakdown
-    category_breakdown = devices.values(
-        'device_type__subcategory__category__name'
-    ).annotate(
-        count=Count('id'),
-        total_value=Sum('purchase_price')
-    ).order_by('-count')
-    
-    # Status distribution
-    status_distribution = devices.values('status').annotate(
-        count=Count('id')
-    )
-    
-    # Warranty status
-    warranty_stats = {
-        'active': devices.filter(warranty_end_date__gte=date.today()).count(),
-        'expired': devices.filter(warranty_end_date__lt=date.today()).count(),
-        'expiring_soon': devices.filter(
-            warranty_end_date__gte=date.today(),
-            warranty_end_date__lte=date.today() + timedelta(days=30)
-        ).count()
-    }
-    
-    # Pagination
-    paginator = Paginator(devices, 50)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        'page_obj': page_obj,
-        'categories': DeviceCategory.objects.filter(is_active=True),
-        'departments': Department.objects.all(),
-        'device_statuses': Device.DEVICE_STATUS,
-        'total_devices': total_devices,
-        'total_value': total_value,
-        'category_breakdown': category_breakdown,
-        'status_distribution': status_distribution,
-        'warranty_stats': warranty_stats,
-        'filters': {
-            'category': category_filter,
-            'department': department_filter,
-            'status': status_filter,
-            'date_from': date_from,
-            'date_to': date_to,
+    """Generate comprehensive inventory report"""
+    try:
+        # Get filter parameters
+        category = request.GET.get('category')
+        status = request.GET.get('status')
+        condition = request.GET.get('condition')
+        vendor = request.GET.get('vendor')
+        purchase_date_from = request.GET.get('purchase_date_from')
+        purchase_date_to = request.GET.get('purchase_date_to')
+        export_format = request.GET.get('format', 'html')
+        
+        # Base queryset
+        devices = Device.objects.select_related(
+            'device_type__subcategory__category',
+            'vendor',
+            'current_location'
+        ).prefetch_related('assignments')
+        
+        # Apply filters
+        if category:
+            devices = devices.filter(device_type__subcategory__category_id=category)
+        
+        if status:
+            devices = devices.filter(status=status)
+        
+        if condition:
+            devices = devices.filter(condition=condition)
+        
+        if vendor:
+            devices = devices.filter(vendor_id=vendor)
+        
+        if purchase_date_from:
+            devices = devices.filter(purchase_date__gte=purchase_date_from)
+        
+        if purchase_date_to:
+            devices = devices.filter(purchase_date__lte=purchase_date_to)
+        
+        # Statistics
+        total_devices = devices.count()
+        total_value = devices.aggregate(total=Sum('purchase_price'))['total'] or 0
+        
+        # Status distribution
+        status_breakdown = devices.values('status').annotate(
+            count=Count('id'),
+            value=Sum('purchase_price')
+        ).order_by('status')
+        
+        # Category breakdown
+        category_breakdown = devices.values(
+            'device_type__subcategory__category__name'
+        ).annotate(
+            count=Count('id'),
+            value=Sum('purchase_price')
+        ).order_by('-count')
+        
+        # Condition analysis
+        condition_breakdown = devices.values('condition').annotate(
+            count=Count('id')
+        ).order_by('condition')
+        
+        # Age analysis
+        today = timezone.now().date()
+        age_analysis = []
+        age_ranges = [
+            ('0-1 years', 0, 365),
+            ('1-3 years', 366, 1095),
+            ('3-5 years', 1096, 1825),
+            ('5+ years', 1826, 9999)
+        ]
+        
+        for label, min_days, max_days in age_ranges:
+            if max_days == 9999:
+                count = devices.filter(
+                    purchase_date__lte=today - timedelta(days=min_days),
+                    purchase_date__isnull=False
+                ).count()
+            else:
+                count = devices.filter(
+                    purchase_date__gte=today - timedelta(days=max_days),
+                    purchase_date__lte=today - timedelta(days=min_days),
+                    purchase_date__isnull=False
+                ).count()
+            
+            age_analysis.append({'label': label, 'count': count})
+        
+        # Vendor analysis
+        vendor_breakdown = devices.filter(vendor__isnull=False).values(
+            'vendor__name'
+        ).annotate(
+            count=Count('id'),
+            value=Sum('purchase_price')
+        ).order_by('-count')[:10]
+        
+        # Assignment status
+        assigned_devices = devices.filter(status='ASSIGNED').count()
+        available_devices = devices.filter(status='AVAILABLE').count()
+        utilization_rate = (assigned_devices / total_devices * 100) if total_devices > 0 else 0
+        
+        # Export options
+        if export_format == 'csv':
+            return export_inventory_csv(devices)
+        elif export_format == 'pdf':
+            return export_inventory_pdf(devices)
+        
+        # Pagination for HTML view
+        paginator = Paginator(devices.order_by('-created_at'), 50)
+        page_number = request.GET.get('page')
+        devices_page = paginator.get_page(page_number)
+        
+        # Filter options
+        categories = DeviceCategory.objects.filter(is_active=True)
+        vendors = Vendor.objects.filter(is_active=True)
+        
+        context = {
+            'devices': devices_page,
+            'categories': categories,
+            'vendors': vendors,
+            'device_statuses': Device.STATUS_CHOICES,
+            'device_conditions': Device.CONDITION_CHOICES,
+            'filters': {
+                'category': category,
+                'status': status,
+                'condition': condition,
+                'vendor': vendor,
+                'purchase_date_from': purchase_date_from,
+                'purchase_date_to': purchase_date_to,
+            },
+            'stats': {
+                'total_devices': total_devices,
+                'total_value': total_value,
+                'assigned_devices': assigned_devices,
+                'available_devices': available_devices,
+                'utilization_rate': round(utilization_rate, 1),
+            },
+            'breakdowns': {
+                'status': status_breakdown,
+                'category': category_breakdown,
+                'condition': condition_breakdown,
+                'vendor': vendor_breakdown,
+                'age': age_analysis,
+            },
+            'report_date': timezone.now().date(),
         }
-    }
-    
-    return render(request, 'reports/inventory_report.html', context)
+        
+        return render(request, 'reports/inventory_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating inventory report: {str(e)}")
+        return redirect('reports:dashboard')
 
 @login_required
 def assignment_report(request):
-    """Assignment analysis report"""
-    
-    # Filters
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    department_filter = request.GET.get('department')
-    assignment_type_filter = request.GET.get('assignment_type')
-    status_filter = request.GET.get('status')
-    export_format = request.GET.get('export')
-    
-    assignments = Assignment.objects.select_related(
-        'device', 'assigned_to_staff', 'assigned_to_department',
-        'assigned_to_location'
-    )
-    
-    # Apply filters
-    if date_from:
-        assignments = assignments.filter(start_date__gte=date_from)
-    
-    if date_to:
-        assignments = assignments.filter(start_date__lte=date_to)
-    
-    if department_filter:
-        assignments = assignments.filter(assigned_to_department_id=department_filter)
-    
-    if assignment_type_filter:
-        assignments = assignments.filter(assignment_type=assignment_type_filter)
-    
-    if status_filter == 'active':
-        assignments = assignments.filter(is_active=True)
-    elif status_filter == 'completed':
-        assignments = assignments.filter(is_active=False)
-    elif status_filter == 'overdue':
-        assignments = assignments.filter(
+    """Generate assignment analysis report"""
+    try:
+        # Filters
+        department = request.GET.get('department')
+        staff = request.GET.get('staff')
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        assignment_type = request.GET.get('assignment_type')
+        status = request.GET.get('status')
+        
+        # Base queryset
+        assignments = Assignment.objects.select_related(
+            'device', 'assigned_to_staff', 'assigned_to_department', 'assigned_to_location'
+        )
+        
+        # Apply filters
+        if department:
+            assignments = assignments.filter(assigned_to_department_id=department)
+        
+        if staff:
+            assignments = assignments.filter(assigned_to_staff_id=staff)
+        
+        if date_from:
+            assignments = assignments.filter(start_date__gte=date_from)
+        
+        if date_to:
+            assignments = assignments.filter(start_date__lte=date_to)
+        
+        if assignment_type == 'temporary':
+            assignments = assignments.filter(is_temporary=True)
+        elif assignment_type == 'permanent':
+            assignments = assignments.filter(is_temporary=False)
+        
+        if status == 'active':
+            assignments = assignments.filter(is_active=True)
+        elif status == 'inactive':
+            assignments = assignments.filter(is_active=False)
+        
+        # Statistics
+        total_assignments = assignments.count()
+        active_assignments = assignments.filter(is_active=True).count()
+        temporary_assignments = assignments.filter(is_temporary=True).count()
+        permanent_assignments = assignments.filter(is_temporary=False).count()
+        
+        # Overdue assignments
+        overdue_assignments = assignments.filter(
             is_temporary=True,
             is_active=True,
-            expected_return_date__lt=date.today(),
-            actual_return_date__isnull=True
+            expected_return_date__lt=timezone.now().date()
         )
-    
-    # Export functionality
-    if export_format == 'csv':
-        return export_assignments_csv(assignments)
-    
-    # Statistics
-    total_assignments = assignments.count()
-    active_assignments = assignments.filter(is_active=True).count()
-    completed_assignments = assignments.filter(is_active=False).count()
-    overdue_assignments = assignments.filter(
-        is_temporary=True,
-        is_active=True,
-        expected_return_date__lt=date.today(),
-        actual_return_date__isnull=True
-    ).count()
-    
-    # Assignment type breakdown
-    type_breakdown = assignments.values('assignment_type').annotate(
-        count=Count('id')
-    ).order_by('-count')
-    
-    # Department breakdown
-    dept_breakdown = assignments.filter(
-        assigned_to_department__isnull=False
-    ).values(
-        'assigned_to_department__name'
-    ).annotate(
-        count=Count('id')
-    ).order_by('-count')
-    
-    # Monthly assignment trend (last 12 months)
-    monthly_data = []
-    for i in range(12):
-        month_start = date.today().replace(day=1) - timedelta(days=i*30)
-        month_end = month_start + timedelta(days=30)
-        count = assignments.filter(
-            start_date__gte=month_start,
-            start_date__lt=month_end
-        ).count()
-        monthly_data.append({
-            'month': month_start.strftime('%Y-%m'),
-            'count': count
-        })
-    monthly_data.reverse()
-    
-    # Top assigned devices
-    top_devices = assignments.values(
-        'device__device_id', 'device__device_name'
-    ).annotate(
-        assignment_count=Count('id')
-    ).order_by('-assignment_count')[:10]
-    
-    # Pagination
-    paginator = Paginator(assignments, 50)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        'page_obj': page_obj,
-        'departments': Department.objects.all(),
-        'assignment_types': Assignment.ASSIGNMENT_TYPES,
-        'total_assignments': total_assignments,
-        'active_assignments': active_assignments,
-        'completed_assignments': completed_assignments,
-        'overdue_assignments': overdue_assignments,
-        'type_breakdown': type_breakdown,
-        'dept_breakdown': dept_breakdown,
-        'monthly_data': monthly_data,
-        'top_devices': top_devices,
-        'filters': {
-            'date_from': date_from,
-            'date_to': date_to,
-            'department': department_filter,
-            'assignment_type': assignment_type_filter,
-            'status': status_filter,
+        
+        # Department breakdown
+        dept_breakdown = assignments.values(
+            'assigned_to_department__name'
+        ).annotate(
+            count=Count('id'),
+            active_count=Count('id', filter=Q(is_active=True))
+        ).order_by('-count')
+        
+        # Device category breakdown
+        category_breakdown = assignments.values(
+            'device__device_type__subcategory__category__name'
+        ).annotate(count=Count('id')).order_by('-count')
+        
+        # Assignment duration analysis
+        returned_assignments = assignments.filter(
+            actual_return_date__isnull=False
+        ).extra(
+            select={
+                'duration': 'julianday(actual_return_date) - julianday(start_date)'
+            }
+        )
+        
+        avg_duration = returned_assignments.aggregate(
+            avg_duration=Avg('duration')
+        )['avg_duration']
+        
+        # Monthly trends
+        monthly_trends = []
+        for i in range(12):
+            month_start = (timezone.now().date() - timedelta(days=30*i)).replace(day=1)
+            if i == 0:
+                month_end = timezone.now().date()
+            else:
+                month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
+            month_count = assignments.filter(
+                start_date__gte=month_start,
+                start_date__lte=month_end
+            ).count()
+            
+            monthly_trends.append({
+                'month': month_start.strftime('%B %Y'),
+                'count': month_count
+            })
+        
+        monthly_trends.reverse()
+        
+        # Most active staff
+        staff_activity = assignments.values(
+            'assigned_to_staff__first_name',
+            'assigned_to_staff__last_name'
+        ).annotate(
+            assignment_count=Count('id')
+        ).order_by('-assignment_count')[:10]
+        
+        context = {
+            'assignments': assignments.order_by('-created_at')[:100],
+            'departments': Department.objects.all(),
+            'staff_members': Staff.objects.select_related('department'),
+            'filters': {
+                'department': department,
+                'staff': staff,
+                'date_from': date_from,
+                'date_to': date_to,
+                'assignment_type': assignment_type,
+                'status': status,
+            },
+            'stats': {
+                'total_assignments': total_assignments,
+                'active_assignments': active_assignments,
+                'temporary_assignments': temporary_assignments,
+                'permanent_assignments': permanent_assignments,
+                'overdue_count': overdue_assignments.count(),
+                'avg_duration': round(avg_duration or 0, 1),
+            },
+            'breakdowns': {
+                'department': dept_breakdown,
+                'category': category_breakdown,
+                'monthly_trends': monthly_trends,
+                'staff_activity': staff_activity,
+            },
+            'overdue_assignments': overdue_assignments[:20],
+            'report_date': timezone.now().date(),
         }
-    }
-    
-    return render(request, 'reports/assignment_report.html', context)
+        
+        return render(request, 'reports/assignment_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating assignment report: {str(e)}")
+        return redirect('reports:dashboard')
 
 @login_required
 def maintenance_report(request):
-    """Generate comprehensive maintenance analysis report"""
+    """Generate maintenance analysis report"""
     try:
-        # Get filter parameters
+        # Filters
         date_from = request.GET.get('date_from')
         date_to = request.GET.get('date_to')
         maintenance_type_filter = request.GET.get('maintenance_type')
@@ -316,23 +366,15 @@ def maintenance_report(request):
         
         # Base queryset
         maintenance_records = MaintenanceSchedule.objects.select_related(
-            'device', 'vendor', 'created_by'
-        ).order_by('-scheduled_date')
+            'device', 'vendor'
+        )
         
         # Apply filters
         if date_from:
-            try:
-                date_from_parsed = timezone.datetime.strptime(date_from, '%Y-%m-%d').date()
-                maintenance_records = maintenance_records.filter(scheduled_date__gte=date_from_parsed)
-            except ValueError:
-                messages.warning(request, 'Invalid date format for "from" date.')
+            maintenance_records = maintenance_records.filter(scheduled_date__gte=date_from)
         
         if date_to:
-            try:
-                date_to_parsed = timezone.datetime.strptime(date_to, '%Y-%m-%d').date()
-                maintenance_records = maintenance_records.filter(scheduled_date__lte=date_to_parsed)
-            except ValueError:
-                messages.warning(request, 'Invalid date format for "to" date.')
+            maintenance_records = maintenance_records.filter(scheduled_date__lte=date_to)
         
         if maintenance_type_filter:
             maintenance_records = maintenance_records.filter(maintenance_type=maintenance_type_filter)
@@ -348,48 +390,51 @@ def maintenance_report(request):
         completed_maintenance = maintenance_records.filter(status='COMPLETED').count()
         pending_maintenance = maintenance_records.filter(status='SCHEDULED').count()
         in_progress_maintenance = maintenance_records.filter(status='IN_PROGRESS').count()
+        
+        # Cost analysis
         total_cost = maintenance_records.filter(
             actual_cost__isnull=False
-        ).aggregate(Sum('actual_cost'))['actual_cost__sum'] or 0
+        ).aggregate(total=Sum('actual_cost'))['total'] or 0
         
-        # Maintenance type breakdown
+        # Type breakdown
         type_breakdown = maintenance_records.values('maintenance_type').annotate(
             count=Count('id'),
-            total_cost=Sum('actual_cost')
+            avg_cost=Avg('actual_cost')
         ).order_by('-count')
         
-        # Vendor performance analysis
+        # Vendor performance
         vendor_performance = maintenance_records.filter(
-            vendor__isnull=False,
-            status='COMPLETED'
-        ).values(
-            'vendor__name'
-        ).annotate(
-            maintenance_count=Count('id'),
-            total_cost=Sum('actual_cost'),
-            avg_cost=Avg('actual_cost')
-        ).order_by('-maintenance_count')
+            vendor__isnull=False
+        ).values('vendor__name').annotate(
+            total_jobs=Count('id'),
+            completed_jobs=Count('id', filter=Q(status='COMPLETED')),
+            avg_cost=Avg('actual_cost'),
+            completion_rate=F('completed_jobs') * 100.0 / F('total_jobs')
+        ).order_by('-total_jobs')
         
         # Upcoming maintenance (next 30 days)
         upcoming_maintenance = MaintenanceSchedule.objects.filter(
-            scheduled_date__gte=date.today(),
-            scheduled_date__lte=date.today() + timedelta(days=30),
+            scheduled_date__gte=timezone.now().date(),
+            scheduled_date__lte=timezone.now().date() + timedelta(days=30),
             status='SCHEDULED'
         ).select_related('device', 'vendor').order_by('scheduled_date')
         
-        # Device maintenance frequency analysis
+        # Device maintenance frequency
         device_maintenance_freq = maintenance_records.values(
-            'device__device_id', 'device__device_name'
+            'device__device_name', 'device__device_id'
         ).annotate(
-            maintenance_count=Count('id'),
-            total_cost=Sum('actual_cost')
+            maintenance_count=Count('id')
         ).order_by('-maintenance_count')[:10]
         
-        # Monthly maintenance trends (last 12 months)
+        # Monthly trends
         monthly_trends = []
         for i in range(12):
-            month_start = date.today().replace(day=1) - timedelta(days=i*30)
-            month_end = month_start + timedelta(days=30)
+            month_start = (timezone.now().date() - timedelta(days=30*i)).replace(day=1)
+            if i == 0:
+                month_end = timezone.now().date()
+            else:
+                month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
             month_count = maintenance_records.filter(
                 scheduled_date__gte=month_start,
                 scheduled_date__lt=month_end
@@ -398,6 +443,8 @@ def maintenance_report(request):
                 'month': month_start.strftime('%B %Y'),
                 'count': month_count
             })
+        
+        monthly_trends.reverse()
         
         # Overdue maintenance
         overdue_maintenance = MaintenanceSchedule.objects.filter(
@@ -410,17 +457,6 @@ def maintenance_report(request):
             'maintenance_types': MaintenanceSchedule.MAINTENANCE_TYPES,
             'maintenance_statuses': MaintenanceSchedule.MAINTENANCE_STATUS,
             'vendors': Vendor.objects.filter(is_active=True),
-            'total_maintenance': total_maintenance,
-            'completed_maintenance': completed_maintenance,
-            'pending_maintenance': pending_maintenance,
-            'in_progress_maintenance': in_progress_maintenance,
-            'total_cost': total_cost,
-            'type_breakdown': type_breakdown,
-            'vendor_performance': vendor_performance,
-            'upcoming_maintenance': upcoming_maintenance,
-            'device_maintenance_freq': device_maintenance_freq,
-            'monthly_trends': monthly_trends,
-            'overdue_maintenance': overdue_maintenance,
             'filters': {
                 'date_from': date_from,
                 'date_to': date_to,
@@ -428,6 +464,22 @@ def maintenance_report(request):
                 'status': status_filter,
                 'vendor': vendor_filter,
             },
+            'stats': {
+                'total_maintenance': total_maintenance,
+                'completed_maintenance': completed_maintenance,
+                'pending_maintenance': pending_maintenance,
+                'in_progress_maintenance': in_progress_maintenance,
+                'total_cost': total_cost,
+                'completion_rate': (completed_maintenance / total_maintenance * 100) if total_maintenance > 0 else 0,
+            },
+            'breakdowns': {
+                'type': type_breakdown,
+                'vendor_performance': vendor_performance,
+                'device_frequency': device_maintenance_freq,
+                'monthly_trends': monthly_trends,
+            },
+            'upcoming_maintenance': upcoming_maintenance,
+            'overdue_maintenance': overdue_maintenance,
             'report_date': timezone.now().date(),
         }
         
@@ -439,201 +491,471 @@ def maintenance_report(request):
 
 @login_required
 def audit_report(request):
-    """System audit and compliance report"""
-    
-    # Filters
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    action_filter = request.GET.get('action')
-    user_filter = request.GET.get('user')
-    
-    audit_logs = AuditLog.objects.select_related('user')
-    
-    # Apply filters
-    if date_from:
-        audit_logs = audit_logs.filter(timestamp__date__gte=date_from)
-    
-    if date_to:
-        audit_logs = audit_logs.filter(timestamp__date__lte=date_to)
-    
-    if action_filter:
-        audit_logs = audit_logs.filter(action=action_filter)
-    
-    if user_filter:
-        audit_logs = audit_logs.filter(user__username__icontains=user_filter)
-    
-    # Statistics
-    total_activities = audit_logs.count()
-    unique_users = audit_logs.values('user').distinct().count()
-    
-    # Activity breakdown
-    activity_breakdown = audit_logs.values('action').annotate(
-        count=Count('id')
-    ).order_by('-count')
-    
-    # User activity
-    user_activity = audit_logs.values(
-        'user__username', 'user__first_name', 'user__last_name'
-    ).annotate(
-        activity_count=Count('id')
-    ).order_by('-activity_count')[:10]
-    
-    # Daily activity (last 30 days)
-    daily_activity = []
-    for i in range(30):
-        day = date.today() - timedelta(days=i)
-        count = audit_logs.filter(timestamp__date=day).count()
-        daily_activity.append({
-            'date': day.strftime('%Y-%m-%d'),
-            'count': count
-        })
-    daily_activity.reverse()
-    
-    # Recent critical activities
-    critical_activities = audit_logs.filter(
-        action__in=['DELETE', 'ASSIGN', 'TRANSFER', 'RETURN']
-    ).order_by('-timestamp')[:20]
-    
-    # QR Scan audit
-    qr_scan_stats = {
-        'total_scans': QRCodeScan.objects.count(),
-        'successful_scans': QRCodeScan.objects.filter(verification_success=True).count(),
-        'failed_scans': QRCodeScan.objects.filter(verification_success=False).count(),
-        'scans_with_discrepancies': QRCodeScan.objects.exclude(discrepancies_found='').count(),
-    }
-    
-    context = {
-        'audit_logs': audit_logs[:100],  # Limited for performance
-        'audit_actions': AuditLog.ACTION_TYPES,
-        'total_activities': total_activities,
-        'unique_users': unique_users,
-        'activity_breakdown': activity_breakdown,
-        'user_activity': user_activity,
-        'daily_activity': daily_activity,
-        'critical_activities': critical_activities,
-        'qr_scan_stats': qr_scan_stats,
-        'filters': {
-            'date_from': date_from,
-            'date_to': date_to,
-            'action': action_filter,
-            'user': user_filter,
+    """Generate audit trail report"""
+    try:
+        # Filters
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        action_filter = request.GET.get('action')
+        user_filter = request.GET.get('user')
+        model_filter = request.GET.get('model')
+        
+        # Base queryset
+        audit_logs = AuditLog.objects.select_related('user')
+        
+        # Apply filters
+        if date_from:
+            audit_logs = audit_logs.filter(timestamp__date__gte=date_from)
+        
+        if date_to:
+            audit_logs = audit_logs.filter(timestamp__date__lte=date_to)
+        
+        if action_filter:
+            audit_logs = audit_logs.filter(action=action_filter)
+        
+        if user_filter:
+            audit_logs = audit_logs.filter(user__username__icontains=user_filter)
+        
+        if model_filter:
+            audit_logs = audit_logs.filter(model_name=model_filter)
+        
+        # Statistics
+        total_activities = audit_logs.count()
+        unique_users = audit_logs.values('user').distinct().count()
+        
+        # Activity breakdown
+        activity_breakdown = audit_logs.values('action').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # User activity
+        user_activity = audit_logs.values(
+            'user__username', 'user__first_name', 'user__last_name'
+        ).annotate(
+            activity_count=Count('id')
+        ).order_by('-activity_count')[:10]
+        
+        # Model activity
+        model_activity = audit_logs.values('model_name').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # Daily activity (last 30 days)
+        daily_activity = []
+        for i in range(30):
+            day = date.today() - timedelta(days=i)
+            count = audit_logs.filter(timestamp__date=day).count()
+            daily_activity.append({
+                'date': day.strftime('%Y-%m-%d'),
+                'count': count
+            })
+        daily_activity.reverse()
+        
+        # Recent critical activities
+        critical_activities = audit_logs.filter(
+            action__in=['DELETE', 'ASSIGN', 'TRANSFER', 'RETURN', 'LOGIN', 'LOGOUT']
+        ).order_by('-timestamp')[:20]
+        
+        # QR Scan audit
+        qr_scan_stats = {}
+        try:
+            qr_scan_stats = {
+                'total_scans': QRCodeScan.objects.count(),
+                'successful_scans': QRCodeScan.objects.filter(verification_success=True).count(),
+                'failed_scans': QRCodeScan.objects.filter(verification_success=False).count(),
+                'scans_with_discrepancies': QRCodeScan.objects.exclude(discrepancies_found='').count(),
+            }
+        except:
+            pass
+        
+        # Security events
+        security_events = audit_logs.filter(
+            action__in=['LOGIN_FAILED', 'PERMISSION_DENIED', 'SUSPICIOUS_ACTIVITY']
+        ).order_by('-timestamp')[:10]
+        
+        context = {
+            'audit_logs': audit_logs.order_by('-timestamp')[:100],  # Limited for performance
+            'audit_actions': ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'ASSIGN', 'RETURN', 'TRANSFER'],
+            'audit_models': audit_logs.values_list('model_name', flat=True).distinct(),
+            'filters': {
+                'date_from': date_from,
+                'date_to': date_to,
+                'action': action_filter,
+                'user': user_filter,
+                'model': model_filter,
+            },
+            'stats': {
+                'total_activities': total_activities,
+                'unique_users': unique_users,
+                'avg_daily_activity': total_activities / 30 if total_activities > 0 else 0,
+            },
+            'breakdowns': {
+                'activity': activity_breakdown,
+                'user_activity': user_activity,
+                'model_activity': model_activity,
+                'daily_activity': daily_activity,
+            },
+            'critical_activities': critical_activities,
+            'security_events': security_events,
+            'qr_scan_stats': qr_scan_stats,
+            'report_date': timezone.now().date(),
         }
-    }
-    
-    return render(request, 'reports/audit_report.html', context)
+        
+        return render(request, 'reports/audit_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating audit report: {str(e)}")
+        return redirect('reports:dashboard')
 
 @login_required
 def warranty_report(request):
-    """Warranty status and expiration report"""
-    
-    # Get devices with warranty information
-    devices = Device.objects.select_related(
-        'device_type__subcategory__category', 'vendor'
-    )
-    
-    # Warranty categories
-    today = date.today()
-    
-    active_warranty = devices.filter(warranty_end_date__gte=today)
-    expired_warranty = devices.filter(warranty_end_date__lt=today)
-    expiring_soon = devices.filter(
-        warranty_end_date__gte=today,
-        warranty_end_date__lte=today + timedelta(days=30)
-    )
-    expiring_3_months = devices.filter(
-        warranty_end_date__gte=today,
-        warranty_end_date__lte=today + timedelta(days=90)
-    )
-    
-    # Warranty by vendor
-    vendor_warranty_stats = devices.values(
-        'vendor__name'
-    ).annotate(
-        total_devices=Count('id'),
-        active_warranties=Count('id', filter=Q(warranty_end_date__gte=today)),
-        expired_warranties=Count('id', filter=Q(warranty_end_date__lt=today))
-    ).order_by('-total_devices')
-    
-    # Warranty value analysis
-    warranty_value_stats = {
-        'active_value': active_warranty.aggregate(Sum('purchase_price'))['purchase_price__sum'] or 0,
-        'expired_value': expired_warranty.aggregate(Sum('purchase_price'))['purchase_price__sum'] or 0,
-        'expiring_soon_value': expiring_soon.aggregate(Sum('purchase_price'))['purchase_price__sum'] or 0,
-    }
-    
-    context = {
-        'active_warranty': active_warranty[:50],
-        'expired_warranty': expired_warranty[:50],
-        'expiring_soon': expiring_soon,
-        'expiring_3_months': expiring_3_months[:50],
-        'vendor_warranty_stats': vendor_warranty_stats,
-        'warranty_value_stats': warranty_value_stats,
-        'warranty_counts': {
-            'active': active_warranty.count(),
-            'expired': expired_warranty.count(),
-            'expiring_soon': expiring_soon.count(),
-            'expiring_3_months': expiring_3_months.count(),
+    """Generate warranty status and expiration report"""
+    try:
+        # Filters
+        vendor_filter = request.GET.get('vendor')
+        category_filter = request.GET.get('category')
+        status_filter = request.GET.get('warranty_status')
+        
+        # Base queryset
+        devices = Device.objects.select_related(
+            'device_type__subcategory__category', 'vendor'
+        )
+        
+        # Apply filters
+        if vendor_filter:
+            devices = devices.filter(vendor_id=vendor_filter)
+        
+        if category_filter:
+            devices = devices.filter(device_type__subcategory__category_id=category_filter)
+        
+        today = timezone.now().date()
+        
+        # Warranty status filtering
+        if status_filter == 'expired':
+            devices = devices.filter(warranty_end_date__lt=today)
+        elif status_filter == 'expiring_30':
+            devices = devices.filter(
+                warranty_end_date__gte=today,
+                warranty_end_date__lte=today + timedelta(days=30)
+            )
+        elif status_filter == 'expiring_90':
+            devices = devices.filter(
+                warranty_end_date__gte=today,
+                warranty_end_date__lte=today + timedelta(days=90)
+            )
+        elif status_filter == 'active':
+            devices = devices.filter(warranty_end_date__gt=today + timedelta(days=90))
+        elif status_filter == 'no_warranty':
+            devices = devices.filter(warranty_end_date__isnull=True)
+        
+        # Warranty statistics
+        warranty_stats = {
+            'total_devices': Device.objects.count(),
+            'with_warranty': Device.objects.filter(warranty_end_date__isnull=False).count(),
+            'without_warranty': Device.objects.filter(warranty_end_date__isnull=True).count(),
+            'expired': Device.objects.filter(warranty_end_date__lt=today).count(),
+            'expiring_30': Device.objects.filter(
+                warranty_end_date__gte=today,
+                warranty_end_date__lte=today + timedelta(days=30)
+            ).count(),
+            'expiring_90': Device.objects.filter(
+                warranty_end_date__gte=today + timedelta(days=31),
+                warranty_end_date__lte=today + timedelta(days=90)
+            ).count(),
+            'active': Device.objects.filter(warranty_end_date__gt=today + timedelta(days=90)).count(),
         }
-    }
-    
-    return render(request, 'reports/warranty_report.html', context)
+        
+        # Devices expiring soon (detailed list)
+        expiring_soon = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=90)
+        ).select_related(
+            'device_type__subcategory__category', 'vendor'
+        ).order_by('warranty_end_date')
+        
+        # Recently expired warranties
+        recently_expired = Device.objects.filter(
+            warranty_end_date__gte=today - timedelta(days=30),
+            warranty_end_date__lt=today
+        ).select_related(
+            'device_type__subcategory__category', 'vendor'
+        ).order_by('-warranty_end_date')
+        
+        # Warranty by vendor
+        vendor_warranty = Vendor.objects.annotate(
+            total_devices=Count('devices'),
+            expired_warranties=Count('devices', filter=Q(devices__warranty_end_date__lt=today)),
+            active_warranties=Count('devices', filter=Q(devices__warranty_end_date__gte=today)),
+            expiring_soon=Count('devices', filter=Q(
+                devices__warranty_end_date__gte=today,
+                devices__warranty_end_date__lte=today + timedelta(days=90)
+            ))
+        ).filter(total_devices__gt=0).order_by('-total_devices')
+        
+        # Warranty by category
+        category_warranty = DeviceCategory.objects.annotate(
+            total_devices=Count('subcategories__device_types__devices'),
+            expired_warranties=Count(
+                'subcategories__device_types__devices',
+                filter=Q(subcategories__device_types__devices__warranty_end_date__lt=today)
+            ),
+            active_warranties=Count(
+                'subcategories__device_types__devices',
+                filter=Q(subcategories__device_types__devices__warranty_end_date__gte=today)
+            )
+        ).filter(total_devices__gt=0).order_by('-total_devices')
+        
+        # Warranty cost implications
+        expiring_value = Device.objects.filter(
+            warranty_end_date__gte=today,
+            warranty_end_date__lte=today + timedelta(days=90)
+        ).aggregate(total_value=Sum('purchase_price'))['total_value'] or 0
+        
+        expired_value = Device.objects.filter(
+            warranty_end_date__lt=today
+        ).aggregate(total_value=Sum('purchase_price'))['total_value'] or 0
+        
+        # Monthly warranty expiration trends
+        monthly_expirations = []
+        for i in range(12):
+            month_start = (today + timedelta(days=30*i)).replace(day=1)
+            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
+            month_count = Device.objects.filter(
+                warranty_end_date__gte=month_start,
+                warranty_end_date__lte=month_end
+            ).count()
+            
+            monthly_expirations.append({
+                'month': month_start.strftime('%B %Y'),
+                'count': month_count
+            })
+        
+        context = {
+            'devices': devices[:100],  # Limited for performance
+            'vendors': Vendor.objects.filter(is_active=True),
+            'categories': DeviceCategory.objects.filter(is_active=True),
+            'warranty_statuses': [
+                ('expired', 'Expired'),
+                ('expiring_30', 'Expiring in 30 days'),
+                ('expiring_90', 'Expiring in 90 days'),
+                ('active', 'Active (>90 days)'),
+                ('no_warranty', 'No Warranty'),
+            ],
+            'filters': {
+                'vendor': vendor_filter,
+                'category': category_filter,
+                'warranty_status': status_filter,
+            },
+            'warranty_stats': warranty_stats,
+            'expiring_soon': expiring_soon[:20],
+            'recently_expired': recently_expired[:20],
+            'vendor_warranty': vendor_warranty,
+            'category_warranty': category_warranty,
+            'cost_analysis': {
+                'expiring_value': expiring_value,
+                'expired_value': expired_value,
+            },
+            'monthly_expirations': monthly_expirations,
+            'report_date': today,
+        }
+        
+        return render(request, 'reports/warranty_report.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating warranty report: {str(e)}")
+        return redirect('reports:dashboard')
 
 @login_required
 def department_utilization_report(request):
-    """Department-wise device utilization report"""
-    
-    departments = Department.objects.all()
-    department_stats = []
-    
-    for dept in departments:
-        # Get assignments for this department
-        dept_assignments = Assignment.objects.filter(
-            Q(assigned_to_department=dept) | Q(assigned_to_staff__department=dept)
+    """Generate department utilization report"""
+    try:
+        # Department filter
+        department_filter = request.GET.get('department')
+        
+        # Base queryset
+        departments = Department.objects.prefetch_related(
+            'staff_members', 'staff_members__assignments'
         )
         
-        active_assignments = dept_assignments.filter(is_active=True)
-        total_devices = active_assignments.count()
+        if department_filter:
+            departments = departments.filter(id=department_filter)
         
-        # Device categories in this department
-        category_breakdown = active_assignments.values(
-            'device__device_type__subcategory__category__name'
-        ).annotate(
-            count=Count('id')
-        )
+        # Calculate utilization metrics for each department
+        dept_utilization = []
         
-        # Total value of assigned devices
-        total_value = active_assignments.aggregate(
-            total=Sum('device__purchase_price')
-        )['total'] or 0
+        for dept in departments:
+            staff_count = dept.staff_members.count()
+            active_assignments = Assignment.objects.filter(
+                assigned_to_department=dept,
+                is_active=True
+            ).count()
+            
+            total_devices_value = Assignment.objects.filter(
+                assigned_to_department=dept,
+                is_active=True
+            ).aggregate(
+                total_value=Sum('device__purchase_price')
+            )['total_value'] or 0
+            
+            # Device categories assigned to this department
+            category_breakdown = Assignment.objects.filter(
+                assigned_to_department=dept,
+                is_active=True
+            ).values(
+                'device__device_type__subcategory__category__name'
+            ).annotate(count=Count('id')).order_by('-count')
+            
+            dept_utilization.append({
+                'department': dept,
+                'staff_count': staff_count,
+                'active_assignments': active_assignments,
+                'devices_per_staff': round(active_assignments / staff_count, 1) if staff_count > 0 else 0,
+                'total_value': total_devices_value,
+                'avg_value_per_staff': round(total_devices_value / staff_count, 2) if staff_count > 0 else 0,
+                'category_breakdown': category_breakdown,
+            })
         
-        # Staff with most assignments
-        top_staff = dept_assignments.filter(
-            assigned_to_staff__isnull=False,
-            is_active=True
-        ).values(
-            'assigned_to_staff__full_name'
-        ).annotate(
-            device_count=Count('id')
-        ).order_by('-device_count')[:5]
+        # Sort by utilization metrics
+        sort_by = request.GET.get('sort_by', 'active_assignments')
+        reverse_sort = request.GET.get('reverse', 'true') == 'true'
         
-        department_stats.append({
-            'department': dept,
-            'total_devices': total_devices,
-            'total_value': total_value,
-            'category_breakdown': category_breakdown,
-            'top_staff': top_staff,
-        })
+        if sort_by in ['active_assignments', 'staff_count', 'devices_per_staff', 'total_value']:
+            dept_utilization.sort(
+                key=lambda x: x[sort_by],
+                reverse=reverse_sort
+            )
+        
+        # Overall statistics
+        total_staff = Staff.objects.count()
+        total_active_assignments = Assignment.objects.filter(is_active=True).count()
+        overall_utilization = (total_active_assignments / total_staff) if total_staff > 0 else 0
+        
+        # Top departments by various metrics
+        top_by_assignments = sorted(dept_utilization, key=lambda x: x['active_assignments'], reverse=True)[:5]
+        top_by_value = sorted(dept_utilization, key=lambda x: x['total_value'], reverse=True)[:5]
+        top_by_efficiency = sorted(dept_utilization, key=lambda x: x['devices_per_staff'], reverse=True)[:5]
+        
+        # Department growth trends (last 12 months)
+        dept_trends = {}
+        for dept in departments:
+            monthly_data = []
+            for i in range(12):
+                month_start = (timezone.now().date() - timedelta(days=30*i)).replace(day=1)
+                month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+                
+                assignments_count = Assignment.objects.filter(
+                    assigned_to_department=dept,
+                    start_date__gte=month_start,
+                    start_date__lte=month_end
+                ).count()
+                
+                monthly_data.append({
+                    'month': month_start.strftime('%B %Y'),
+                    'assignments': assignments_count
+                })
+            
+            monthly_data.reverse()
+            dept_trends[dept.id] = monthly_data
+        
+        context = {
+            'departments': departments,
+            'dept_utilization': dept_utilization,
+            'filters': {
+                'department': department_filter,
+                'sort_by': sort_by,
+                'reverse': reverse_sort,
+            },
+            'overall_stats': {
+                'total_staff': total_staff,
+                'total_active_assignments': total_active_assignments,
+                'overall_utilization': round(overall_utilization, 2),
+            },
+            'top_departments': {
+                'by_assignments': top_by_assignments,
+                'by_value': top_by_value,
+                'by_efficiency': top_by_efficiency,
+            },
+            'dept_trends': dept_trends,
+            'report_date': timezone.now().date(),
+        }
+        
+        return render(request, 'reports/department_utilization.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error generating department utilization report: {str(e)}")
+        return redirect('reports:dashboard')
+
+@login_required
+def generate_custom_report(request):
+    """Generate custom report based on user selections"""
+    if request.method == 'POST':
+        report_type = request.POST.get('report_type')
+        date_from = request.POST.get('date_from')
+        date_to = request.POST.get('date_to')
+        filters = request.POST.dict()
+        
+        # Create report generation record
+        try:
+            report_gen = ReportGeneration.objects.create(
+                template=None,  # Custom report
+                generated_by=request.user,
+                filters_applied=filters,
+                date_range_start=date_from if date_from else None,
+                date_range_end=date_to if date_to else None,
+                file_format='CSV'
+            )
+        except:
+            pass  # Skip if model doesn't exist
+        
+        # Redirect to appropriate report with filters
+        if report_type == 'inventory':
+            return redirect(f"/reports/inventory/?{request.POST.urlencode()}")
+        elif report_type == 'assignments':
+            return redirect(f"/reports/assignments/?{request.POST.urlencode()}")
+        elif report_type == 'maintenance':
+            return redirect(f"/reports/maintenance/?{request.POST.urlencode()}")
+        elif report_type == 'audit':
+            return redirect(f"/reports/audit/?{request.POST.urlencode()}")
+        elif report_type == 'warranty':
+            return redirect(f"/reports/warranty/?{request.POST.urlencode()}")
+        elif report_type == 'department':
+            return redirect(f"/reports/department-utilization/?{request.POST.urlencode()}")
     
-    # Sort by device count
-    department_stats.sort(key=lambda x: x['total_devices'], reverse=True)
-    
+    # GET request - show form
     context = {
-        'department_stats': department_stats,
+        'departments': Department.objects.all(),
+        'vendors': Vendor.objects.filter(is_active=True),
+        'categories': DeviceCategory.objects.filter(is_active=True),
+        'staff_members': Staff.objects.select_related('department'),
     }
     
-    return render(request, 'reports/department_utilization.html', context)
+    return render(request, 'reports/custom_report.html', context)
 
-# Export functions
+@login_required
+@require_http_methods(["GET"])
+def ajax_report_progress(request, report_id):
+    """Get report generation progress via AJAX"""
+    try:
+        report = get_object_or_404(ReportGeneration, id=report_id, generated_by=request.user)
+        
+        data = {
+            'status': report.status,
+            'progress': report.progress_percentage,
+            'file_url': report.file_path.url if report.file_path else None,
+            'error_message': report.error_message,
+            'completed_at': report.completed_at.isoformat() if report.completed_at else None,
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'status': 'ERROR'
+        }, status=400)
+
+# Export helper functions
 def export_inventory_csv(devices):
     """Export inventory data to CSV"""
     response = HttpResponse(content_type='text/csv')
@@ -641,10 +963,10 @@ def export_inventory_csv(devices):
     
     writer = csv.writer(response)
     writer.writerow([
-        'Device ID', 'Asset Tag', 'Device Name', 'Category', 'Subcategory',
+        'Device ID', 'Asset Tag', 'Device Name', 'Category', 'Type',
         'Brand', 'Model', 'Serial Number', 'Status', 'Condition',
-        'Purchase Date', 'Purchase Price', 'Vendor', 'Warranty End Date',
-        'Assigned To', 'Department', 'Location'
+        'Purchase Date', 'Purchase Price', 'Vendor', 'Warranty End',
+        'Current Location', 'Current Assignment', 'Created Date'
     ])
     
     for device in devices:
@@ -652,55 +974,22 @@ def export_inventory_csv(devices):
         
         writer.writerow([
             device.device_id,
-            device.asset_tag,
+            device.asset_tag or '',
             device.device_name,
-            device.device_type.subcategory.category.name,
-            device.device_type.subcategory.name,
-            device.brand,
-            device.model,
-            device.serial_number,
+            device.device_type.subcategory.category.name if device.device_type else '',
+            device.device_type.name if device.device_type else '',
+            device.brand or '',
+            device.model or '',
+            device.serial_number or '',
             device.get_status_display(),
             device.get_condition_display(),
-            device.purchase_date,
-            device.purchase_price,
-            device.vendor.name,
-            device.warranty_end_date,
-            str(current_assignment.assigned_to_staff) if current_assignment and current_assignment.assigned_to_staff else '',
-            str(current_assignment.assigned_to_department) if current_assignment and current_assignment.assigned_to_department else '',
-            str(current_assignment.assigned_to_location) if current_assignment and current_assignment.assigned_to_location else '',
-        ])
-    
-    return response
-
-def export_assignments_csv(assignments):
-    """Export assignment data to CSV"""
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="assignment_report.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow([
-        'Assignment ID', 'Device ID', 'Device Name', 'Assignment Type',
-        'Assigned To Staff', 'Assigned To Department', 'Assigned To Location',
-        'Start Date', 'Expected Return Date', 'Actual Return Date',
-        'Is Temporary', 'Is Active', 'Purpose', 'Created By'
-    ])
-    
-    for assignment in assignments:
-        writer.writerow([
-            assignment.assignment_id,
-            assignment.device.device_id,
-            assignment.device.device_name,
-            assignment.get_assignment_type_display(),
-            str(assignment.assigned_to_staff) if assignment.assigned_to_staff else '',
-            str(assignment.assigned_to_department) if assignment.assigned_to_department else '',
-            str(assignment.assigned_to_location) if assignment.assigned_to_location else '',
-            assignment.start_date,
-            assignment.expected_return_date or '',
-            assignment.actual_return_date or '',
-            assignment.is_temporary,
-            assignment.is_active,
-            assignment.purpose,
-            assignment.created_by.username if assignment.created_by else '',
+            device.purchase_date.strftime('%Y-%m-%d') if device.purchase_date else '',
+            device.purchase_price or '',
+            device.vendor.name if device.vendor else '',
+            device.warranty_end_date.strftime('%Y-%m-%d') if device.warranty_end_date else '',
+            device.current_location.name if device.current_location else '',
+            str(current_assignment.assigned_to_staff or current_assignment.assigned_to_department) if current_assignment else '',
+            device.created_at.strftime('%Y-%m-%d %H:%M:%S')
         ])
     
     return response
@@ -708,26 +997,34 @@ def export_assignments_csv(assignments):
 def export_inventory_pdf(devices):
     """Export inventory data to PDF"""
     try:
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import letter, A4
-        from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-        from reportlab.lib.styles import getSampleStyleSheet
         from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
         
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="inventory_report.pdf"'
         
-        # Create PDF document
         doc = SimpleDocTemplate(response, pagesize=A4)
         elements = []
+        
+        # Styles
         styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=30,
+            alignment=1  # Center alignment
+        )
         
         # Title
-        title = Paragraph("BPS IT Inventory Report", styles['Title'])
+        title = Paragraph("BPS IT Inventory Report", title_style)
         elements.append(title)
+        elements.append(Spacer(1, 12))
         
-        # Generate date
+        # Date
         from datetime import datetime
         date_para = Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles['Normal'])
         elements.append(date_para)
@@ -740,10 +1037,10 @@ def export_inventory_pdf(devices):
             data.append([
                 device.device_id,
                 device.device_name[:20] + "..." if len(device.device_name) > 20 else device.device_name,
-                device.device_type.subcategory.category.name,
-                device.brand,
+                device.device_type.subcategory.category.name if device.device_type else '',
+                device.brand[:15] + "..." if device.brand and len(device.brand) > 15 else (device.brand or ''),
                 device.get_status_display(),
-                str(device.purchase_date),
+                str(device.purchase_date) if device.purchase_date else '',
             ])
         
         # Create table
@@ -768,58 +1065,3 @@ def export_inventory_pdf(devices):
     except ImportError:
         # Fallback to CSV if reportlab is not available
         return export_inventory_csv(devices)
-
-@login_required
-def generate_custom_report(request):
-    """Generate custom report based on user selections"""
-    if request.method == 'POST':
-        report_type = request.POST.get('report_type')
-        date_from = request.POST.get('date_from')
-        date_to = request.POST.get('date_to')
-        filters = request.POST.dict()
-        
-        # Create report generation record
-        report_gen = ReportGeneration.objects.create(
-            template=None,  # Custom report
-            generated_by=request.user,
-            filters_applied=filters,
-            date_range_start=date_from if date_from else None,
-            date_range_end=date_to if date_to else None,
-            file_format='CSV'
-        )
-        
-        # Redirect to appropriate report with filters
-        if report_type == 'inventory':
-            return redirect(f"/reports/inventory/?{request.POST.urlencode()}")
-        elif report_type == 'assignments':
-            return redirect(f"/reports/assignments/?{request.POST.urlencode()}")
-        elif report_type == 'maintenance':
-            return redirect(f"/reports/maintenance/?{request.POST.urlencode()}")
-        elif report_type == 'audit':
-            return redirect(f"/reports/audit/?{request.POST.urlencode()}")
-    
-    context = {
-        'categories': DeviceCategory.objects.filter(is_active=True),
-        'departments': Department.objects.all(),
-        'vendors': Vendor.objects.filter(is_active=True),
-        'device_statuses': Device.DEVICE_STATUS,
-        'assignment_types': Assignment.ASSIGNMENT_TYPES,
-    }
-    
-    return render(request, 'reports/custom_report.html', context)
-
-# AJAX endpoints
-@login_required
-def ajax_report_progress(request, report_id):
-    """Check report generation progress"""
-    try:
-        report = ReportGeneration.objects.get(id=report_id)
-        data = {
-            'status': 'completed' if report.generation_completed else ('failed' if report.generation_failed else 'in_progress'),
-            'progress': 100 if report.generation_completed else 50,
-            'total_records': report.total_records,
-            'error_message': report.error_message if report.generation_failed else None
-        }
-        return JsonResponse(data)
-    except ReportGeneration.DoesNotExist:
-        return JsonResponse({'error': 'Report not found'}, status=404)
