@@ -17,6 +17,7 @@ from django.core.serializers import serialize
 from django.core.exceptions import ValidationError
 from django.conf import settings
 
+
 # Django contrib imports
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
@@ -54,9 +55,9 @@ from .models import (
     MaintenanceSchedule, AuditLog, Room, Building
 )
 from .forms import (
-    DeviceForm, AssignmentForm, StaffForm, 
-    LocationForm, DeviceSearchForm, 
-    BulkAssignmentForm, MaintenanceScheduleForm, DeviceTransferForm,
+    DeviceForm, AssignmentForm, StaffForm, ReturnForm, 
+    LocationForm, DeviceSearchForm, BulkDeviceActionForm,  
+    BulkAssignmentForm, MaintenanceScheduleForm, DeviceTransferForm, AssignmentSearchForm,
     VendorForm
 )
 
@@ -559,103 +560,66 @@ def ajax_device_stats(request):
 
 @login_required
 def device_list(request):
-    """Comprehensive device list with advanced filtering"""
-    try:
-        devices = Device.objects.select_related(
-            'device_type__subcategory__category',
-            'vendor', 'current_location', 'created_by'
-        ).prefetch_related(
-            'assignments__assigned_to_staff',
-            'assignments__assigned_to_department'
-        ).order_by('-created_at')
+    """List all devices with search and filtering"""
+    devices = Device.objects.select_related(
+        'device_type', 'vendor', 'current_location'
+    ).all()
+    
+    # Apply search and filters
+    form = DeviceSearchForm(request.GET)
+    if form.is_valid():
+        search = form.cleaned_data.get('search')
+        if search:
+            devices = devices.filter(
+                Q(device_id__icontains=search) |
+                Q(device_name__icontains=search) |
+                Q(asset_tag__icontains=search) |
+                Q(brand__icontains=search) |
+                Q(model__icontains=search) |
+                Q(serial_number__icontains=search)
+            )
         
-        # Apply filters
-        search_form = DeviceSearchForm(request.GET)
-        if search_form.is_valid():
-            # Device search
-            if search_form.cleaned_data.get('search'):
-                search_term = search_form.cleaned_data['search']
-                devices = devices.filter(
-                    Q(device_name__icontains=search_term) |
-                    Q(device_id__icontains=search_term) |
-                    Q(asset_tag__icontains=search_term) |
-                    Q(serial_number__icontains=search_term) |
-                    Q(model__icontains=search_term) |
-                    Q(brand__icontains=search_term)
-                )
-            
-            # Status filter
-            if search_form.cleaned_data.get('status'):
-                devices = devices.filter(status=search_form.cleaned_data['status'])
-            
-            # Category filter
-            if search_form.cleaned_data.get('category'):
-                devices = devices.filter(
-                    device_type__subcategory__category=search_form.cleaned_data['category']
-                )
-            
-            # Location filter
-            if search_form.cleaned_data.get('location'):
-                devices = devices.filter(current_location=search_form.cleaned_data['location'])
-            
-            # Vendor filter
-            if search_form.cleaned_data.get('vendor'):
-                devices = devices.filter(vendor=search_form.cleaned_data['vendor'])
-            
-            # Warranty status filter
-            warranty_status = search_form.cleaned_data.get('warranty_status')
-            if warranty_status:
-                today = timezone.now().date()
-                if warranty_status == 'active':
-                    devices = devices.filter(warranty_end_date__gte=today)
-                elif warranty_status == 'expired':
-                    devices = devices.filter(warranty_end_date__lt=today)
-                elif warranty_status == 'expiring':
-                    alert_date = today + timedelta(days=30)
-                    devices = devices.filter(
-                        warranty_end_date__gte=today,
-                        warranty_end_date__lte=alert_date
-                    )
-            
-            # Assignment status filter
-            assignment_status = search_form.cleaned_data.get('assignment_status')
-            if assignment_status == 'assigned':
-                devices = devices.filter(assignments__is_active=True).distinct()
-            elif assignment_status == 'unassigned':
-                devices = devices.exclude(assignments__is_active=True).distinct()
-            
-            # Condition filter
-            if search_form.cleaned_data.get('condition'):
-                devices = devices.filter(condition=search_form.cleaned_data['condition'])
-            
-            # Date range filters
-            purchase_date_from = search_form.cleaned_data.get('purchase_date_from')
-            purchase_date_to = search_form.cleaned_data.get('purchase_date_to')
-            if purchase_date_from:
-                devices = devices.filter(purchase_date__gte=purchase_date_from)
-            if purchase_date_to:
-                devices = devices.filter(purchase_date__lte=purchase_date_to)
+        status = form.cleaned_data.get('status')
+        if status:
+            devices = devices.filter(status=status)
         
-        # Pagination
-        paginator = Paginator(devices, 25)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
+        condition = form.cleaned_data.get('condition')
+        if condition:
+            devices = devices.filter(condition=condition)
         
-        context = {
-            'page_obj': page_obj,
-            'search_form': search_form,
-            'total_devices': devices.count(),
-        }
+        category = form.cleaned_data.get('category')
+        if category:
+            devices = devices.filter(device_type__subcategory__category=category)
         
-        return render(request, 'inventory/device_list.html', context)
+        location = form.cleaned_data.get('location')
+        if location:
+            devices = devices.filter(current_location=location)
         
-    except Exception as e:
-        messages.error(request, f"Error loading devices: {str(e)}")
-        return render(request, 'inventory/device_list.html', {
-            'page_obj': None, 
-            'search_form': DeviceSearchForm(), 
-            'total_devices': 0
-        })
+        vendor = form.cleaned_data.get('vendor')
+        if vendor:
+            devices = devices.filter(vendor=vendor)
+    
+    # Pagination
+    paginator = Paginator(devices, 25)
+    page_number = request.GET.get('page')
+    devices_page = paginator.get_page(page_number)
+    
+    # Statistics for dashboard
+    stats = {
+        'total_devices': devices.count(),
+        'available_devices': devices.filter(status='AVAILABLE').count(),
+        'assigned_devices': devices.filter(status='ASSIGNED').count(),
+        'maintenance_devices': devices.filter(status='MAINTENANCE').count(),
+    }
+    
+    context = {
+        'devices': devices_page,
+        'form': form,
+        'stats': stats,
+        'title': 'Device Management'
+    }
+    
+    return render(request, 'inventory/device_list.html', context)
 
 @login_required
 def device_detail(request, device_id):
@@ -781,62 +745,56 @@ def device_create(request):
 @login_required
 @permission_required('inventory.change_device', raise_exception=True)
 def device_edit(request, device_id):
-    """Edit device with change tracking"""
-    try:
-        device = get_object_or_404(Device, device_id=device_id)
-        original_data = {
-            'device_name': device.device_name,
-            'status': device.status,
-            'condition': device.condition,
-            'current_location': device.current_location,
-        }
-        
-        if request.method == 'POST':
-            form = DeviceForm(request.POST, request.FILES, instance=device)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        device = form.save(commit=False)
-                        device.updated_by = request.user
-                        device.save()
-                        
-                        # Track changes
-                        changes = {}
-                        for field, old_value in original_data.items():
-                            new_value = getattr(device, field)
-                            if old_value != new_value:
-                                changes[field] = {'old': str(old_value), 'new': str(new_value)}
-                        
-                        if changes:
-                            AuditLog.objects.create(
-                                user=request.user,
-                                action='UPDATE',
-                                model_name='Device',
-                                object_id=device.device_id,
-                                object_repr=str(device),
-                                changes=changes,
-                                ip_address=request.META.get('REMOTE_ADDR')
-                            )
-                        
-                        messages.success(request, f'Device "{device.device_name}" updated successfully.')
-                        return redirect('inventory:device_detail', device_id=device.device_id)
-                except Exception as e:
-                    messages.error(request, f'Error updating device: {str(e)}')
-        else:
-            form = DeviceForm(instance=device)
-        
-        context = {
-            'form': form,
-            'device': device,
-            'title': f'Edit {device.device_name}',
-            'action': 'Update',
-            'submit_text': 'Update Device'
-        }
-        return render(request, 'inventory/device_form.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading device: {str(e)}")
-        return redirect('inventory:device_list')
+    """Edit device"""
+    device = get_object_or_404(Device, id=device_id)
+    
+    if request.method == 'POST':
+        form = DeviceForm(request.POST, instance=device)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Track changes
+                    changes = {}
+                    for field in form.changed_data:
+                        changes[field] = {
+                            'old': getattr(device, field),
+                            'new': form.cleaned_data[field]
+                        }
+                    
+                    device = form.save(commit=False)
+                    device.updated_by = request.user
+                    device.save()
+                    
+                    # Log the activity
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='UPDATE',
+                        model_name='Device',
+                        object_id=device.id,
+                        object_repr=str(device),
+                        changes=changes,
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    messages.success(request, f'Device "{device.device_name}" updated successfully.')
+                    return redirect('inventory:device_detail', device_id=device.id)
+                    
+            except Exception as e:
+                messages.error(request, f'Error updating device: {str(e)}')
+    else:
+        form = DeviceForm(instance=device)
+        # Populate specifications_text for editing
+        if device.specifications:
+            specs_text = '\n'.join([f"{k}: {v}" for k, v in device.specifications.items()])
+            form.initial['specifications_text'] = specs_text
+    
+    context = {
+        'form': form,
+        'device': device,
+        'title': f'Edit Device: {device.device_name}'
+    }
+    
+    return render(request, 'inventory/device_form.html', context)
 
 @login_required
 @permission_required('inventory.delete_device', raise_exception=True)
@@ -1202,85 +1160,52 @@ class DeviceSubCategoryForm(forms.ModelForm):
 
 @login_required
 def assignment_list(request):
-    """Comprehensive assignment listing with filtering"""
-    try:
-        assignments = Assignment.objects.select_related(
-            'device', 'assigned_to_staff', 'assigned_to_department',
-            'assigned_to_location', 'created_by', 'requested_by'
-        ).order_by('-created_at')
+    """List all assignments"""
+    assignments = Assignment.objects.select_related(
+        'device', 'assigned_to_staff', 'assigned_to_department'
+    ).all()
+    
+    # Apply filters
+    form = AssignmentSearchForm(request.GET)
+    if form.is_valid():
+        search = form.cleaned_data.get('search')
+        if search:
+            assignments = assignments.filter(
+                Q(device__device_name__icontains=search) |
+                Q(device__device_id__icontains=search) |
+                Q(assigned_to_staff__user__first_name__icontains=search) |
+                Q(assigned_to_staff__user__last_name__icontains=search) |
+                Q(assigned_to_department__name__icontains=search)
+            )
         
-        # Apply filters
-        search_form = AssignmentSearchForm(request.GET)
-        if search_form.is_valid():
-            # Search functionality
-            if search_form.cleaned_data.get('search'):
-                search_term = search_form.cleaned_data['search']
-                assignments = assignments.filter(
-                    Q(device__device_name__icontains=search_term) |
-                    Q(device__device_id__icontains=search_term) |
-                    Q(assigned_to_staff__first_name__icontains=search_term) |
-                    Q(assigned_to_staff__last_name__icontains=search_term) |
-                    Q(assigned_to_staff__employee_id__icontains=search_term) |
-                    Q(assignment_id__icontains=search_term)
-                )
-            
-            # Status filters
-            status = search_form.cleaned_data.get('status')
-            if status == 'active':
-                assignments = assignments.filter(is_active=True)
-            elif status == 'inactive':
-                assignments = assignments.filter(is_active=False)
-            elif status == 'overdue':
-                today = timezone.now().date()
-                assignments = assignments.filter(
-                    is_temporary=True,
-                    is_active=True,
-                    expected_return_date__lt=today,
-                    actual_return_date__isnull=True
-                )
-            
-            # Assignment type filter
-            assignment_type = search_form.cleaned_data.get('assignment_type')
-            if assignment_type == 'permanent':
-                assignments = assignments.filter(is_temporary=False)
-            elif assignment_type == 'temporary':
-                assignments = assignments.filter(is_temporary=True)
-            
-            # Department filter
-            if search_form.cleaned_data.get('department'):
-                assignments = assignments.filter(
-                    Q(assigned_to_department=search_form.cleaned_data['department']) |
-                    Q(assigned_to_staff__department=search_form.cleaned_data['department'])
-                )
-            
-            # Date range filters
-            date_from = search_form.cleaned_data.get('date_from')
-            date_to = search_form.cleaned_data.get('date_to')
-            if date_from:
-                assignments = assignments.filter(created_at__date__gte=date_from)
-            if date_to:
-                assignments = assignments.filter(created_at__date__lte=date_to)
+        status = form.cleaned_data.get('status')
+        if status == 'active':
+            assignments = assignments.filter(is_active=True)
+        elif status == 'inactive':
+            assignments = assignments.filter(is_active=False)
         
-        # Pagination
-        paginator = Paginator(assignments, 25)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
+        assignment_type = form.cleaned_data.get('assignment_type')
+        if assignment_type == 'temporary':
+            assignments = assignments.filter(is_temporary=True)
+        elif assignment_type == 'permanent':
+            assignments = assignments.filter(is_temporary=False)
         
-        context = {
-            'page_obj': page_obj,
-            'search_form': search_form,
-            'total_assignments': assignments.count(),
-        }
-        
-        return render(request, 'inventory/assignment_list.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading assignments: {str(e)}")
-        return render(request, 'inventory/assignment_list.html', {
-            'page_obj': None, 
-            'search_form': AssignmentSearchForm(), 
-            'total_assignments': 0
-        })
+        department = form.cleaned_data.get('department')
+        if department:
+            assignments = assignments.filter(assigned_to_department=department)
+    
+    # Pagination
+    paginator = Paginator(assignments, 25)
+    page_number = request.GET.get('page')
+    assignments_page = paginator.get_page(page_number)
+    
+    context = {
+        'assignments': assignments_page,
+        'form': form,
+        'title': 'Assignment Management'
+    }
+    
+    return render(request, 'inventory/assignment_list.html', context)
 
 @login_required
 @permission_required('inventory.add_assignment', raise_exception=True)
