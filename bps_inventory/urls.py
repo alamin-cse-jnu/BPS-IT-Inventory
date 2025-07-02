@@ -1,149 +1,57 @@
-# bps_inventory/urls.py - Updated Main URL Configuration
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.http import HttpResponse
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.utils import timezone
-from datetime import datetime, date
-
-@login_required
-def home_view(request):
-    """Enhanced home view with quick stats"""
-    try:
-        from inventory.models import Device, Assignment
-        from inventory.utils import get_device_assignment_summary, get_warranty_alerts
-        
-        # Get quick statistics with error handling
-        try:
-            summary = get_device_assignment_summary()
-        except Exception as e:
-            print(f"Error getting device assignment summary: {e}")
-            # Fallback summary calculation
-            summary = {
-                'total_devices': Device.objects.count(),
-                'active_assignments': Assignment.objects.filter(is_active=True).count(),
-                'available_devices': Device.objects.filter(status='AVAILABLE').count(),
-                'overdue_assignments': 0  # Safe fallback
-            }
-        
-        # Get warranty alerts with proper error handling
-        try:
-            warranty_alerts = get_warranty_alerts()[:5]  # Get only first 5
-        except Exception as e:
-            print(f"Error getting warranty alerts: {e}")
-            warranty_alerts = []
-        
-        # Get recent assignments
-        try:
-            recent_assignments = Assignment.objects.select_related(
-                'device', 'assigned_to_staff', 'assigned_to_department'
-            ).order_by('-created_at')[:5]
-        except Exception as e:
-            print(f"Error getting recent assignments: {e}")
-            recent_assignments = []
-        
-        context = {
-            'summary': summary,
-            'warranty_alerts': warranty_alerts,
-            'recent_assignments': recent_assignments,
-            'current_date': timezone.now().date(),
-        }
-        
-        return render(request, 'home.html', context)
-        
-    except ImportError as e:
-        print(f"Import error in home view: {e}")
-        # Fallback context if models aren't available yet
-        context = {
-            'summary': {
-                'total_devices': 0, 
-                'active_assignments': 0, 
-                'available_devices': 0, 
-                'overdue_assignments': 0
-            },
-            'warranty_alerts': [],
-            'recent_assignments': [],
-            'current_date': timezone.now().date(),
-        }
-        return render(request, 'home.html', context)
-    
-    except Exception as e:
-        print(f"Unexpected error in home view: {e}")
-        # Return a basic error page or redirect to login
-        return render(request, 'home.html', {
-            'summary': {'total_devices': 0, 'active_assignments': 0, 'available_devices': 0, 'overdue_assignments': 0},
-            'warranty_alerts': [],
-            'recent_assignments': [],
-            'current_date': timezone.now().date(),
-            'error_message': 'Unable to load dashboard data. Please try refreshing the page.'
-        })
-
-def public_qr_verify(request, device_id):
-    """Public QR code verification view (no login required)"""
-    try:
-        from inventory.models import Device
-        from qr_management.models import QRCodeScan
-        
-        device = Device.objects.select_related(
-            'device_type__subcategory__category',
-            'vendor', 'current_location'
-        ).get(device_id=device_id)
-        
-        # Log the scan
-        try:
-            QRCodeScan.objects.create(
-                device=device,
-                scanner_ip=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                scan_type='PUBLIC_VERIFY'
-            )
-        except:
-            pass  # Don't fail if scan logging fails
-        
-        # Get current assignment
-        current_assignment = device.assignments.filter(is_active=True).first()
-        
-        context = {
-            'device': device,
-            'current_assignment': current_assignment,
-            'scan_time': timezone.now(),
-        }
-        
-        return render(request, 'qr_management/public_verify.html', context)
-        
-    except Exception as e:
-        context = {
-            'error': f"Device {device_id} not found or error occurred: {str(e)}",
-            'device_id': device_id
-        }
-        return render(request, 'qr_management/public_verify.html', context)
+from . import views 
 
 # URL patterns
 urlpatterns = [
-    # Home page
-    path('', home_view, name='home'),
+    # ================================
+    # MAIN SYSTEM URLS
+    # ================================
     
-    # Admin
+    # Home page
+    path('', views.home_view, name='home'),
+    
+    # System utilities
+    path('health/', views.system_health_check, name='system_health'),
+    path('status/', views.system_status, name='system_status'),
+    path('api/docs/', views.api_documentation, name='api_docs'),
+    
+    # ================================
+    # ADMIN
+    # ================================
     path('admin/', admin.site.urls),
     
-    # Authentication
+    # ================================
+    # AUTHENTICATION
+    # ================================
     path('auth/', include('authentication.urls')),
     path('accounts/', include('django.contrib.auth.urls')),  # Built-in auth views
     
-    # Main applications
+    # ================================
+    # MAIN APPLICATIONS
+    # ================================
     path('inventory/', include('inventory.urls')),
     path('reports/', include('reports.urls')),
     path('qr/', include('qr_management.urls')),
     
-    # Public QR verification (no login required)
-    path('verify/<str:device_id>/', public_qr_verify, name='public_qr_verify'),
+    # ================================
+    # PUBLIC ENDPOINTS
+    # ================================
     
-    # API endpoints (for future mobile app)
-    # path('api/v1/', include('api.urls')),  # We'll create this later
+    # Public QR verification (no login required)
+    path('verify/<str:device_id>/', views.public_qr_verify, name='public_qr_verify'),
+    
+    # ================================
+    # FUTURE API ENDPOINTS
+    # ================================
+    # path('api/v1/', include('api.urls')),  # For future mobile app API
 ]
+
+# ================================
+# DEVELOPMENT CONFIGURATIONS
+# ================================
 
 # Add Django Debug Toolbar URLs in development
 if settings.DEBUG:
@@ -153,6 +61,7 @@ if settings.DEBUG:
             path('__debug__/', include(debug_toolbar.urls)),
         ] + urlpatterns
     except ImportError:
+        # Debug toolbar not installed
         pass
 
 # Serve media files in development
@@ -160,17 +69,96 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-# Admin site customization
+# ================================
+# ADMIN SITE CUSTOMIZATION
+# ================================
 admin.site.site_header = "BPS IT Inventory Management System"
 admin.site.site_title = "BPS Inventory Admin"
 admin.site.index_title = "Welcome to BPS IT Inventory Management System"
 
-# Error handlers
+# ================================
+# ERROR HANDLERS
+# ================================
+
 def handler404(request, exception):
-    return render(request, 'errors/404.html', status=404)
+    """Custom 404 error handler"""
+    from django.shortcuts import render
+    return render(request, 'errors/404.html', {
+        'error_code': '404',
+        'error_title': 'Page Not Found',
+        'error_message': 'The page you are looking for could not be found.',
+        'system_name': 'BPS IT Inventory Management System',
+    }, status=404)
 
 def handler500(request):
-    return render(request, 'errors/500.html', status=500)
+    """Custom 500 error handler"""
+    from django.shortcuts import render
+    return render(request, 'errors/500.html', {
+        'error_code': '500',
+        'error_title': 'Internal Server Error',
+        'error_message': 'An internal server error occurred. Please try again later.',
+        'system_name': 'BPS IT Inventory Management System',
+    }, status=500)
 
 def handler403(request, exception):
-    return render(request, 'errors/403.html', status=403)
+    """Custom 403 error handler"""
+    from django.shortcuts import render
+    return render(request, 'errors/403.html', {
+        'error_code': '403',
+        'error_title': 'Access Forbidden',
+        'error_message': 'You do not have permission to access this resource.',
+        'system_name': 'BPS IT Inventory Management System',
+    }, status=403)
+
+def handler400(request, exception):
+    """Custom 400 error handler"""
+    from django.shortcuts import render
+    return render(request, 'errors/400.html', {
+        'error_code': '400',
+        'error_title': 'Bad Request',
+        'error_message': 'Your request could not be processed due to invalid data.',
+        'system_name': 'BPS IT Inventory Management System',
+    }, status=400)
+
+# ================================
+# URL CONFIGURATION SUMMARY
+# ================================
+
+"""
+URL STRUCTURE SUMMARY:
+=====================
+
+PUBLIC URLS (No Authentication Required):
+- / (home page)
+- /status/ (system status)
+- /api/docs/ (API documentation)
+- /verify/<device_id>/ (public QR verification)
+- /accounts/login/ (login page)
+
+AUTHENTICATED URLS (Login Required):
+- /auth/* (authentication management)
+- /inventory/* (inventory management)
+- /reports/* (reporting system)
+- /qr/* (QR code management)
+- /admin/ (Django admin)
+
+ADMIN ONLY URLS (Staff Permission Required):
+- /health/ (system health check)
+- /admin/* (Django admin interface)
+
+API ENDPOINTS:
+- /inventory/api/* (inventory API endpoints)
+- /reports/ajax/* (reports AJAX endpoints)
+- /qr/scan/mobile/ (mobile QR scanning)
+
+STATIC/MEDIA FILES (Development Only):
+- /static/* (static files)
+- /media/* (uploaded media files)
+- /__debug__/* (debug toolbar)
+
+ERROR PAGES:
+- Custom 400, 403, 404, 500 error handlers
+
+FUTURE ENDPOINTS:
+- /api/v1/* (planned mobile app API)
+"""

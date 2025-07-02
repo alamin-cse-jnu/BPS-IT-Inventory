@@ -247,312 +247,152 @@ def dashboard(request):
 
 @login_required
 @require_http_methods(["GET"])
-@cache_page(60 * 5)  # Cache for 5 minutes
 def ajax_dashboard_stats(request):
-    """Get real-time dashboard statistics via AJAX"""
+    """Get dashboard statistics via AJAX"""
     try:
-        # Device statistics
-        total_devices = Device.objects.count()
-        active_assignments = Assignment.objects.filter(is_active=True).count()
-        available_devices = Device.objects.filter(status='AVAILABLE').count()
-        
-        # Assignment statistics
-        overdue_assignments = Assignment.objects.filter(
-            is_temporary=True,
-            is_active=True,
-            expected_return_date__lt=timezone.now().date()
-        ).count()
-        
-        # Warranty alerts (devices expiring in next 30 days)
-        today = timezone.now().date()
-        warranty_alerts = Device.objects.filter(
-            warranty_end_date__gte=today,
-            warranty_end_date__lte=today + timedelta(days=30)
-        ).count()
-        
-        # Maintenance due (devices without maintenance in last 6 months)
-        six_months_ago = today - timedelta(days=180)
-        maintenance_due = Device.objects.filter(
-            Q(last_maintenance_date__isnull=True) |
-            Q(last_maintenance_date__lt=six_months_ago)
-        ).filter(status__in=['AVAILABLE', 'ASSIGNED']).count()
-        
-        # Device status distribution
-        status_distribution = list(
-            Device.objects.values('status')
-            .annotate(count=Count('status'))
-            .order_by('status')
-        )
-        
-        # Device condition distribution
-        condition_distribution = list(
-            Device.objects.values('condition')
-            .annotate(count=Count('condition'))
-            .order_by('condition')
-        )
-        
-        # Top categories by device count
-        top_categories = list(
-            Device.objects.select_related('device_type__subcategory__category')
-            .values('device_type__subcategory__category__name')
-            .annotate(count=Count('id'))
-            .order_by('-count')[:5]
-        )
-        
-        # Department utilization
-        department_utilization = list(
-            Assignment.objects.filter(is_active=True, assigned_to_department__isnull=False)
-            .values('assigned_to_department__name')
-            .annotate(device_count=Count('device', distinct=True))
-            .order_by('-device_count')[:10]
-        )
-        
-        # Assignment trends (last 7 days)
-        assignment_trends = []
-        for i in range(7):
-            date = today - timedelta(days=i)
-            daily_assignments = Assignment.objects.filter(
-                start_date=date
-            ).count()
-            assignment_trends.append({
-                'date': date.strftime('%Y-%m-%d'),
-                'assignments': daily_assignments
-            })
-        assignment_trends.reverse()
-        
-        # Recent activities (last 24 hours)
-        yesterday = timezone.now() - timedelta(days=1)
-        recent_assignments = Assignment.objects.filter(
-            created_at__gte=yesterday
-        ).select_related('device', 'assigned_to_staff', 'assigned_to_department')[:5]
-        
-        recent_activities = []
-        for assignment in recent_assignments:
-            activity = {
-                'type': 'assignment',
-                'message': f"Device {assignment.device.device_name} assigned to {assignment.assigned_to_staff or assignment.assigned_to_department}",
-                'timestamp': assignment.created_at.isoformat(),
-                'url': reverse('inventory:assignment_detail', args=[assignment.assignment_id])
-            }
-            recent_activities.append(activity)
-        
-        # Calculate utilization rate
-        utilization_rate = (active_assignments / total_devices * 100) if total_devices > 0 else 0
-        
-        data = {
-            'summary': {
-                'total_devices': total_devices,
-                'active_assignments': active_assignments,
-                'available_devices': available_devices,
-                'overdue_assignments': overdue_assignments,
-                'warranty_alerts': warranty_alerts,
-                'maintenance_due': maintenance_due,
-                'utilization_rate': round(utilization_rate, 1)
-            },
-            'distributions': {
-                'status': status_distribution,
-                'condition': condition_distribution,
-                'categories': top_categories,
-                'departments': department_utilization
-            },
-            'trends': {
-                'assignments': assignment_trends
-            },
-            'recent_activities': recent_activities,
-            'timestamp': timezone.now().isoformat()
+        stats = {
+            'total_devices': Device.objects.count(),
+            'active_devices': Device.objects.filter(status='ACTIVE').count(),
+            'assigned_devices': Device.objects.filter(
+                assignments__is_active=True
+            ).distinct().count(),
+            'maintenance_devices': Device.objects.filter(status='MAINTENANCE').count(),
+            'total_assignments': Assignment.objects.filter(is_active=True).count(),
+            'overdue_assignments': Assignment.objects.filter(
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            ).count(),
+            'pending_maintenance': MaintenanceSchedule.objects.filter(
+                status='SCHEDULED'
+            ).count() if 'MaintenanceSchedule' in globals() else 0,
+            'warranty_expiring': Device.objects.filter(
+                warranty_end_date__gte=timezone.now().date(),
+                warranty_end_date__lte=timezone.now().date() + timedelta(days=30)
+            ).count(),
         }
         
-        return JsonResponse(data)
+        return JsonResponse(stats)
         
     except Exception as e:
-        return JsonResponse({
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 @login_required
 @require_http_methods(["GET"])
 def ajax_notification_list(request):
-    """Get user notifications via AJAX"""
+    """Get notifications via AJAX"""
     try:
-        user = request.user
         notifications = []
         
-        # Check if user has permission to view inventory
-        if user.has_perm('inventory.view_device'):
+        # Overdue assignments
+        overdue_assignments = Assignment.objects.filter(
+            is_temporary=True,
+            is_active=True,
+            expected_return_date__lt=timezone.now().date()
+        ).select_related('device', 'assigned_to_staff')[:5]
+        
+        for assignment in overdue_assignments:
+            notifications.append({
+                'type': 'warning',
+                'title': 'Overdue Assignment',
+                'message': f'Device {assignment.device.device_id} is overdue for return',
+                'url': f'/inventory/assignments/{assignment.id}/',
+                'created_at': assignment.expected_return_date.isoformat()
+            })
+        
+        # Warranty expiring soon
+        expiring_warranties = Device.objects.filter(
+            warranty_end_date__gte=timezone.now().date(),
+            warranty_end_date__lte=timezone.now().date() + timedelta(days=30)
+        )[:5]
+        
+        for device in expiring_warranties:
+            notifications.append({
+                'type': 'info',
+                'title': 'Warranty Expiring',
+                'message': f'Warranty for {device.device_id} expires on {device.warranty_end_date}',
+                'url': f'/inventory/devices/{device.device_id}/',
+                'created_at': device.warranty_end_date.isoformat()
+            })
+        
+        # Scheduled maintenance
+        try:
+            scheduled_maintenance = MaintenanceSchedule.objects.filter(
+                status='SCHEDULED',
+                scheduled_date__lte=timezone.now().date() + timedelta(days=7)
+            ).select_related('device')[:5]
             
-            # Overdue assignments
-            overdue_assignments = Assignment.objects.filter(
-                is_temporary=True,
-                is_active=True,
-                expected_return_date__lt=timezone.now().date()
-            ).select_related('device', 'assigned_to_staff')[:10]
-            
-            for assignment in overdue_assignments:
-                notifications.append({
-                    'type': 'warning',
-                    'title': 'Overdue Assignment',
-                    'message': f"Device {assignment.device.device_name} is overdue for return",
-                    'url': reverse('inventory:assignment_detail', args=[assignment.assignment_id]),
-                    'timestamp': assignment.expected_return_date.isoformat(),
-                    'priority': 'high'
-                })
-            
-            # Warranty expiring soon (next 30 days)
-            today = timezone.now().date()
-            warranty_alerts = Device.objects.filter(
-                warranty_end_date__gte=today,
-                warranty_end_date__lte=today + timedelta(days=30)
-            ).order_by('warranty_end_date')[:10]
-            
-            for device in warranty_alerts:
-                days_remaining = (device.warranty_end_date - today).days
-                notifications.append({
-                    'type': 'info',
-                    'title': 'Warranty Expiring',
-                    'message': f"Device {device.device_name} warranty expires in {days_remaining} days",
-                    'url': reverse('inventory:device_detail', args=[device.device_id]),
-                    'timestamp': device.warranty_end_date.isoformat(),
-                    'priority': 'medium' if days_remaining > 7 else 'high'
-                })
-            
-            # Maintenance due
-            six_months_ago = today - timedelta(days=180)
-            maintenance_due = Device.objects.filter(
-                Q(last_maintenance_date__isnull=True) |
-                Q(last_maintenance_date__lt=six_months_ago)
-            ).filter(status__in=['AVAILABLE', 'ASSIGNED'])[:10]
-            
-            for device in maintenance_due:
+            for maintenance in scheduled_maintenance:
                 notifications.append({
                     'type': 'info',
-                    'title': 'Maintenance Due',
-                    'message': f"Device {device.device_name} is due for maintenance",
-                    'url': reverse('inventory:device_detail', args=[device.device_id]),
-                    'timestamp': device.last_maintenance_date.isoformat() if device.last_maintenance_date else None,
-                    'priority': 'low'
+                    'title': 'Scheduled Maintenance',
+                    'message': f'Maintenance for {maintenance.device.device_id} scheduled for {maintenance.scheduled_date}',
+                    'url': f'/inventory/maintenance/{maintenance.id}/',
+                    'created_at': maintenance.scheduled_date.isoformat()
                 })
-            
-            # Upcoming maintenance schedules (next 7 days)
-            upcoming_maintenance = MaintenanceSchedule.objects.filter(
-                scheduled_date__gte=today,
-                scheduled_date__lte=today + timedelta(days=7),
-                status__in=['SCHEDULED', 'IN_PROGRESS']
-            ).select_related('device')[:10]
-            
-            for maintenance in upcoming_maintenance:
-                notifications.append({
-                    'type': 'info',
-                    'title': 'Upcoming Maintenance',
-                    'message': f"Maintenance scheduled for {maintenance.device.device_name} on {maintenance.scheduled_date}",
-                    'url': reverse('inventory:maintenance_detail', args=[maintenance.id]),
-                    'timestamp': maintenance.scheduled_date.isoformat(),
-                    'priority': 'medium'
-                })
+        except:
+            pass
         
-        # Sort notifications by priority and timestamp
-        priority_order = {'high': 1, 'medium': 2, 'low': 3}
-        notifications.sort(key=lambda x: (
-            priority_order.get(x['priority'], 4),
-            x['timestamp'] or '9999-12-31'
-        ))
+        # Sort by date (most recent first)
+        notifications.sort(key=lambda x: x['created_at'], reverse=True)
         
-        # Limit to 20 most important notifications
-        notifications = notifications[:20]
-        
-        data = {
-            'notifications': notifications,
-            'count': len(notifications),
-            'timestamp': timezone.now().isoformat()
-        }
-        
-        return JsonResponse(data)
+        return JsonResponse({
+            'notifications': notifications[:10],
+            'count': len(notifications)
+        })
         
     except Exception as e:
-        return JsonResponse({
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 @login_required
 @require_http_methods(["GET"])
 def ajax_device_stats(request):
-    """Get device statistics for charts"""
+    """Get device statistics via AJAX"""
     try:
-        # Get query parameters
-        period = request.GET.get('period', '30')  # days
-        chart_type = request.GET.get('type', 'status')
+        # Status distribution
+        status_stats = Device.objects.values('status').annotate(
+            count=Count('id')
+        ).order_by('-count')
         
-        try:
-            days = int(period)
-        except ValueError:
-            days = 30
+        # Condition distribution
+        condition_stats = Device.objects.values('condition').annotate(
+            count=Count('id')
+        ).order_by('-count')
         
-        start_date = timezone.now().date() - timedelta(days=days)
+        # Category distribution
+        category_stats = Device.objects.values(
+            'device_type__subcategory__category__name'
+        ).annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
         
-        if chart_type == 'status':
-            # Device status distribution
-            data = list(
-                Device.objects.values('status')
-                .annotate(count=Count('status'))
-                .order_by('status')
-            )
+        # Assignment trends (last 6 months)
+        six_months_ago = timezone.now().date() - timedelta(days=180)
+        monthly_assignments = []
+        
+        for i in range(6):
+            month_start = six_months_ago + timedelta(days=i*30)
+            month_end = month_start + timedelta(days=30)
             
-        elif chart_type == 'condition':
-            # Device condition distribution
-            data = list(
-                Device.objects.values('condition')
-                .annotate(count=Count('condition'))
-                .order_by('condition')
-            )
+            count = Assignment.objects.filter(
+                start_date__gte=month_start,
+                start_date__lt=month_end
+            ).count()
             
-        elif chart_type == 'category':
-            # Device category distribution
-            data = list(
-                Device.objects.select_related('device_type__subcategory__category')
-                .values('device_type__subcategory__category__name')
-                .annotate(count=Count('id'))
-                .order_by('-count')[:10]
-            )
-            
-        elif chart_type == 'assignment_trend':
-            # Assignment trends over time
-            data = []
-            for i in range(days):
-                date = start_date + timedelta(days=i)
-                daily_count = Assignment.objects.filter(start_date=date).count()
-                data.append({
-                    'date': date.strftime('%Y-%m-%d'),
-                    'count': daily_count
-                })
-                
-        elif chart_type == 'utilization':
-            # Department utilization
-            data = list(
-                Assignment.objects.filter(
-                    is_active=True,
-                    assigned_to_department__isnull=False
-                )
-                .values('assigned_to_department__name')
-                .annotate(count=Count('device', distinct=True))
-                .order_by('-count')[:10]
-            )
-            
-        else:
-            data = []
+            monthly_assignments.append({
+                'month': month_start.strftime('%Y-%m'),
+                'count': count
+            })
         
         return JsonResponse({
-            'data': data,
-            'period': days,
-            'chart_type': chart_type,
-            'timestamp': timezone.now().isoformat()
+            'status_distribution': list(status_stats),
+            'condition_distribution': list(condition_stats),
+            'category_distribution': list(category_stats),
+            'assignment_trends': monthly_assignments
         })
         
     except Exception as e:
-        return JsonResponse({
-            'error': str(e),
-            'timestamp': timezone.now().isoformat()
-        }, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 # ================================
 # DEVICE MANAGEMENT VIEWS
@@ -1160,44 +1000,32 @@ def device_type_delete(request, type_id):
 @login_required
 @require_http_methods(["GET"])
 def ajax_subcategories_by_category(request):
-    """Get subcategories for a specific category via AJAX"""
+    """AJAX: Get subcategories for category - matches URL pattern name"""
     try:
         category_id = request.GET.get('category_id')
-        if not category_id:
-            return JsonResponse({'error': 'Category ID is required'}, status=400)
-        
-        subcategories = DeviceSubCategory.objects.filter(
-            category_id=category_id,
-            is_active=True
-        ).values('id', 'name').order_by('name')
-        
-        return JsonResponse({
-            'subcategories': list(subcategories)
-        })
-        
+        if category_id:
+            subcategories = DeviceSubCategory.objects.filter(
+                category_id=category_id, is_active=True
+            ).values('id', 'name')
+            return JsonResponse({'subcategories': list(subcategories)})
+        return JsonResponse({'subcategories': []})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 @login_required
 @require_http_methods(["GET"])
 def ajax_device_types_by_subcategory(request):
-    """Get device types for a specific subcategory via AJAX"""
+    """AJAX: Get device types for subcategory - matches URL pattern name"""
     try:
         subcategory_id = request.GET.get('subcategory_id')
-        if not subcategory_id:
-            return JsonResponse({'error': 'Subcategory ID is required'}, status=400)
-        
-        device_types = DeviceType.objects.filter(
-            subcategory_id=subcategory_id,
-            is_active=True
-        ).values('id', 'name').order_by('name')
-        
-        return JsonResponse({
-            'device_types': list(device_types)
-        })
-        
+        if subcategory_id:
+            device_types = DeviceType.objects.filter(
+                subcategory_id=subcategory_id, is_active=True
+            ).values('id', 'name')
+            return JsonResponse({'device_types': list(device_types)})
+        return JsonResponse({'device_types': []})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 # Additional form needed for forms.py
 class DeviceCategoryForm(forms.ModelForm):
@@ -2764,186 +2592,202 @@ def vendor_edit(request, vendor_id):
 def maintenance_list(request):
     """List all maintenance schedules"""
     try:
-        maintenance_schedules = MaintenanceSchedule.objects.select_related(
-            'device', 'device__device_type', 'vendor', 'assigned_to'
-        ).order_by('scheduled_date', 'priority')
+        # Get filter parameters
+        status = request.GET.get('status')
+        device_id = request.GET.get('device_id')
+        vendor = request.GET.get('vendor')
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
         
-        # Status filter
-        status_filter = request.GET.get('status')
-        if status_filter:
-            maintenance_schedules = maintenance_schedules.filter(status=status_filter)
+        # Base queryset
+        maintenance = MaintenanceSchedule.objects.select_related(
+            'device', 'vendor', 'created_by'
+        ).order_by('-scheduled_date')
         
-        # Priority filter
-        priority_filter = request.GET.get('priority')
-        if priority_filter:
-            maintenance_schedules = maintenance_schedules.filter(priority=priority_filter)
-        
-        # Date range filter
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
-        if start_date:
-            maintenance_schedules = maintenance_schedules.filter(scheduled_date__gte=start_date)
-        if end_date:
-            maintenance_schedules = maintenance_schedules.filter(scheduled_date__lte=end_date)
-        
-        # Search functionality
-        search = request.GET.get('search')
-        if search:
-            maintenance_schedules = maintenance_schedules.filter(
-                Q(device__asset_tag__icontains=search) |
-                Q(device__serial_number__icontains=search) |
-                Q(device__device_type__name__icontains=search) |
-                Q(description__icontains=search) |
-                Q(vendor__name__icontains=search)
+        # Apply filters
+        if status:
+            maintenance = maintenance.filter(status=status)
+        if device_id:
+            maintenance = maintenance.filter(
+                Q(device__device_id__icontains=device_id) |
+                Q(device__device_name__icontains=device_id)
             )
+        if vendor:
+            maintenance = maintenance.filter(vendor_id=vendor)
+        if date_to:
+            maintenance = maintenance.filter(scheduled_date__lte=date_to)
         
         # Pagination
-        paginator = Paginator(maintenance_schedules, 25)
+        paginator = Paginator(maintenance, 25)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
-        # Stats for dashboard cards
-        total_maintenance = maintenance_schedules.count()
-        pending_maintenance = maintenance_schedules.filter(status='SCHEDULED').count()
-        overdue_maintenance = maintenance_schedules.filter(
+        # Statistics
+        total_maintenance = maintenance.count()
+        scheduled = maintenance.filter(status='SCHEDULED').count()
+        in_progress = maintenance.filter(status='IN_PROGRESS').count()
+        completed = maintenance.filter(status='COMPLETED').count()
+        overdue = maintenance.filter(
             status='SCHEDULED',
             scheduled_date__lt=timezone.now().date()
         ).count()
         
         context = {
             'page_obj': page_obj,
-            'search': search,
-            'status_filter': status_filter,
-            'priority_filter': priority_filter,
-            'start_date': start_date,
-            'end_date': end_date,
             'total_maintenance': total_maintenance,
-            'pending_maintenance': pending_maintenance,
-            'overdue_maintenance': overdue_maintenance,
+            'scheduled': scheduled,
+            'in_progress': in_progress,
+            'completed': completed,
+            'overdue': overdue,
+            'vendors': Vendor.objects.filter(is_active=True),
+            'status_choices': MaintenanceSchedule.STATUS_CHOICES,
+            'filters': {
+                'status': status,
+                'device_id': device_id,
+                'vendor': vendor,
+                'date_from': date_from,
+                'date_to': date_to,
+            }
         }
         
-        return render(request, 'inventory/maintenance_list.html', context)
+        return render(request, 'inventory/maintenance/list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance list: {str(e)}")
-        return render(request, 'inventory/maintenance_list.html', {'page_obj': None})
+        return render(request, 'inventory/maintenance/list.html', {})
 
 @login_required
-def maintenance_detail(request, maintenance_id):
-    """Maintenance schedule detail view"""
-    try:
-        maintenance = get_object_or_404(
-            MaintenanceSchedule.objects.select_related(
-                'device', 'device__device_type', 'vendor', 'assigned_to', 'created_by'
-            ),
-            id=maintenance_id
-        )
-        
-        # Get device assignment history
-        device_assignments = Assignment.objects.filter(
-            device=maintenance.device
-        ).select_related('staff').order_by('-assigned_date')[:5]
-        
-        # Check if maintenance is overdue
-        is_overdue = (
-            maintenance.status == 'SCHEDULED' and 
-            maintenance.scheduled_date < timezone.now().date()
-        )
-        
-        context = {
-            'maintenance': maintenance,
-            'device_assignments': device_assignments,
-            'is_overdue': is_overdue,
-        }
-        
-        return render(request, 'inventory/maintenance_detail.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading maintenance details: {str(e)}")
-        return redirect('inventory:maintenance_list')
-    
-
-@login_required
-@permission_required('inventory.add_maintenanceschedule', raise_exception=True)
 def maintenance_create(request):
     """Create new maintenance schedule"""
-    if request.method == 'POST':
-        form = MaintenanceScheduleForm(request.POST)
-        if form.is_valid():
-            try:
+    try:
+        if request.method == 'POST':
+            form = MaintenanceScheduleForm(request.POST)
+            if form.is_valid():
                 maintenance = form.save(commit=False)
                 maintenance.created_by = request.user
                 maintenance.save()
                 
-                # Log the activity
-                from .utils import log_user_activity
-                log_user_activity(
-                    user=request.user,
-                    action='CREATE',
-                    model_name='MaintenanceSchedule',
-                    object_id=maintenance.id,
-                    object_repr=str(maintenance),
-                    ip_address=request.META.get('REMOTE_ADDR')
-                )
+                # Create audit log
+                try:
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='CREATE',
+                        model_name='MaintenanceSchedule',
+                        object_id=maintenance.id,
+                        object_repr=str(maintenance),
+                        changes=form.cleaned_data,
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                except:
+                    pass
                 
-                messages.success(request, f'Maintenance schedule for "{maintenance.device}" created successfully.')
+                messages.success(request, f'Maintenance schedule created successfully for {maintenance.device.device_id}')
                 return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
-            except Exception as e:
-                messages.error(request, f'Error creating maintenance schedule: {str(e)}')
-    else:
-        form = MaintenanceScheduleForm()
-    
-    context = {
-        'form': form,
-        'title': 'Schedule Maintenance',
-        'action': 'Create',
-    }
-    return render(request, 'inventory/maintenance_form.html', context)
+            else:
+                messages.error(request, 'Please correct the errors below.')
+        else:
+            form = MaintenanceScheduleForm()
+        
+        context = {
+            'form': form,
+            'title': 'Schedule Maintenance',
+            'devices': Device.objects.filter(status__in=['ACTIVE', 'MAINTENANCE']),
+            'vendors': Vendor.objects.filter(is_active=True),
+        }
+        
+        return render(request, 'inventory/maintenance/create.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error creating maintenance schedule: {str(e)}")
+        return redirect('inventory:maintenance_list')
 
 @login_required
-@permission_required('inventory.change_maintenanceschedule', raise_exception=True)
+def maintenance_detail(request, maintenance_id):
+    """View maintenance schedule details"""
+    try:
+        maintenance = get_object_or_404(
+            MaintenanceSchedule.objects.select_related(
+                'device', 'vendor', 'created_by'
+            ),
+            id=maintenance_id
+        )
+        
+        # Get related maintenance history for this device
+        related_maintenance = MaintenanceSchedule.objects.filter(
+            device=maintenance.device
+        ).exclude(id=maintenance_id).order_by('-scheduled_date')[:5]
+        
+        context = {
+            'maintenance': maintenance,
+            'related_maintenance': related_maintenance,
+            'can_edit': request.user.has_perm('inventory.change_maintenanceschedule'),
+        }
+        
+        return render(request, 'inventory/maintenance/detail.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading maintenance details: {str(e)}")
+        return redirect('inventory:maintenance_list')
+
+@login_required
 def maintenance_edit(request, maintenance_id):
     """Edit maintenance schedule"""
     try:
         maintenance = get_object_or_404(MaintenanceSchedule, id=maintenance_id)
         
         if request.method == 'POST':
+            original_data = {
+                'status': maintenance.status,
+                'scheduled_date': maintenance.scheduled_date,
+                'description': maintenance.description,
+                'cost': maintenance.cost,
+                'vendor': maintenance.vendor_id,
+            }
+            
             form = MaintenanceScheduleForm(request.POST, instance=maintenance)
             if form.is_valid():
+                maintenance = form.save()
+                
+                # Create audit log
                 try:
-                    with transaction.atomic():
-                        maintenance = form.save()
-                        
-                        # Log the activity
-                        from .utils import log_user_activity
-                        log_user_activity(
+                    changes = {}
+                    for field, old_value in original_data.items():
+                        new_value = getattr(maintenance, field)
+                        if old_value != new_value:
+                            changes[field] = {'old': old_value, 'new': new_value}
+                    
+                    if changes:
+                        AuditLog.objects.create(
                             user=request.user,
                             action='UPDATE',
                             model_name='MaintenanceSchedule',
                             object_id=maintenance.id,
                             object_repr=str(maintenance),
+                            changes=changes,
                             ip_address=request.META.get('REMOTE_ADDR')
                         )
-                        
-                        messages.success(request, f'Maintenance schedule for "{maintenance.device}" updated successfully.')
-                        return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
-                except Exception as e:
-                    messages.error(request, f'Error updating maintenance schedule: {str(e)}')
+                except:
+                    pass
+                
+                messages.success(request, 'Maintenance schedule updated successfully.')
+                return redirect('inventory:maintenance_detail', maintenance_id=maintenance.id)
+            else:
+                messages.error(request, 'Please correct the errors below.')
         else:
             form = MaintenanceScheduleForm(instance=maintenance)
         
         context = {
             'form': form,
             'maintenance': maintenance,
-            'title': f'Edit Maintenance: {maintenance.device}',
-            'action': 'Update',
+            'title': 'Edit Maintenance Schedule',
         }
-        return render(request, 'inventory/maintenance_form.html', context)
+        
+        return render(request, 'inventory/maintenance/edit.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading maintenance for edit: {str(e)}")
+        messages.error(request, f"Error editing maintenance schedule: {str(e)}")
         return redirect('inventory:maintenance_list')
-
+    
 @login_required
 @permission_required('inventory.change_maintenanceschedule', raise_exception=True)
 def maintenance_complete(request, maintenance_id):
@@ -3090,30 +2934,37 @@ def device_type_create(request):
 @login_required
 @require_http_methods(["GET"])
 def get_device_info(request, device_id):
-    """Get device information for AJAX requests"""
+    """Get device information via API"""
     try:
         device = get_object_or_404(Device, device_id=device_id)
-        
-        # Get current assignment
-        current_assignment = Assignment.objects.filter(
-            device=device, is_active=True
-        ).select_related('assigned_to_staff', 'assigned_to_department').first()
+        current_assignment = device.assignments.filter(is_active=True).first()
         
         data = {
             'device_id': device.device_id,
+            'asset_tag': device.asset_tag,
             'device_name': device.device_name,
             'status': device.status,
             'status_display': device.get_status_display(),
-            'current_location': device.current_location.name if device.current_location else None,
-            'device_type': device.device_type.name if device.device_type else None,
+            'condition': device.condition,
+            'condition_display': device.get_condition_display(),
             'brand': device.brand,
             'model': device.model,
             'serial_number': device.serial_number,
-            'specifications': device.specifications,
+            'category': device.device_type.subcategory.category.name if device.device_type else None,
+            'subcategory': device.device_type.subcategory.name if device.device_type else None,
+            'device_type': device.device_type.name if device.device_type else None,
+            'vendor': device.vendor.name if device.vendor else None,
+            'purchase_date': device.purchase_date.isoformat() if device.purchase_date else None,
+            'purchase_price': float(device.purchase_price) if device.purchase_price else None,
+            'warranty_end_date': device.warranty_end_date.isoformat() if device.warranty_end_date else None,
             'current_assignment': {
                 'assignment_id': current_assignment.assignment_id if current_assignment else None,
-                'assigned_to': str(current_assignment.assigned_to_staff or current_assignment.assigned_to_department) if current_assignment else None,
-                'is_temporary': current_assignment.is_temporary if current_assignment else False
+                'assigned_to_staff': str(current_assignment.assigned_to_staff) if current_assignment and current_assignment.assigned_to_staff else None,
+                'assigned_to_department': current_assignment.assigned_to_department.name if current_assignment and current_assignment.assigned_to_department else None,
+                'assigned_to_location': str(current_assignment.assigned_to_location) if current_assignment and current_assignment.assigned_to_location else None,
+                'start_date': current_assignment.start_date.isoformat() if current_assignment and current_assignment.start_date else None,
+                'is_temporary': current_assignment.is_temporary if current_assignment else False,
+                'expected_return_date': current_assignment.expected_return_date.isoformat() if current_assignment and current_assignment.expected_return_date else None,
             } if current_assignment else None
         }
         
@@ -3125,61 +2976,60 @@ def get_device_info(request, device_id):
 @login_required
 @require_http_methods(["POST"])
 def quick_assign_device(request):
-    """Quick assign device via AJAX"""
+    """Quick assign device via API"""
     try:
         device_id = request.POST.get('device_id')
         staff_id = request.POST.get('staff_id')
-        is_temporary = request.POST.get('is_temporary', False) == 'true'
-        expected_return_date = request.POST.get('expected_return_date')
+        department_id = request.POST.get('department_id')
+        location_id = request.POST.get('location_id')
+        assignment_type = request.POST.get('assignment_type', 'permanent')
+        purpose = request.POST.get('purpose', '')
+        
+        if not device_id:
+            return JsonResponse({'error': 'Device ID is required'}, status=400)
         
         device = get_object_or_404(Device, device_id=device_id)
-        staff = get_object_or_404(Staff, id=staff_id)
         
-        # Check if device is available
-        if device.status != 'AVAILABLE':
-            return JsonResponse({'error': 'Device is not available for assignment'}, status=400)
+        # Check if device is already assigned
+        if device.assignments.filter(is_active=True).exists():
+            return JsonResponse({'error': 'Device is already assigned'}, status=400)
         
-        # Validate return date for temporary assignments
-        if is_temporary and expected_return_date:
-            try:
-                expected_return_date = datetime.strptime(expected_return_date, '%Y-%m-%d').date()
-            except ValueError:
-                return JsonResponse({'error': 'Invalid expected return date format'}, status=400)
-        else:
-            expected_return_date = None
+        # Get assignment targets
+        assigned_to_staff = None
+        assigned_to_department = None
+        assigned_to_location = None
         
-        with transaction.atomic():
-            # Create assignment
-            assignment = Assignment.objects.create(
-                device=device,
-                assigned_to_staff=staff,
-                is_temporary=is_temporary,
-                expected_return_date=expected_return_date,
-                created_by=request.user,
-                updated_by=request.user,
-                requested_by=request.user,
-            )
-            
-            # Update device status
-            device.status = 'ASSIGNED'
-            device.updated_by = request.user
-            device.save()
-            
-            # Create audit log
-            AuditLog.objects.create(
-                user=request.user,
-                action='QUICK_ASSIGN',
-                model_name='Assignment',
-                object_id=assignment.assignment_id,
-                object_repr=str(assignment),
-                changes={'quick_assignment': True},
-                ip_address=request.META.get('REMOTE_ADDR')
-            )
+        if staff_id:
+            assigned_to_staff = get_object_or_404(Staff, id=staff_id)
+        if department_id:
+            assigned_to_department = get_object_or_404(Department, id=department_id)
+        if location_id:
+            assigned_to_location = get_object_or_404(Location, id=location_id)
+        
+        if not any([assigned_to_staff, assigned_to_department, assigned_to_location]):
+            return JsonResponse({'error': 'At least one assignment target is required'}, status=400)
+        
+        # Create assignment
+        assignment = Assignment.objects.create(
+            device=device,
+            assigned_to_staff=assigned_to_staff,
+            assigned_to_department=assigned_to_department,
+            assigned_to_location=assigned_to_location,
+            is_temporary=(assignment_type == 'temporary'),
+            start_date=timezone.now().date(),
+            purpose=purpose,
+            created_by=request.user,
+            is_active=True
+        )
+        
+        # Update device status
+        device.status = 'ASSIGNED'
+        device.save()
         
         return JsonResponse({
             'success': True,
             'assignment_id': assignment.assignment_id,
-            'message': f'Device successfully assigned to {staff.full_name}'
+            'message': f'Device {device_id} assigned successfully'
         })
         
     except Exception as e:
@@ -3188,65 +3038,63 @@ def quick_assign_device(request):
 @login_required
 @require_http_methods(["GET"])
 def search_suggestions(request):
-    """Provide search suggestions for autocomplete"""
+    """Get search suggestions via API"""
     try:
         query = request.GET.get('q', '').strip()
-        search_type = request.GET.get('type', 'device')
+        suggestion_type = request.GET.get('type', 'all')
         
         if len(query) < 2:
             return JsonResponse({'suggestions': []})
         
         suggestions = []
         
-        if search_type == 'device':
+        if suggestion_type in ['all', 'devices']:
+            # Device suggestions
             devices = Device.objects.filter(
-                Q(device_name__icontains=query) |
                 Q(device_id__icontains=query) |
-                Q(brand__icontains=query) |
-                Q(model__icontains=query)
-            ).select_related('device_type')[:10]
-            
-            suggestions = [
-                {
-                    'id': device.device_id,
-                    'text': f"{device.device_name} ({device.device_id})",
-                    'type': 'device',
-                    'status': device.status,
-                    'category': device.device_type.subcategory.category.name if device.device_type else 'Unknown'
-                }
-                for device in devices
-            ]
-        
-        elif search_type == 'staff':
-            staff_members = Staff.objects.filter(
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(employee_id__icontains=query)
-            ).select_related('department')[:10]
-            
-            suggestions = [
-                {
-                    'id': staff.id,
-                    'text': f"{staff.full_name} ({staff.employee_id})",
-                    'type': 'staff',
-                    'department': staff.department.name if staff.department else 'No Department'
-                }
-                for staff in staff_members
-            ]
-        
-        elif search_type == 'department':
-            departments = Department.objects.filter(
-                name__icontains=query
+                Q(device_name__icontains=query) |
+                Q(asset_tag__icontains=query) |
+                Q(serial_number__icontains=query)
             )[:10]
             
-            suggestions = [
-                {
+            for device in devices:
+                suggestions.append({
+                    'type': 'device',
+                    'id': device.device_id,
+                    'text': f"{device.device_id} - {device.device_name}",
+                    'category': 'Devices'
+                })
+        
+        if suggestion_type in ['all', 'staff']:
+            # Staff suggestions
+            staff = Staff.objects.filter(
+                Q(user__username__icontains=query) |
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(employee_id__icontains=query)
+            )[:10]
+            
+            for s in staff:
+                suggestions.append({
+                    'type': 'staff',
+                    'id': s.id,
+                    'text': f"{s.user.get_full_name()} ({s.employee_id})",
+                    'category': 'Staff'
+                })
+        
+        if suggestion_type in ['all', 'departments']:
+            # Department suggestions
+            departments = Department.objects.filter(
+                name__icontains=query
+            )[:5]
+            
+            for dept in departments:
+                suggestions.append({
+                    'type': 'department',
                     'id': dept.id,
                     'text': dept.name,
-                    'type': 'department'
-                }
-                for dept in departments
-            ]
+                    'category': 'Departments'
+                })
         
         return JsonResponse({'suggestions': suggestions})
         
@@ -3256,32 +3104,39 @@ def search_suggestions(request):
 @login_required
 @require_http_methods(["GET"])
 def device_availability_check(request):
-    """Check device availability for assignment"""
+    """Check device availability via API"""
     try:
-        device_ids = request.GET.getlist('device_ids[]')
+        device_id = request.GET.get('device_id')
         
-        if not device_ids:
-            return JsonResponse({'error': 'No device IDs provided'}, status=400)
+        if not device_id:
+            return JsonResponse({'error': 'Device ID is required'}, status=400)
         
-        devices = Device.objects.filter(device_id__in=device_ids)
-        availability = {}
-        
-        for device in devices:
-            current_assignment = Assignment.objects.filter(
-                device=device, is_active=True
-            ).first()
+        try:
+            device = Device.objects.get(device_id=device_id)
+            current_assignment = device.assignments.filter(is_active=True).first()
             
-            availability[device.device_id] = {
-                'available': device.status == 'AVAILABLE',
+            is_available = not current_assignment and device.status in ['ACTIVE', 'AVAILABLE']
+            
+            data = {
+                'device_id': device_id,
+                'is_available': is_available,
                 'status': device.status,
                 'status_display': device.get_status_display(),
                 'current_assignment': {
                     'assignment_id': current_assignment.assignment_id,
-                    'assigned_to': str(current_assignment.assigned_to_staff or current_assignment.assigned_to_department)
+                    'assigned_to': str(current_assignment.assigned_to_staff) if current_assignment.assigned_to_staff else str(current_assignment.assigned_to_department),
+                    'start_date': current_assignment.start_date.isoformat()
                 } if current_assignment else None
             }
-        
-        return JsonResponse({'availability': availability})
+            
+            return JsonResponse(data)
+            
+        except Device.DoesNotExist:
+            return JsonResponse({
+                'device_id': device_id,
+                'is_available': False,
+                'error': 'Device not found'
+            })
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -3289,23 +3144,28 @@ def device_availability_check(request):
 @login_required
 @require_http_methods(["GET"])
 def get_staff_by_department(request, department_id):
-    """Get staff members for a specific department (AJAX)"""
+    """Get staff members by department via API"""
     try:
-        staff_members = Staff.objects.filter(department_id=department_id).order_by('last_name', 'first_name')
+        department = get_object_or_404(Department, id=department_id)
+        staff = Staff.objects.filter(
+            department=department, is_active=True
+        ).select_related('user')
         
-        data = {
-            'staff_members': [
-                {
-                    'id': staff.id,
-                    'name': staff.full_name,
-                    'employee_id': staff.employee_id,
-                    'designation': staff.designation or '',
-                }
-                for staff in staff_members
-            ]
-        }
+        staff_data = []
+        for s in staff:
+            staff_data.append({
+                'id': s.id,
+                'name': s.user.get_full_name(),
+                'username': s.user.username,
+                'employee_id': s.employee_id,
+                'position': s.position,
+                'email': s.user.email,
+            })
         
-        return JsonResponse(data)
+        return JsonResponse({
+            'department': department.name,
+            'staff': staff_data
+        })
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -3313,23 +3173,25 @@ def get_staff_by_department(request, department_id):
 @login_required
 @require_http_methods(["GET"])
 def get_rooms_by_building(request, building_id):
-    """Get rooms for a specific building (AJAX)"""
+    """Get rooms by building via API"""
     try:
-        rooms = Room.objects.filter(building_id=building_id).order_by('name')
+        building = get_object_or_404(Building, id=building_id)
+        rooms = Room.objects.filter(building=building, is_active=True)
         
-        data = {
-            'rooms': [
-                {
-                    'id': room.id,
-                    'name': room.name,
-                    'floor': room.floor or '',
-                    'department': room.department.name if room.department else '',
-                }
-                for room in rooms
-            ]
-        }
+        rooms_data = []
+        for room in rooms:
+            rooms_data.append({
+                'id': room.id,
+                'name': room.name,
+                'room_number': room.room_number,
+                'floor': room.floor,
+                'capacity': room.capacity,
+            })
         
-        return JsonResponse(data)
+        return JsonResponse({
+            'building': building.name,
+            'rooms': rooms_data
+        })
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -3337,23 +3199,25 @@ def get_rooms_by_building(request, building_id):
 @login_required
 @require_http_methods(["GET"])
 def get_locations_by_room(request, room_id):
-    """Get locations for a specific room (AJAX)"""
+    """Get locations by room via API"""
     try:
-        locations = Location.objects.filter(room_id=room_id).order_by('name')
+        room = get_object_or_404(Room, id=room_id)
+        locations = Location.objects.filter(room=room, is_active=True)
         
-        data = {
-            'locations': [
-                {
-                    'id': location.id,
-                    'name': location.name,
-                    'location_type': location.location_type or '',
-                    'description': location.description or '',
-                }
-                for location in locations
-            ]
-        }
+        locations_data = []
+        for location in locations:
+            locations_data.append({
+                'id': location.id,
+                'name': location.name,
+                'location_type': location.location_type,
+                'location_type_display': location.get_location_type_display(),
+                'description': location.description,
+            })
         
-        return JsonResponse(data)
+        return JsonResponse({
+            'room': str(room),
+            'locations': locations_data
+        })
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -3521,82 +3385,125 @@ def bulk_export(request):
 
 @login_required
 def import_template(request):
-    """Download import template files"""
-    template_type = request.GET.get('type', 'devices')
-    
-    response = HttpResponse(content_type='text/csv')
-    
-    if template_type == 'devices':
-        response['Content-Disposition'] = 'attachment; filename="device_import_template.csv"'
-        writer = csv.writer(response)
-        writer.writerow([
-            'asset_tag', 'device_name', 'device_type', 'brand', 'model',
-            'serial_number', 'mac_address', 'ip_address', 'status', 'condition',
-            'purchase_date', 'purchase_price', 'vendor', 'warranty_end_date',
-            'notes'
-        ])
-        writer.writerow([
-            'BPS-IT-0001', 'Finance Laptop', 'Laptop', 'Dell', 'Latitude 7420',
-            'DL123456', '00:1B:44:11:3A:B7', '192.168.1.100', 'AVAILABLE', 'GOOD',
-            '2024-01-15', '85000', 'Dell Bangladesh', '2027-01-15',
-            'Sample device entry'
-        ])
+    """Download CSV import template"""
+    try:
+        template_type = request.GET.get('type', 'devices')
         
-    elif template_type == 'staff':
-        response['Content-Disposition'] = 'attachment; filename="staff_import_template.csv"'
-        writer = csv.writer(response)
-        writer.writerow([
-            'employee_id', 'first_name', 'last_name', 'email', 'phone',
-            'designation', 'department', 'hire_date'
-        ])
-        writer.writerow([
-            'EMP001', 'John', 'Doe', 'john.doe@company.com', '+8801712345678',
-            'Senior Developer', 'IT Department', '2024-01-15'
-        ])
-    
-    return response
+        response = HttpResponse(content_type='text/csv')
+        
+        if template_type == 'devices':
+            response['Content-Disposition'] = 'attachment; filename="devices_import_template.csv"'
+            writer = csv.writer(response)
+            writer.writerow([
+                'device_id', 'asset_tag', 'device_name', 'category', 'subcategory', 'device_type',
+                'brand', 'model', 'serial_number', 'status', 'condition',
+                'purchase_date', 'purchase_price', 'vendor', 'warranty_start_date', 'warranty_end_date',
+                'description', 'notes'
+            ])
+            # Add sample row
+            writer.writerow([
+                'DEV001', 'AT001', 'Sample Laptop', 'IT Equipment', 'Computers', 'Laptop',
+                'Dell', 'Latitude 7420', 'SN123456', 'ACTIVE', 'EXCELLENT',
+                '2023-01-15', '1200.00', 'Dell Inc', '2023-01-15', '2026-01-15',
+                'Sample laptop for demonstration', 'Sample notes'
+            ])
+            
+        elif template_type == 'assignments':
+            response['Content-Disposition'] = 'attachment; filename="assignments_import_template.csv"'
+            writer = csv.writer(response)
+            writer.writerow([
+                'device_id', 'assigned_to_staff_email', 'assigned_to_department', 'assignment_type',
+                'start_date', 'expected_return_date', 'location', 'purpose', 'notes'
+            ])
+            # Add sample row
+            writer.writerow([
+                'DEV001', 'john.doe@example.com', 'IT Department', 'permanent',
+                '2023-01-15', '', 'Office 101', 'Daily work laptop', 'Sample assignment'
+            ])
+            
+        elif template_type == 'maintenance':
+            response['Content-Disposition'] = 'attachment; filename="maintenance_import_template.csv"'
+            writer = csv.writer(response)
+            writer.writerow([
+                'device_id', 'maintenance_type', 'scheduled_date', 'vendor', 'cost',
+                'description', 'status', 'notes'
+            ])
+            # Add sample row
+            writer.writerow([
+                'DEV001', 'PREVENTIVE', '2023-06-15', 'Dell Inc', '150.00',
+                'Regular maintenance check', 'SCHEDULED', 'Sample maintenance'
+            ])
+        
+        return response
+        
+    except Exception as e:
+        messages.error(request, f"Error generating template: {str(e)}")
+        return redirect('inventory:dashboard')
 
 @login_required
 def export_devices_csv(request):
     """Export devices to CSV"""
     try:
+        # Get filter parameters from request
+        category = request.GET.get('category')
+        status = request.GET.get('status')
+        condition = request.GET.get('condition')
+        vendor = request.GET.get('vendor')
+        
+        # Base queryset
+        devices = Device.objects.select_related(
+            'device_type__subcategory__category', 'vendor'
+        ).prefetch_related('assignments')
+        
+        # Apply filters
+        if category:
+            devices = devices.filter(device_type__subcategory__category_id=category)
+        if status:
+            devices = devices.filter(status=status)
+        if condition:
+            devices = devices.filter(condition=condition)
+        if vendor:
+            devices = devices.filter(vendor_id=vendor)
+        
+        # Create CSV response
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="devices_export.csv"'
         
         writer = csv.writer(response)
         writer.writerow([
-            'Device ID', 'Asset Tag', 'Device Name', 'Category', 'Type',
+            'Device ID', 'Asset Tag', 'Device Name', 'Category', 'Subcategory', 'Type',
             'Brand', 'Model', 'Serial Number', 'Status', 'Condition',
-            'Purchase Date', 'Purchase Price', 'Vendor', 'Warranty End',
-            'Current Assignment', 'Location', 'Created Date'
+            'Purchase Date', 'Purchase Price', 'Vendor', 'Warranty Start', 'Warranty End',
+            'Current Assignment', 'Assigned To', 'Assignment Date', 'Location',
+            'Created Date', 'Last Updated'
         ])
-        
-        devices = Device.objects.select_related(
-            'device_type__subcategory__category',
-            'vendor', 'current_location'
-        ).prefetch_related('assignments')
         
         for device in devices:
             current_assignment = device.assignments.filter(is_active=True).first()
             
             writer.writerow([
                 device.device_id,
-                device.asset_tag or '',
+                device.asset_tag,
                 device.device_name,
                 device.device_type.subcategory.category.name if device.device_type else '',
+                device.device_type.subcategory.name if device.device_type else '',
                 device.device_type.name if device.device_type else '',
-                device.brand or '',
-                device.model or '',
-                device.serial_number or '',
+                device.brand,
+                device.model,
+                device.serial_number,
                 device.get_status_display(),
                 device.get_condition_display(),
                 device.purchase_date.strftime('%Y-%m-%d') if device.purchase_date else '',
-                device.purchase_price or '',
+                device.purchase_price,
                 device.vendor.name if device.vendor else '',
+                device.warranty_start_date.strftime('%Y-%m-%d') if device.warranty_start_date else '',
                 device.warranty_end_date.strftime('%Y-%m-%d') if device.warranty_end_date else '',
-                str(current_assignment.assigned_to_staff or current_assignment.assigned_to_department) if current_assignment else '',
-                device.current_location.name if device.current_location else '',
-                device.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                current_assignment.assignment_id if current_assignment else '',
+                str(current_assignment.assigned_to_staff) if current_assignment and current_assignment.assigned_to_staff else '',
+                current_assignment.start_date.strftime('%Y-%m-%d') if current_assignment and current_assignment.start_date else '',
+                str(current_assignment.assigned_to_location) if current_assignment and current_assignment.assigned_to_location else '',
+                device.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                device.updated_at.strftime('%Y-%m-%d %H:%M:%S')
             ])
         
         return response
@@ -3609,27 +3516,52 @@ def export_devices_csv(request):
 def export_assignments_csv(request):
     """Export assignments to CSV"""
     try:
+        # Get filter parameters
+        status = request.GET.get('status')
+        department = request.GET.get('department')
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        
+        # Base queryset
+        assignments = Assignment.objects.select_related(
+            'device', 'assigned_to_staff__department', 'assigned_to_department',
+            'assigned_to_location', 'created_by'
+        )
+        
+        # Apply filters
+        if status == 'active':
+            assignments = assignments.filter(is_active=True)
+        elif status == 'inactive':
+            assignments = assignments.filter(is_active=False)
+        if department:
+            assignments = assignments.filter(
+                Q(assigned_to_department_id=department) |
+                Q(assigned_to_staff__department_id=department)
+            )
+        if date_from:
+            assignments = assignments.filter(start_date__gte=date_from)
+        if date_to:
+            assignments = assignments.filter(start_date__lte=date_to)
+        
+        # Create CSV response
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="assignments_export.csv"'
         
         writer = csv.writer(response)
         writer.writerow([
-            'Assignment ID', 'Device ID', 'Device Name', 'Assigned To (Staff)',
-            'Assigned To (Department)', 'Assignment Type', 'Start Date',
-            'Expected Return Date', 'Actual Return Date', 'Status',
-            'Purpose', 'Created Date', 'Created By'
+            'Assignment ID', 'Device ID', 'Device Name', 'Assigned To Staff', 'Staff Department',
+            'Assigned To Department', 'Assignment Type', 'Start Date', 'Expected Return',
+            'Actual Return', 'Status', 'Purpose', 'Location', 'Notes',
+            'Created Date', 'Created By'
         ])
-        
-        assignments = Assignment.objects.select_related(
-            'device', 'assigned_to_staff', 'assigned_to_department', 'created_by'
-        ).order_by('-created_at')
         
         for assignment in assignments:
             writer.writerow([
                 assignment.assignment_id,
                 assignment.device.device_id,
                 assignment.device.device_name,
-                assignment.assigned_to_staff.user.get_full_name() if assignment.assigned_to_staff else '',
+                str(assignment.assigned_to_staff) if assignment.assigned_to_staff else '',
+                assignment.assigned_to_staff.department.name if assignment.assigned_to_staff and assignment.assigned_to_staff.department else '',
                 assignment.assigned_to_department.name if assignment.assigned_to_department else '',
                 'Temporary' if assignment.is_temporary else 'Permanent',
                 assignment.start_date.strftime('%Y-%m-%d') if assignment.start_date else '',
@@ -3637,6 +3569,8 @@ def export_assignments_csv(request):
                 assignment.actual_return_date.strftime('%Y-%m-%d') if assignment.actual_return_date else '',
                 'Active' if assignment.is_active else 'Inactive',
                 assignment.purpose or '',
+                str(assignment.assigned_to_location) if assignment.assigned_to_location else '',
+                assignment.notes or '',
                 assignment.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 assignment.created_by.username
             ])
@@ -4736,45 +4670,59 @@ def import_staff_csv(request):
 def export_maintenance_csv(request):
     """Export maintenance schedules to CSV"""
     try:
+        # Get filter parameters
+        status = request.GET.get('status')
+        vendor = request.GET.get('vendor')
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        
+        # Base queryset
+        maintenance = MaintenanceSchedule.objects.select_related(
+            'device', 'vendor', 'created_by'
+        )
+        
+        # Apply filters
+        if status:
+            maintenance = maintenance.filter(status=status)
+        if vendor:
+            maintenance = maintenance.filter(vendor_id=vendor)
+        if date_from:
+            maintenance = maintenance.filter(scheduled_date__gte=date_from)
+        if date_to:
+            maintenance = maintenance.filter(scheduled_date__lte=date_to)
+        
+        # Create CSV response
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="maintenance_schedule.csv"'
+        response['Content-Disposition'] = 'attachment; filename="maintenance_export.csv"'
         
         writer = csv.writer(response)
         writer.writerow([
-            'Schedule ID', 'Device ID', 'Device Name', 'Maintenance Type',
-            'Title', 'Description', 'Scheduled Date', 'Scheduled Time',
-            'Status', 'Vendor', 'Technician', 'Estimated Cost',
-            'Actual Cost', 'Completion Date', 'Created By', 'Created Date'
+            'Maintenance ID', 'Device ID', 'Device Name', 'Maintenance Type', 'Status',
+            'Scheduled Date', 'Completed Date', 'Vendor', 'Cost', 'Description',
+            'Notes', 'Created Date', 'Created By'
         ])
         
-        schedules = MaintenanceSchedule.objects.select_related(
-            'device', 'vendor', 'created_by'
-        ).order_by('-scheduled_date')
-        
-        for schedule in schedules:
+        for item in maintenance:
             writer.writerow([
-                schedule.id,
-                schedule.device.device_id,
-                schedule.device.device_name,
-                schedule.get_maintenance_type_display(),
-                schedule.title or '',
-                schedule.description,
-                schedule.scheduled_date.strftime('%Y-%m-%d') if schedule.scheduled_date else '',
-                schedule.scheduled_time.strftime('%H:%M:%S') if schedule.scheduled_time else '',
-                schedule.get_status_display(),
-                schedule.vendor.name if schedule.vendor else '',
-                schedule.technician_name or '',
-                schedule.estimated_cost or '',
-                schedule.actual_cost or '',
-                schedule.completion_date.strftime('%Y-%m-%d') if schedule.completion_date else '',
-                schedule.created_by.username if schedule.created_by else '',
-                schedule.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                item.id,
+                item.device.device_id,
+                item.device.device_name,
+                item.get_maintenance_type_display(),
+                item.get_status_display(),
+                item.scheduled_date.strftime('%Y-%m-%d') if item.scheduled_date else '',
+                item.completed_date.strftime('%Y-%m-%d') if item.completed_date else '',
+                item.vendor.name if item.vendor else '',
+                item.cost,
+                item.description,
+                item.notes or '',
+                item.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                item.created_by.username
             ])
         
         return response
         
     except Exception as e:
-        messages.error(request, f"Error exporting maintenance schedules: {str(e)}")
+        messages.error(request, f"Error exporting maintenance: {str(e)}")
         return redirect('inventory:maintenance_list')
     
 # ================================
@@ -4783,364 +4731,130 @@ def export_maintenance_csv(request):
 
 @login_required
 def advanced_search(request):
-    """Advanced search across all entities"""
+    """Advanced search with multiple filters"""
     try:
-        # Initialize search results
-        results = {
-            'devices': [],
-            'assignments': [],
-            'staff': [],
-            'locations': [],
-            'maintenance': []
-        }
-        
-        search_performed = False
-        query = request.GET.get('q', '').strip()
-        search_type = request.GET.get('type', 'all')
-        
-        # Filter parameters
-        category = request.GET.get('category', '')
-        status = request.GET.get('status', '')
-        department = request.GET.get('department', '')
-        date_from = request.GET.get('date_from', '')
-        date_to = request.GET.get('date_to', '')
-        
-        if query or any([category, status, department, date_from, date_to]):
-            search_performed = True
+        if request.method == 'POST':
+            # Process advanced search form
+            form_data = request.POST.dict()
             
-            # Build base search query for text fields
-            if query:
-                search_q = Q()
-                search_terms = query.split()
-                
-                for term in search_terms:
-                    search_q |= (
-                        Q(device_name__icontains=term) |
-                        Q(asset_tag__icontains=term) |
-                        Q(brand__icontains=term) |
-                        Q(model__icontains=term) |
-                        Q(serial_number__icontains=term) |
-                        Q(notes__icontains=term)
+            # Build device query
+            devices = Device.objects.select_related(
+                'device_type__subcategory__category', 'vendor'
+            ).prefetch_related('assignments')
+            
+            # Apply filters
+            if form_data.get('device_id'):
+                devices = devices.filter(device_id__icontains=form_data['device_id'])
+            if form_data.get('device_name'):
+                devices = devices.filter(device_name__icontains=form_data['device_name'])
+            if form_data.get('category'):
+                devices = devices.filter(device_type__subcategory__category_id=form_data['category'])
+            if form_data.get('status'):
+                devices = devices.filter(status=form_data['status'])
+            if form_data.get('condition'):
+                devices = devices.filter(condition=form_data['condition'])
+            if form_data.get('vendor'):
+                devices = devices.filter(vendor_id=form_data['vendor'])
+            if form_data.get('purchase_date_from'):
+                devices = devices.filter(purchase_date__gte=form_data['purchase_date_from'])
+            if form_data.get('purchase_date_to'):
+                devices = devices.filter(purchase_date__lte=form_data['purchase_date_to'])
+            if form_data.get('warranty_status'):
+                today = timezone.now().date()
+                if form_data['warranty_status'] == 'active':
+                    devices = devices.filter(warranty_end_date__gt=today)
+                elif form_data['warranty_status'] == 'expired':
+                    devices = devices.filter(warranty_end_date__lt=today)
+                elif form_data['warranty_status'] == 'expiring':
+                    thirty_days = today + timedelta(days=30)
+                    devices = devices.filter(
+                        warranty_end_date__gte=today,
+                        warranty_end_date__lte=thirty_days
                     )
-            else:
-                search_q = Q()
             
-            # Search devices
-            if search_type in ['all', 'devices']:
-                device_query = Device.objects.select_related(
-                    'device_type__subcategory__category',
-                    'vendor',
-                    'current_location'
-                ).prefetch_related('assignments')
-                
-                if query:
-                    device_query = device_query.filter(search_q)
-                
-                # Apply filters
-                if category:
-                    device_query = device_query.filter(
-                        device_type__subcategory__category_id=category
-                    )
-                
-                if status:
-                    device_query = device_query.filter(status=status)
-                
-                if date_from:
-                    try:
-                        from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        device_query = device_query.filter(purchase_date__gte=from_date)
-                    except ValueError:
-                        pass
-                
-                if date_to:
-                    try:
-                        to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        device_query = device_query.filter(purchase_date__lte=to_date)
-                    except ValueError:
-                        pass
-                
-                results['devices'] = device_query.order_by('-created_at')[:50]
+            # Pagination
+            paginator = Paginator(devices, 25)
+            page_number = request.GET.get('page')
+            page_obj = paginator.get_page(page_number)
             
-            # Search assignments
-            if search_type in ['all', 'assignments']:
-                assignment_search_q = Q()
-                
-                if query:
-                    for term in query.split():
-                        assignment_search_q |= (
-                            Q(device__device_name__icontains=term) |
-                            Q(device__asset_tag__icontains=term) |
-                            Q(assigned_to_staff__first_name__icontains=term) |
-                            Q(assigned_to_staff__last_name__icontains=term) |
-                            Q(assigned_to_department__name__icontains=term) |
-                            Q(purpose__icontains=term)
-                        )
-                
-                assignment_query = Assignment.objects.select_related(
-                    'device',
-                    'assigned_to_staff',
-                    'assigned_to_department',
-                    'assigned_to_location'
-                )
-                
-                if assignment_search_q:
-                    assignment_query = assignment_query.filter(assignment_search_q)
-                
-                # Apply department filter
-                if department:
-                    assignment_query = assignment_query.filter(
-                        assigned_to_department_id=department
-                    )
-                
-                # Apply date filters
-                if date_from:
-                    try:
-                        from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        assignment_query = assignment_query.filter(start_date__gte=from_date)
-                    except ValueError:
-                        pass
-                
-                if date_to:
-                    try:
-                        to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        assignment_query = assignment_query.filter(start_date__lte=to_date)
-                    except ValueError:
-                        pass
-                
-                results['assignments'] = assignment_query.order_by('-created_at')[:50]
+            context = {
+                'page_obj': page_obj,
+                'search_performed': True,
+                'form_data': form_data,
+                'total_results': devices.count(),
+                'categories': DeviceCategory.objects.filter(is_active=True),
+                'vendors': Vendor.objects.filter(is_active=True),
+            }
             
-            # Search staff
-            if search_type in ['all', 'staff']:
-                staff_search_q = Q()
-                
-                if query:
-                    for term in query.split():
-                        staff_search_q |= (
-                            Q(first_name__icontains=term) |
-                            Q(last_name__icontains=term) |
-                            Q(employee_id__icontains=term) |
-                            Q(email__icontains=term) |
-                            Q(designation__icontains=term)
-                        )
-                
-                staff_query = Staff.objects.select_related('department')
-                
-                if staff_search_q:
-                    staff_query = staff_query.filter(staff_search_q)
-                
-                if department:
-                    staff_query = staff_query.filter(department_id=department)
-                
-                results['staff'] = staff_query.order_by('first_name', 'last_name')[:50]
-            
-            # Search locations
-            if search_type in ['all', 'locations']:
-                location_search_q = Q()
-                
-                if query:
-                    for term in query.split():
-                        location_search_q |= (
-                            Q(name__icontains=term) |
-                            Q(location_code__icontains=term) |
-                            Q(description__icontains=term)
-                        )
-                
-                location_query = Location.objects.select_related('room__building')
-                
-                if location_search_q:
-                    location_query = location_query.filter(location_search_q)
-                
-                results['locations'] = location_query.order_by('name')[:50]
-            
-            # Search maintenance schedules
-            if search_type in ['all', 'maintenance']:
-                maintenance_search_q = Q()
-                
-                if query:
-                    for term in query.split():
-                        maintenance_search_q |= (
-                            Q(device__device_name__icontains=term) |
-                            Q(device__asset_tag__icontains=term) |
-                            Q(title__icontains=term) |
-                            Q(description__icontains=term) |
-                            Q(technician_name__icontains=term)
-                        )
-                
-                maintenance_query = MaintenanceSchedule.objects.select_related(
-                    'device', 'vendor'
-                )
-                
-                if maintenance_search_q:
-                    maintenance_query = maintenance_query.filter(maintenance_search_q)
-                
-                # Apply date filters
-                if date_from:
-                    try:
-                        from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
-                        maintenance_query = maintenance_query.filter(scheduled_date__gte=from_date)
-                    except ValueError:
-                        pass
-                
-                if date_to:
-                    try:
-                        to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
-                        maintenance_query = maintenance_query.filter(scheduled_date__lte=to_date)
-                    except ValueError:
-                        pass
-                
-                results['maintenance'] = maintenance_query.order_by('-scheduled_date')[:50]
+        else:
+            # Show search form
+            context = {
+                'search_performed': False,
+                'categories': DeviceCategory.objects.filter(is_active=True),
+                'vendors': Vendor.objects.filter(is_active=True),
+            }
         
-        # Get filter options
-        categories = DeviceCategory.objects.filter(is_active=True).order_by('name')
-        departments = Department.objects.all().order_by('name')
-        
-        # Count results
-        result_counts = {
-            'devices': len(results['devices']),
-            'assignments': len(results['assignments']),
-            'staff': len(results['staff']),
-            'locations': len(results['locations']),
-            'maintenance': len(results['maintenance'])
-        }
-        
-        total_results = sum(result_counts.values())
-        
-        context = {
-            'results': results,
-            'result_counts': result_counts,
-            'total_results': total_results,
-            'search_performed': search_performed,
-            'query': query,
-            'search_type': search_type,
-            'categories': categories,
-            'departments': departments,
-            'filters': {
-                'category': category,
-                'status': status,
-                'department': department,
-                'date_from': date_from,
-                'date_to': date_to
-            },
-            'title': 'Advanced Search'
-        }
-        
-        return render(request, 'inventory/advanced_search.html', context)
+        return render(request, 'inventory/search/advanced_search.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error performing search: {str(e)}")
-        return render(request, 'inventory/advanced_search.html', {
-            'title': 'Advanced Search',
-            'search_performed': False
-        })
+        messages.error(request, f"Error in advanced search: {str(e)}")
+        return render(request, 'inventory/search/advanced_search.html', {})
 
 @login_required
+@require_http_methods(["GET"])
 def global_search_api(request):
-    """Global search API for autocomplete"""
+    """Global search API endpoint"""
     try:
         query = request.GET.get('q', '').strip()
-        search_type = request.GET.get('type', 'all')
-        limit = min(int(request.GET.get('limit', 10)), 50)
+        limit = int(request.GET.get('limit', 10))
         
-        if not query or len(query) < 2:
-            return JsonResponse({'results': []})
+        if len(query) < 2:
+            return JsonResponse({'results': [], 'message': 'Query too short'})
         
         results = []
         
         # Search devices
-        if search_type in ['all', 'devices']:
-            devices = Device.objects.filter(
-                Q(device_name__icontains=query) |
-                Q(asset_tag__icontains=query) |
-                Q(brand__icontains=query) |
-                Q(model__icontains=query) |
-                Q(serial_number__icontains=query)
-            ).select_related('device_type')[:limit]
-            
-            for device in devices:
-                results.append({
-                    'type': 'device',
-                    'id': device.device_id,
-                    'title': device.device_name,
-                    'subtitle': f"{device.asset_tag} - {device.device_type.name if device.device_type else 'Unknown Type'}",
-                    'url': reverse('inventory:device_detail', args=[device.device_id]),
-                    'icon': 'fas fa-desktop'
-                })
+        devices = Device.objects.filter(
+            Q(device_id__icontains=query) |
+            Q(device_name__icontains=query) |
+            Q(asset_tag__icontains=query)
+        )[:limit]
+        
+        for device in devices:
+            results.append({
+                'type': 'device',
+                'id': device.device_id,
+                'title': device.device_name,
+                'subtitle': f"ID: {device.device_id} | Status: {device.get_status_display()}",
+                'url': f'/inventory/devices/{device.device_id}/',
+                'icon': 'device'
+            })
         
         # Search assignments
-        if search_type in ['all', 'assignments'] and len(results) < limit:
-            assignments = Assignment.objects.filter(
-                Q(device__device_name__icontains=query) |
-                Q(device__asset_tag__icontains=query) |
-                Q(assigned_to_staff__first_name__icontains=query) |
-                Q(assigned_to_staff__last_name__icontains=query) |
-                Q(assigned_to_department__name__icontains=query)
-            ).select_related(
-                'device', 'assigned_to_staff', 'assigned_to_department'
-            )[:limit - len(results)]
-            
-            for assignment in assignments:
-                assigned_to = (
-                    str(assignment.assigned_to_staff) if assignment.assigned_to_staff 
-                    else str(assignment.assigned_to_department) if assignment.assigned_to_department
-                    else 'Unknown'
-                )
-                
-                results.append({
-                    'type': 'assignment',
-                    'id': assignment.assignment_id,
-                    'title': f"{assignment.device.device_name} → {assigned_to}",
-                    'subtitle': f"Assignment ID: {assignment.assignment_id}",
-                    'url': reverse('inventory:assignment_detail', args=[assignment.assignment_id]),
-                    'icon': 'fas fa-handshake'
-                })
+        assignments = Assignment.objects.filter(
+            Q(assignment_id__icontains=query) |
+            Q(device__device_id__icontains=query) |
+            Q(device__device_name__icontains=query)
+        ).select_related('device', 'assigned_to_staff')[:limit]
         
-        # Search staff
-        if search_type in ['all', 'staff'] and len(results) < limit:
-            staff = Staff.objects.filter(
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(employee_id__icontains=query) |
-                Q(email__icontains=query)
-            ).select_related('department')[:limit - len(results)]
-            
-            for person in staff:
-                results.append({
-                    'type': 'staff',
-                    'id': person.id,
-                    'title': f"{person.first_name} {person.last_name}",
-                    'subtitle': f"{person.employee_id} - {person.department.name if person.department else 'No Department'}",
-                    'url': reverse('inventory:staff_detail', args=[person.id]),
-                    'icon': 'fas fa-user'
-                })
-        
-        # Search locations
-        if search_type in ['all', 'locations'] and len(results) < limit:
-            locations = Location.objects.filter(
-                Q(name__icontains=query) |
-                Q(location_code__icontains=query)
-            )[:limit - len(results)]
-            
-            for location in locations:
-                results.append({
-                    'type': 'location',
-                    'id': location.id,
-                    'title': location.name,
-                    'subtitle': f"Code: {location.location_code}",
-                    'url': reverse('inventory:location_detail', args=[location.id]),
-                    'icon': 'fas fa-map-marker-alt'
-                })
+        for assignment in assignments:
+            results.append({
+                'type': 'assignment',
+                'id': assignment.assignment_id,
+                'title': f"Assignment {assignment.assignment_id}",
+                'subtitle': f"Device: {assignment.device.device_id} | Assigned to: {assignment.assigned_to_staff or assignment.assigned_to_department}",
+                'url': f'/inventory/assignments/{assignment.id}/',
+                'icon': 'assignment'
+            })
         
         return JsonResponse({
-            'results': results,
-            'query': query,
-            'total': len(results)
+            'results': results[:limit],
+            'total': len(results),
+            'query': query
         })
         
     except Exception as e:
-        return JsonResponse({
-            'error': str(e),
-            'results': []
-        }, status=500)
+        return JsonResponse({'error': str(e)}, status=400)
 
 # Advanced search form for forms.py
 class AdvancedSearchForm(forms.Form):
@@ -5634,64 +5348,87 @@ def delete_backup(request, backup_filename):
 # ================================
 @login_required
 def global_search(request):
-    """Global search function"""
+    """Global search across all inventory items"""
     try:
         query = request.GET.get('q', '').strip()
+        search_type = request.GET.get('type', 'all')
         
-        if not query:
-            return render(request, 'inventory/search_results.html', {
-                'query': '',
-                'results': {'devices': [], 'assignments': [], 'staff': []},
-                'total_results': 0
+        if len(query) < 2:
+            return render(request, 'inventory/search/global_search.html', {
+                'query': query,
+                'results': {},
+                'message': 'Please enter at least 2 characters to search.'
             })
         
-        # Search devices
-        devices = Device.objects.filter(
-            Q(device_name__icontains=query) |
-            Q(device_id__icontains=query) |
-            Q(asset_tag__icontains=query) |
-            Q(brand__icontains=query) |
-            Q(model__icontains=query) |
-            Q(serial_number__icontains=query)
-        ).select_related('device_type')[:20]
+        results = {}
         
-        # Search assignments
-        assignments = Assignment.objects.filter(
-            Q(device__device_name__icontains=query) |
-            Q(device__device_id__icontains=query) |
-            Q(assigned_to_staff__user__first_name__icontains=query) |
-            Q(assigned_to_staff__user__last_name__icontains=query) |
-            Q(assigned_to_department__name__icontains=query)
-        ).select_related('device', 'assigned_to_staff', 'assigned_to_department')[:20]
+        if search_type in ['all', 'devices']:
+            # Search devices
+            device_results = Device.objects.filter(
+                Q(device_id__icontains=query) |
+                Q(device_name__icontains=query) |
+                Q(asset_tag__icontains=query) |
+                Q(serial_number__icontains=query) |
+                Q(brand__icontains=query) |
+                Q(model__icontains=query)
+            ).select_related('device_type__subcategory__category', 'vendor')[:20]
+            
+            results['devices'] = device_results
         
-        # Search staff
-        staff = Staff.objects.filter(
-            Q(user__first_name__icontains=query) |
-            Q(user__last_name__icontains=query) |
-            Q(employee_id__icontains=query) |
-            Q(user__email__icontains=query)
-        ).select_related('user', 'department')[:20]
+        if search_type in ['all', 'assignments']:
+            # Search assignments
+            assignment_results = Assignment.objects.filter(
+                Q(assignment_id__icontains=query) |
+                Q(device__device_id__icontains=query) |
+                Q(device__device_name__icontains=query) |
+                Q(assigned_to_staff__user__first_name__icontains=query) |
+                Q(assigned_to_staff__user__last_name__icontains=query) |
+                Q(assigned_to_department__name__icontains=query)
+            ).select_related(
+                'device', 'assigned_to_staff__user', 'assigned_to_department'
+            )[:20]
+            
+            results['assignments'] = assignment_results
         
-        results = {
-            'devices': devices,
-            'assignments': assignments,
-            'staff': staff
-        }
+        if search_type in ['all', 'staff']:
+            # Search staff
+            staff_results = Staff.objects.filter(
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__username__icontains=query) |
+                Q(employee_id__icontains=query) |
+                Q(department__name__icontains=query)
+            ).select_related('user', 'department')[:20]
+            
+            results['staff'] = staff_results
         
-        total_results = len(devices) + len(assignments) + len(staff)
+        if search_type in ['all', 'maintenance']:
+            # Search maintenance records
+            try:
+                maintenance_results = MaintenanceSchedule.objects.filter(
+                    Q(device__device_id__icontains=query) |
+                    Q(device__device_name__icontains=query) |
+                    Q(description__icontains=query) |
+                    Q(vendor__name__icontains=query)
+                ).select_related('device', 'vendor')[:20]
+                
+                results['maintenance'] = maintenance_results
+            except:
+                results['maintenance'] = []
         
         context = {
             'query': query,
+            'search_type': search_type,
             'results': results,
-            'total_results': total_results,
+            'total_results': sum(len(v) for v in results.values() if hasattr(v, '__len__')),
         }
         
-        return render(request, 'inventory/search_results.html', context)
+        return render(request, 'inventory/search/global_search.html', context)
         
     except Exception as e:
         messages.error(request, f"Error performing search: {str(e)}")
-        return render(request, 'inventory/search_results.html', {
+        return render(request, 'inventory/search/global_search.html', {
             'query': query,
-            'results': {'devices': [], 'assignments': [], 'staff': []},
-            'total_results': 0
+            'results': {},
+            'error': str(e)
         })
