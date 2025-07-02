@@ -1,55 +1,43 @@
-from django.core.validators import RegexValidator
-from datetime import date, timedelta
 from django.db import models
 from django.contrib.auth.models import User
-from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from decimal import Decimal
 import uuid
-import qrcode
-from io import BytesIO
-from django.core.files import File
-from PIL import Image
-import json
 
 # ================================
-# 1. ORGANIZATION & LOCATION MODELS
+# 1. CORE ORGANIZATIONAL MODELS
 # ================================
-
-class Organization(models.Model):
-    """Organization/Company information"""
-    name = models.CharField(max_length=200)
-    address = models.TextField()
-    contact_person = models.CharField(max_length=100)
-    phone = models.CharField(max_length=20)
-    email = models.EmailField()
-    website = models.URLField(blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.name
 
 class Building(models.Model):
-    """Building information"""
-    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='buildings')
+    """Building information for asset location tracking"""
     name = models.CharField(max_length=100)
+    code = models.CharField(max_length=10, unique=True)
     address = models.TextField()
+    description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['name']
+
     def __str__(self):
-        return f"{self.organization.name} - {self.name}"
+        return f"{self.name} ({self.code})"
 
 class Floor(models.Model):
     """Floor information within buildings"""
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='floors')
     name = models.CharField(max_length=50)
+    floor_number = models.IntegerField()
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['building', 'floor_number']
+        ordering = ['building', 'floor_number']
 
     def __str__(self):
         return f"{self.building.name} - {self.name}"
@@ -58,7 +46,7 @@ class Department(models.Model):
     """Department information"""
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name='departments')
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20)  # This field was missing!
+    code = models.CharField(max_length=20)
     head_of_department = models.CharField(max_length=100, blank=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)
@@ -68,6 +56,7 @@ class Department(models.Model):
 
     class Meta:
         unique_together = ['floor', 'code']
+        ordering = ['name']
 
     def __str__(self):
         return f"{self.floor.building.name} - {self.name}"
@@ -81,6 +70,10 @@ class Room(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['department', 'room_number']
+        ordering = ['department', 'room_number']
 
     def __str__(self):
         return f"{self.department.name} - {self.room_number}"
@@ -98,6 +91,7 @@ class Location(models.Model):
 
     class Meta:
         unique_together = ['building', 'floor', 'department', 'room']
+        ordering = ['building', 'floor', 'department', 'room']
 
     def __str__(self):
         location_str = f"{self.building.name} - {self.floor.name} - {self.department.name}"
@@ -106,426 +100,290 @@ class Location(models.Model):
         return location_str
 
 # ================================
-# 2. STAFF & USER MANAGEMENT MODELS
+# 2. STAFF & VENDOR MODELS
 # ================================
 
 class Staff(models.Model):
-    """Staff information"""
+    """Staff member information linked to Django User"""
+    EMPLOYMENT_TYPES = [
+        ('PERMANENT', 'Permanent'),
+        ('CONTRACT', 'Contract'),
+        ('TEMPORARY', 'Temporary'),
+        ('CONSULTANT', 'Consultant'),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
     employee_id = models.CharField(max_length=20, unique=True)
-    department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name='staff')
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     designation = models.CharField(max_length=100)
-    phone = models.CharField(max_length=20, blank=True)
-    extension = models.CharField(max_length=10, blank=True)
-    supervisor = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
+    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPES, default='PERMANENT')
+    phone_number = models.CharField(max_length=20, blank=True)
+    office_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     is_active = models.BooleanField(default=True)
-    joining_date = models.DateField()
+    joining_date = models.DateField(null=True, blank=True)
+    leaving_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['user__first_name', 'user__last_name']
+        verbose_name_plural = 'Staff'
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} ({self.employee_id})"
 
     @property
     def full_name(self):
-        """Get full name from related User model"""
-        if self.user:
-            return f"{self.user.first_name} {self.user.last_name}".strip()
-        return self.employee_id
-    
-    @property  
-    def first_name(self):
-        """Get first name from related User model"""
-        return self.user.first_name if self.user else ""
-    
-    @property
-    def last_name(self):
-        """Get last name from related User model"""  
-        return self.user.last_name if self.user else ""
-    
-    @property
-    def email(self):
-        """Get email from related User model"""
-        return self.user.email if self.user else ""
-    
-    def __str__(self):
-        return f"{self.full_name} ({self.employee_id})"
-
-class StaffAssignmentHistory(models.Model):
-    """Track staff department and designation changes"""
-    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, related_name='assignment_history')
-    department = models.ForeignKey(Department, on_delete=models.CASCADE)
-    designation = models.CharField(max_length=100)
-    start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
-    reason = models.TextField(blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.staff.full_name} - {self.designation} at {self.department.name}"
-
-# ================================
-# 3. VENDOR & SUPPLIER MODELS
-# ================================
+        return self.user.get_full_name()
 
 class Vendor(models.Model):
     """Vendor/Supplier information"""
+    VENDOR_TYPES = [
+        ('HARDWARE_SUPPLIER', 'Hardware Supplier'),
+        ('SOFTWARE_VENDOR', 'Software Vendor'),
+        ('SERVICE_PROVIDER', 'Service Provider'),
+        ('MAINTENANCE_CONTRACTOR', 'Maintenance Contractor'),
+        ('CONSULTANT', 'Consultant'),
+    ]
+
     name = models.CharField(max_length=200)
-    contact_person = models.CharField(max_length=100)
-    email = models.EmailField()
-    phone = models.CharField(max_length=20)
-    address = models.TextField()
+    vendor_type = models.CharField(max_length=30, choices=VENDOR_TYPES)
+    contact_person = models.CharField(max_length=100, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
     website = models.URLField(blank=True)
+    tax_id = models.CharField(max_length=50, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
 
     def __str__(self):
         return self.name
 
 # ================================
-# 4. DEVICE CATEGORY & TYPE MODELS
+# 3. DEVICE CATEGORIZATION MODELS
 # ================================
 
 class DeviceCategory(models.Model):
-    """Main device categories"""
-    CATEGORY_TYPES = [
-        ('DATA_CENTER', 'Data Centre Equipment'),
-        ('NETWORK', 'Network Equipment'),
-        ('COMPUTING', 'End-User Computing Devices'),
-        ('DISPLAY', 'Projectors and Displays'),
-        ('PERIPHERAL', 'Peripherals'),
-        ('STORAGE', 'Storage Devices'),
-        ('AUDIO_VIDEO', 'Audio/Video Equipment'),
-        ('MOBILE', 'Mobile Devices'),
-        ('SECURITY', 'Security Equipment'),
-        ('OTHER', 'Other Equipment'),
-    ]
-
-    name = models.CharField(max_length=100)
-    category_type = models.CharField(max_length=20, choices=CATEGORY_TYPES, unique=True)
+    """High-level device categories"""
+    name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
-    icon = models.CharField(max_length=50, blank=True, help_text="Font Awesome icon class")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name_plural = "Device Categories"
+        ordering = ['name']
+        verbose_name_plural = 'Device Categories'
 
     def __str__(self):
         return self.name
 
-class DeviceSubCategory(models.Model):
-    """Sub-categories within main categories"""
+class DeviceSubcategory(models.Model):
+    """Device subcategories under main categories"""
     category = models.ForeignKey(DeviceCategory, on_delete=models.CASCADE, related_name='subcategories')
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['category', 'code']
-        verbose_name_plural = "Device Sub-Categories"
+        unique_together = ['category', 'name']
+        ordering = ['category', 'name']
+        verbose_name_plural = 'Device Subcategories'
 
     def __str__(self):
-        return f"{self.category.name} > {self.name}"
+        return f"{self.category.name} - {self.name}"
 
 class DeviceType(models.Model):
-    """Specific device types within sub-categories"""
-    subcategory = models.ForeignKey(DeviceSubCategory, on_delete=models.CASCADE, related_name='device_types')
+    """Specific device types under subcategories"""
+    subcategory = models.ForeignKey(DeviceSubcategory, on_delete=models.CASCADE, related_name='device_types')
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20)
     description = models.TextField(blank=True)
-    typical_specifications = models.JSONField(default=dict, blank=True, help_text="Common specifications for this device type")
+    specifications_template = models.JSONField(default=dict, blank=True, help_text="Template for device specifications")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['subcategory', 'code']
+        unique_together = ['subcategory', 'name']
+        ordering = ['subcategory', 'name']
 
     def __str__(self):
-        return f"{self.subcategory} > {self.name}"
+        return f"{self.subcategory.category.name} - {self.subcategory.name} - {self.name}"
 
 # ================================
-# 5. DEVICE MODELS
+# 4. CORE DEVICE MODEL
 # ================================
 
 class Device(models.Model):
-    """Main device model"""
-    
-    # FIXED: Renamed to follow Django conventions
+    """Core device/asset model"""
     STATUS_CHOICES = [
         ('AVAILABLE', 'Available'),
         ('ASSIGNED', 'Assigned'),
-        ('IN_USE', 'In Use'),
         ('MAINTENANCE', 'Under Maintenance'),
-        ('REPAIR', 'Under Repair'),
         ('RETIRED', 'Retired'),
+        ('LOST', 'Lost'),
+        ('DAMAGED', 'Damaged'),
         ('DISPOSED', 'Disposed'),
-        ('LOST', 'Lost/Missing'),
-        ('DAMAGED', 'Damaged'),
     ]
 
-    CONDITION_CHOICES = [
-        ('NEW', 'New'),
-        ('EXCELLENT', 'Excellent'),
-        ('GOOD', 'Good'),
-        ('FAIR', 'Fair'),
-        ('POOR', 'Poor'),
-        ('DAMAGED', 'Damaged'),
-        ('NOT_WORKING', 'Not Working'),
-    ]
-
-    # Basic Identification
-    device_id = models.CharField(max_length=20, unique=True, editable=False)  # Auto-generated BPS-YYYY-XXXX
-    asset_tag = models.CharField(max_length=50, unique=True)
-    qr_code = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    
-    # Device Classification
-    device_type = models.ForeignKey(DeviceType, on_delete=models.PROTECT, related_name='devices')
+    # Primary identification
+    device_id = models.CharField(max_length=50, unique=True, primary_key=True)
     device_name = models.CharField(max_length=200)
+    asset_tag = models.CharField(max_length=50, unique=True, blank=True)
+    serial_number = models.CharField(max_length=100, blank=True)
     
-    # Hardware Information
-    brand = models.CharField(max_length=100)
-    model = models.CharField(max_length=100)
-    serial_number = models.CharField(max_length=100, unique=True)
-    mac_address = models.CharField(
-        max_length=17, 
-        blank=True, 
-        validators=[RegexValidator(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$', 'Invalid MAC address format')]
-    )
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    # Classification
+    device_type = models.ForeignKey(DeviceType, on_delete=models.PROTECT, related_name='devices')
+    brand = models.CharField(max_length=100, blank=True)
+    model = models.CharField(max_length=100, blank=True)
     
-    # Technical Specifications (stored as JSON for flexibility)
-    specifications = models.JSONField(default=dict, blank=True, help_text="Technical specifications as key-value pairs")
-    
-    # Status and Condition - FIXED: Using the correct choice field names
+    # Status and location
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
-    condition = models.CharField(max_length=20, choices=CONDITION_CHOICES, default='NEW')
-    
-    # Procurement Information
-    vendor = models.ForeignKey(Vendor, on_delete=models.PROTECT, related_name='devices')
-    purchase_date = models.DateField()
-    purchase_order_number = models.CharField(max_length=50, blank=True)
-    purchase_price = models.DecimalField(max_digits=12, decimal_places=2)
-    
-    # Warranty Information
-    warranty_start_date = models.DateField()
-    warranty_end_date = models.DateField()
-    warranty_type = models.CharField(max_length=50, default='Standard')
-    support_contract = models.TextField(blank=True)
-    amc_details = models.TextField(blank=True, help_text="Annual Maintenance Contract details")
-    
-    # Location and Assignment
     current_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='devices')
     
-    # Lifecycle Management
-    deployment_date = models.DateField(null=True, blank=True)
-    last_maintenance_date = models.DateField(null=True, blank=True)
-    next_maintenance_date = models.DateField(null=True, blank=True)
-    retirement_date = models.DateField(null=True, blank=True)
+    # Financial information
+    purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    purchase_date = models.DateField(null=True, blank=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='devices')
+    
+    # Warranty information
+    warranty_start_date = models.DateField(null=True, blank=True)
+    warranty_end_date = models.DateField(null=True, blank=True)
+    warranty_provider = models.CharField(max_length=200, blank=True)
+    
+    # Technical specifications
+    specifications = models.JSONField(default=dict, blank=True, help_text="Device technical specifications")
+    
+    # Lifecycle information
+    expected_life_years = models.PositiveIntegerField(null=True, blank=True, help_text="Expected useful life in years")
     disposal_date = models.DateField(null=True, blank=True)
+    disposal_method = models.CharField(max_length=100, blank=True)
     
-    # Additional Information
+    # QR Code
+    qr_code = models.TextField(blank=True, help_text="QR code data")
+    
+    # Notes and comments
     notes = models.TextField(blank=True)
-    is_critical = models.BooleanField(default=False, help_text="Mark as critical infrastructure")
     
-    # Tracking
+    # Audit fields
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='devices_created')
+    updated_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='devices_updated')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_devices')
-    updated_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='updated_devices')
 
     class Meta:
         ordering = ['device_id']
+        indexes = [
+            models.Index(fields=['device_id']),
+            models.Index(fields=['asset_tag']),
+            models.Index(fields=['serial_number']),
+            models.Index(fields=['status']),
+            models.Index(fields=['device_type']),
+        ]
 
     def __str__(self):
         return f"{self.device_id} - {self.device_name}"
 
-    def save(self, *args, **kwargs):
-        """Override save to auto-generate device_id"""
-        if not self.device_id:
-            current_year = timezone.now().year
-            # Get the last device for the current year
-            last_device = Device.objects.filter(
-                device_id__startswith=f'BPS-{current_year}'
-            ).order_by('-device_id').first()
-            
-            if last_device:
-                # Extract the sequence number from the last device ID
-                try:
-                    last_sequence = int(last_device.device_id.split('-')[-1])
-                    new_sequence = last_sequence + 1
-                except (ValueError, IndexError):
-                    new_sequence = 1
-            else:
-                new_sequence = 1
-            
-            self.device_id = f'BPS-{current_year}-{new_sequence:04d}'
-        
-        super().save(*args, **kwargs)
+    @property
+    def is_under_warranty(self):
+        if self.warranty_end_date:
+            return timezone.now().date() <= self.warranty_end_date
+        return False
 
     @property
-    def warranty_status(self):
-        """Get warranty status"""
-        if not self.warranty_end_date:
-            return 'Unknown'
-        
-        today = date.today()
-        if self.warranty_end_date < today:
-            return 'Expired'
-        elif self.warranty_end_date <= today + timezone.timedelta(days=30):
-            return 'Expiring Soon'
-        else:
-            return 'Active'
+    def warranty_days_remaining(self):
+        if self.is_under_warranty:
+            return (self.warranty_end_date - timezone.now().date()).days
+        return 0
 
     @property
     def age_in_years(self):
-        """Calculate device age in years"""
         if self.purchase_date:
-            today = date.today()
-            return (today - self.purchase_date).days / 365.25
-        return 0
-    @property
-    def is_warranty_active(self):
-        """Check if warranty is still active"""
-        if not self.warranty_end_date:
-            return False
-        return self.warranty_end_date >= date.today()
-    
-    @property
-    def warranty_expires_soon(self):
-        """Check if warranty expires within 30 days"""
-        if not self.warranty_end_date:
-            return False
-        return (self.warranty_end_date - date.today()).days <= 30
-
+            return (timezone.now().date() - self.purchase_date).days / 365.25
+        return None
 
 # ================================
-# 6. ASSIGNMENT MODELS
+# 5. ASSIGNMENT MODELS
 # ================================
 
 class Assignment(models.Model):
     """Device assignment tracking"""
-    assignment_id = models.CharField(max_length=20, unique=True, editable=False)  # Auto-generated
-    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='assignments')
+    ASSIGNMENT_TYPES = [
+        ('PERMANENT', 'Permanent Assignment'),
+        ('TEMPORARY', 'Temporary Assignment'),
+        ('PROJECT', 'Project Assignment'),
+        ('POOL', 'Pool Assignment'),
+    ]
+
+    assignment_id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assignments')
     
     # Assignment targets (at least one must be specified)
-    assigned_to_staff = models.ForeignKey('Staff', on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
-    assigned_to_department = models.ForeignKey('Department', on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
-    assigned_to_location = models.ForeignKey('Location', on_delete=models.CASCADE, null=True, blank=True, related_name='assignments')
+    assigned_to_staff = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='device_assignments')
+    assigned_to_department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='device_assignments')
+    assigned_to_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='device_assignments')
     
     # Assignment details
-    is_temporary = models.BooleanField(default=False, help_text="Is this a temporary assignment?")
-    expected_return_date = models.DateField(null=True, blank=True, help_text="Required for temporary assignments")
+    assignment_type = models.CharField(max_length=20, choices=ASSIGNMENT_TYPES, default='PERMANENT')
+    start_date = models.DateField(default=timezone.now)
+    expected_return_date = models.DateField(null=True, blank=True)
     actual_return_date = models.DateField(null=True, blank=True)
     
-    # Dates
-    start_date = models.DateField(default=date.today)
-    end_date = models.DateField(null=True, blank=True)
-    
     # Assignment metadata
-    purpose = models.CharField(max_length=200, help_text="Purpose of assignment")
-    conditions = models.TextField(blank=True, help_text="Special conditions or requirements")
+    purpose = models.CharField(max_length=500, blank=True)
     notes = models.TextField(blank=True)
-    return_notes = models.TextField(blank=True, help_text="Notes when device is returned")
-    return_condition = models.CharField(max_length=50, blank=True, help_text="Device condition when returned")
-    
-    # Status tracking
     is_active = models.BooleanField(default=True)
     
-    # Tracking
-    assigned_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_made')
-    assigned_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # Temporary assignment specific
+    is_temporary = models.BooleanField(default=False)
+    
+    # Audit fields
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_created')
-    updated_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_updated')
-    requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='assignments_requested')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-assigned_at']
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['device', 'is_active']),
+            models.Index(fields=['assigned_to_staff', 'is_active']),
+            models.Index(fields=['start_date']),
+            models.Index(fields=['expected_return_date']),
+        ]
 
     def __str__(self):
-        target = self.assigned_to_staff or self.assigned_to_department or self.assigned_to_location
-        return f"{self.device.device_name} → {target}"
-
-    def save(self, *args, **kwargs):
-        """Override save to auto-generate assignment_id"""
-        if not self.assignment_id:
-            current_year = timezone.now().year
-            # Get the last assignment for the current year
-            last_assignment = Assignment.objects.filter(
-                assignment_id__startswith=f'ASG-{current_year}'
-            ).order_by('-assignment_id').first()
-            
-            if last_assignment:
-                # Extract the sequence number from the last assignment ID
-                try:
-                    last_sequence = int(last_assignment.assignment_id.split('-')[-1])
-                    new_sequence = last_sequence + 1
-                except (ValueError, IndexError):
-                    new_sequence = 1
-            else:
-                new_sequence = 1
-            
-            self.assignment_id = f'ASG-{current_year}-{new_sequence:04d}'
-        
-        super().save(*args, **kwargs)
-
-    def clean(self):
-        """Validate assignment data"""
-        from django.core.exceptions import ValidationError
-        
-        # At least one assignment target must be specified
-        if not any([self.assigned_to_staff, self.assigned_to_department, self.assigned_to_location]):
-            raise ValidationError("Must assign to at least one target (staff, department, or location)")
-        
-        # Temporary assignments must have expected return date
-        if self.is_temporary and not self.expected_return_date:
-            raise ValidationError("Expected return date is required for temporary assignments")
-        
-        # Return date validations
-        if self.expected_return_date and self.start_date:
-            if self.expected_return_date <= self.start_date:
-                raise ValidationError("Expected return date must be after start date")
-        
-        if self.actual_return_date and self.start_date:
-            if self.actual_return_date < self.start_date:
-                raise ValidationError("Actual return date cannot be before start date")
+        target = str(self.assigned_to_staff) if self.assigned_to_staff else (
+            str(self.assigned_to_department) if self.assigned_to_department else 
+            str(self.assigned_to_location)
+        )
+        return f"{self.device.device_id} → {target}"
 
     @property
     def is_overdue(self):
-        """Check if temporary assignment is overdue"""
-        if self.is_temporary and self.is_active and self.expected_return_date:
-            return self.expected_return_date < date.today()
+        if self.is_temporary and self.expected_return_date and self.is_active:
+            return timezone.now().date() > self.expected_return_date
         return False
 
     @property
-    def assignment_duration(self):
-        """Calculate assignment duration"""
-        end_date = self.actual_return_date or self.end_date or date.today()
-        return (end_date - self.start_date).days
+    def days_until_due(self):
+        if self.expected_return_date and self.is_active:
+            return (self.expected_return_date - timezone.now().date()).days
+        return None
 
-class AssignmentHistory(models.Model):
-    """Track assignment changes and history"""
-    assignment = models.ForeignKey('Assignment', on_delete=models.CASCADE, related_name='history_records')
-    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='assignment_history')
-    action = models.CharField(max_length=50)  # ASSIGNED, TRANSFERRED, RETURNED, etc.
-    changed_by = models.ForeignKey(User, on_delete=models.PROTECT)
-    changed_at = models.DateTimeField(auto_now_add=True)
-    reason = models.TextField(blank=True)
-    notes = models.TextField(blank=True)
-
-    class Meta:
-        ordering = ['-changed_at']
-
-    def __str__(self):
-        return f"{self.device.device_name} - {self.action} at {self.changed_at}"
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if not any([self.assigned_to_staff, self.assigned_to_department, self.assigned_to_location]):
+            raise ValidationError("At least one assignment target must be specified.")
 
 # ================================
-# 7. MAINTENANCE & LIFECYCLE MODELS
+# 6. MAINTENANCE MODELS
 # ================================
 
 class MaintenanceSchedule(models.Model):
@@ -538,14 +396,6 @@ class MaintenanceSchedule(models.Model):
         ('INSPECTION', 'Routine Inspection'),
     ]
 
-    MAINTENANCE_STATUS = [
-        ('SCHEDULED', 'Scheduled'),
-        ('IN_PROGRESS', 'In Progress'),
-        ('COMPLETED', 'Completed'),
-        ('CANCELLED', 'Cancelled'),
-        ('POSTPONED', 'Postponed'),
-    ]
-
     FREQUENCY_CHOICES = [
         ('WEEKLY', 'Weekly'),
         ('MONTHLY', 'Monthly'),
@@ -555,53 +405,43 @@ class MaintenanceSchedule(models.Model):
         ('AS_NEEDED', 'As Needed'),
     ]
 
-    # Existing fields (keep these)
-    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='maintenance_schedules')
+    STATUS_CHOICES = [
+        ('SCHEDULED', 'Scheduled'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+        ('POSTPONED', 'Postponed'),
+    ]
+
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='maintenance_schedules')
     maintenance_type = models.CharField(max_length=20, choices=MAINTENANCE_TYPES)
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
     description = models.TextField()
     next_due_date = models.DateField()
     last_completed_date = models.DateField(null=True, blank=True)
-    assigned_technician = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_assignments')
+    assigned_technician = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_assignments')
     estimated_duration = models.DurationField(null=True, blank=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_schedules')
+    cost_estimate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    # Add the missing fields that your forms expect
-    title = models.CharField(max_length=200, blank=True)
-    scheduled_date = models.DateField(null=True, blank=True)
-    scheduled_time = models.TimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=MAINTENANCE_STATUS, default='SCHEDULED')
-    vendor = models.ForeignKey('Vendor', on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_schedules')
-    technician_name = models.CharField(max_length=100, blank=True)
-    technician_contact = models.CharField(max_length=50, blank=True)
-    estimated_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    actual_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    parts_used = models.TextField(blank=True)
-    work_performed = models.TextField(blank=True)
-    completion_date = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ['next_due_date']
 
     def __str__(self):
-        return f"{self.device.device_name} - {self.get_maintenance_type_display()}"
+        return f"{self.device.device_name} - {self.get_maintenance_type_display()} ({self.next_due_date})"
 
     @property
     def is_overdue(self):
-        """Check if maintenance is overdue"""
-        if self.scheduled_date:
-            return self.scheduled_date < date.today()
-        return self.next_due_date < date.today()
+        return timezone.now().date() > self.next_due_date and self.status == 'SCHEDULED'
 
     @property
     def days_until_due(self):
-        """Calculate days until next maintenance"""
-        if self.scheduled_date:
-            return (self.scheduled_date - date.today()).days
-        return (self.next_due_date - date.today()).days
-    
+        return (self.next_due_date - timezone.now().date()).days
+
 class MaintenanceRecord(models.Model):
     """Record of completed maintenance activities"""
     STATUS_CHOICES = [
@@ -612,13 +452,14 @@ class MaintenanceRecord(models.Model):
         ('POSTPONED', 'Postponed'),
     ]
 
-    device = models.ForeignKey('Device', on_delete=models.CASCADE, related_name='maintenance_records')
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='maintenance_records')
     maintenance_schedule = models.ForeignKey(MaintenanceSchedule, on_delete=models.SET_NULL, null=True, blank=True, related_name='records')
     maintenance_type = models.CharField(max_length=20, choices=MaintenanceSchedule.MAINTENANCE_TYPES)
     description = models.TextField()
     scheduled_date = models.DateField()
     completed_date = models.DateField(null=True, blank=True)
-    technician = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
+    technician = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
+    vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED')
     work_performed = models.TextField(blank=True)
     parts_used = models.TextField(blank=True)
@@ -640,8 +481,9 @@ class MaintenanceRecord(models.Model):
         if self.completed_date and self.scheduled_date:
             return (self.completed_date - self.scheduled_date).days
         return None
+
 # ================================
-# 8. AUDIT & TRACKING MODELS
+# 7. AUDIT & TRACKING MODELS
 # ================================
 
 class AuditLog(models.Model):
@@ -662,7 +504,7 @@ class AuditLog(models.Model):
         ('EXPORT', 'Export'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='audit_logs')
     action = models.CharField(max_length=20, choices=ACTION_CHOICES)
     model_name = models.CharField(max_length=50)
     object_id = models.CharField(max_length=50, blank=True)
@@ -674,6 +516,11 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['action', 'timestamp']),
+            models.Index(fields=['model_name', 'timestamp']),
+        ]
 
     def __str__(self):
         return f"{self.user} {self.action} {self.model_name} at {self.timestamp}"
@@ -694,9 +541,34 @@ class DeviceMovement(models.Model):
     def __str__(self):
         return f"{self.device.device_name}: {self.from_location} → {self.to_location}"
 
+class DeviceHistory(models.Model):
+    """Track device status and assignment changes"""
+    ACTION_TYPES = [
+        ('STATUS_CHANGE', 'Status Change'),
+        ('ASSIGNMENT', 'Assignment'),
+        ('RETURN', 'Return'),
+        ('TRANSFER', 'Transfer'),
+        ('MAINTENANCE', 'Maintenance'),
+        ('LOCATION_CHANGE', 'Location Change'),
+    ]
 
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='history_logs')
+    action = models.CharField(max_length=20, choices=ACTION_TYPES)
+    old_value = models.CharField(max_length=200, blank=True)
+    new_value = models.CharField(max_length=200, blank=True)
+    changed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='device_changes')
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
 
-# 11. SYSTEM CONFIGURATION MODELS
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.device.device_name} - {self.action} at {self.changed_at}"
+
+# ================================
+# 8. SYSTEM CONFIGURATION MODELS
 # ================================
 
 class SystemConfiguration(models.Model):
@@ -715,7 +587,6 @@ class SystemConfiguration(models.Model):
     value = models.TextField()
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
-    
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -726,7 +597,7 @@ class SystemConfiguration(models.Model):
         return f"{self.category}.{self.key} = {self.value[:50]}"
 
 # ================================
-# 12. NOTIFICATION & ALERT MODELS
+# 9. NOTIFICATION MODELS
 # ================================
 
 class NotificationRule(models.Model):
@@ -744,127 +615,71 @@ class NotificationRule(models.Model):
     name = models.CharField(max_length=200)
     event_type = models.CharField(max_length=30, choices=EVENT_TYPES)
     description = models.TextField()
-    
-    # Trigger conditions
     trigger_conditions = models.JSONField(default=dict, help_text="Conditions that trigger this notification")
-    
-    # Notification settings
     notify_email = models.BooleanField(default=True)
     notify_sms = models.BooleanField(default=False)
     notify_in_app = models.BooleanField(default=True)
-    
-    # Recipients
     notify_device_owner = models.BooleanField(default=True)
     notify_department_head = models.BooleanField(default=False)
     notify_it_admin = models.BooleanField(default=True)
-    additional_recipients = models.JSONField(default=list, help_text="List of additional email addresses")
-    
-    # Message template
-    email_subject_template = models.CharField(max_length=200)
-    email_body_template = models.TextField()
-    sms_template = models.CharField(max_length=160, blank=True)
-    
+    additional_recipients = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.event_type} - {self.name}"
+        return f"{self.name} - {self.get_event_type_display()}"
 
 class Notification(models.Model):
     """Individual notification instances"""
-    NOTIFICATION_STATUS = [
+    NOTIFICATION_TYPES = [
+        ('INFO', 'Information'),
+        ('WARNING', 'Warning'),
+        ('ERROR', 'Error'),
+        ('SUCCESS', 'Success'),
+    ]
+
+    STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('SENT', 'Sent'),
         ('FAILED', 'Failed'),
         ('READ', 'Read'),
     ]
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     rule = models.ForeignKey(NotificationRule, on_delete=models.CASCADE, related_name='notifications')
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=10, choices=NOTIFICATION_TYPES, default='INFO')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
     
-    # Related objects
-    device = models.ForeignKey(Device, on_delete=models.CASCADE, null=True, blank=True)
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, null=True, blank=True)
-    maintenance = models.ForeignKey(MaintenanceSchedule, on_delete=models.CASCADE, null=True, blank=True)
-    
-    # Message content
-    subject = models.CharField(max_length=200)
+    title = models.CharField(max_length=200)
     message = models.TextField()
     
+    # Related objects (optional)
+    related_device = models.ForeignKey(Device, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    related_assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    
     # Delivery tracking
-    status = models.CharField(max_length=20, choices=NOTIFICATION_STATUS, default='PENDING')
     sent_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
-    delivery_attempts = models.PositiveIntegerField(default=0)
-    error_message = models.TextField(blank=True)
-    
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.subject} → {self.recipient.username} ({self.status})"
-
-# 14. INTEGRATION & API MODELS
-# ================================
-
-class APIAccessLog(models.Model):
-    """Log API access for monitoring and security"""
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    ip_address = models.GenericIPAddressField()
-    user_agent = models.TextField(blank=True)
     
-    # Request details
-    method = models.CharField(max_length=10)  # GET, POST, PUT, DELETE
-    endpoint = models.CharField(max_length=200)
-    request_data = models.JSONField(default=dict, blank=True)
-    
-    # Response details
-    status_code = models.PositiveIntegerField()
-    response_time = models.FloatField(help_text="Response time in seconds")
-    
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.method} {self.endpoint} - {self.status_code} ({self.user or 'Anonymous'})"
-
-class DataImportLog(models.Model):
-    """Log data import operations"""
-    IMPORT_TYPES = [
-        ('DEVICES', 'Device Import'),
-        ('STAFF', 'Staff Import'),
-        ('LOCATIONS', 'Location Import'),
-        ('ASSIGNMENTS', 'Assignment Import'),
-    ]
-
-    import_type = models.CharField(max_length=20, choices=IMPORT_TYPES)
-    file_name = models.CharField(max_length=200)
-    file_path = models.CharField(max_length=500)
-    total_records = models.PositiveIntegerField(default=0)
-    successful_imports = models.PositiveIntegerField(default=0)
-    failed_imports = models.PositiveIntegerField(default=0)
-    errors = models.JSONField(default=list, blank=True)
-    warnings = models.JSONField(default=list, blank=True)
-    imported_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
-    started_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    # Delivery methods used
+    sent_via_email = models.BooleanField(default=False)
+    sent_via_sms = models.BooleanField(default=False)
+    sent_via_app = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['-started_at']
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'status']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['related_device']),
+        ]
 
     def __str__(self):
-        return f"{self.import_type} - {self.file_name} ({self.successful_imports}/{self.total_records})"
+        return f"{self.title} - {self.recipient.username}"
 
     @property
-    def success_rate(self):
-        """Calculate import success rate"""
-        if self.total_records > 0:
-            return (self.successful_imports / self.total_records) * 100
-        return 0
-
-    @property
-    def duration(self):
-        """Calculate import duration"""
-        if self.completed_at:
-            return self.completed_at - self.started_at
-        return None
+    def is_read(self):
+        return self.status == 'READ' or self.read_at is not None
