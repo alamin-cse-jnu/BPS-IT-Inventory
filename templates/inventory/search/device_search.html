@@ -1,0 +1,248 @@
+<!-- File location: D:\IT Inventory\inventory\templates\inventory\search\device_search.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - BPS Inventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-search"></i> {{ title }}
+        </h1>
+        <a href="{% url 'inventory:device_list' %}" class="btn btn-secondary">
+            <i class="fas fa-list"></i> All Devices
+        </a>
+    </div>
+
+    <!-- Search Form -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Search Filters</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="q">Search Text:</label>
+                        <input type="text" class="form-control" name="q" id="q" 
+                               value="{{ query }}" placeholder="Device ID, Name, Asset Tag, Serial...">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="category">Category:</label>
+                        <select class="form-control" name="category" id="category">
+                            <option value="">All Categories</option>
+                            {% for cat in categories %}
+                                <option value="{{ cat.id }}" {% if filters.category == cat.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ cat.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="status">Status:</label>
+                        <select class="form-control" name="status" id="status">
+                            <option value="">All Status</option>
+                            {% for status_code, status_name in status_choices %}
+                                <option value="{{ status_code }}" {% if filters.status == status_code %}selected{% endif %}>
+                                    {{ status_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="condition">Condition:</label>
+                        <select class="form-control" name="condition" id="condition">
+                            <option value="">All Conditions</option>
+                            {% for condition_code, condition_name in condition_choices %}
+                                <option value="{{ condition_code }}" {% if filters.condition == condition_code %}selected{% endif %}>
+                                    {{ condition_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="vendor">Vendor:</label>
+                        <select class="form-control" name="vendor" id="vendor">
+                            <option value="">All Vendors</option>
+                            {% for v in vendors %}
+                                <option value="{{ v.id }}" {% if filters.vendor == v.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ v.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    {% if search_performed %}
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Search Results 
+                    {% if total_results %}
+                        <span class="badge badge-info">{{ total_results }} found</span>
+                    {% endif %}
+                </h6>
+                {% if query %}
+                    <small class="text-muted">Results for: "{{ query }}"</small>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if page_obj.object_list %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="deviceTable">
+                            <thead>
+                                <tr>
+                                    <th>Device ID</th>
+                                    <th>Device Name</th>
+                                    <th>Category</th>
+                                    <th>Status</th>
+                                    <th>Condition</th>
+                                    <th>Asset Tag</th>
+                                    <th>Vendor</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for device in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ device.device_id }}</strong>
+                                        </td>
+                                        <td>{{ device.device_name }}</td>
+                                        <td>
+                                            {% if device.device_type %}
+                                                {{ device.device_type.subcategory.category.name }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-{% if device.status == 'ACTIVE' %}success{% elif device.status == 'ASSIGNED' %}info{% elif device.status == 'MAINTENANCE' %}warning{% else %}secondary{% endif %}">
+                                                {{ device.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-{% if device.condition == 'EXCELLENT' %}success{% elif device.condition == 'GOOD' %}info{% elif device.condition == 'FAIR' %}warning{% else %}danger{% endif %}">
+                                                {{ device.get_condition_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ device.asset_tag|default:"-" }}</td>
+                                        <td>{{ device.vendor.name|default:"-" }}</td>
+                                        <td>
+                                            <a href="{% url 'inventory:device_detail' device.device_id %}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                            <a href="{% url 'inventory:device_edit' device.device_id %}" 
+                                               class="btn btn-sm btn-outline-success">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if page_obj.has_other_pages %}
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div>
+                                <small class="text-muted">
+                                    Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} 
+                                    of {{ page_obj.paginator.count }} results
+                                </small>
+                            </div>
+                            <nav>
+                                <ul class="pagination pagination-sm mb-0">
+                                    {% if page_obj.has_previous %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                                Previous
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    {% for num in page_obj.paginator.page_range %}
+                                        {% if page_obj.number == num %}
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ num }}</span>
+                                            </li>
+                                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                                    {{ num }}
+                                                </a>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if page_obj.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                                Next
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No devices found</h5>
+                        <p class="text-muted">Try adjusting your search criteria or filters.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="card shadow mb-4">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">Device Search</h5>
+                <p class="text-muted">Use the filters above to search for specific devices.</p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Focus on search input
+    $('#q').focus();
+    
+    // Clear all filters
+    if ($('#clear-filters').length === 0) {
+        $('.card-header .text-primary').parent().append(
+            '<a href="{% url "inventory:device_search" %}" class="btn btn-sm btn-outline-secondary" id="clear-filters">' +
+            '<i class="fas fa-times"></i> Clear Filters</a>'
+        );
+    }
+});
+</script>
+{% endblock %}

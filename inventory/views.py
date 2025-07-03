@@ -44,12 +44,14 @@ from datetime import date, timedelta, datetime
 from io import StringIO, BytesIO
 from pathlib import Path
 import json as json_module 
+import qrcode
+import base64
 
 # Model imports
 from .models import (
     Device, Assignment, Staff, Department, Location, 
     DeviceCategory, DeviceType, DeviceSubCategory, Vendor,
-    MaintenanceSchedule, AuditLog, Room, Building
+    MaintenanceSchedule, AuditLog, Room, Building,
 )
 
 # CORRECTED: Import the correct DeviceTransferForm
@@ -3329,6 +3331,306 @@ def bulk_device_update(request):
     return redirect('inventory:device_list')
 
 @login_required
+@permission_required('inventory.add_assignment', raise_exception=True)
+def bulk_assignment(request):
+    """
+    Handle bulk device assignments
+    This is the missing function referenced in your URLs
+    """
+    if request.method == 'GET':
+        # Show bulk assignment form
+        context = {
+            'title': 'Bulk Device Assignment',
+            'staff_members': Staff.objects.filter(is_active=True).order_by('full_name'),
+            'departments': Department.objects.filter(is_active=True).order_by('name'),
+            'locations': Location.objects.filter(is_active=True).order_by('name'),
+        }
+        return render(request, 'inventory/bulk_assignment.html', context)
+    
+    elif request.method == 'POST':
+        device_ids = request.POST.getlist('device_ids')
+        staff_id = request.POST.get('assigned_staff')
+        department_id = request.POST.get('assigned_department')
+        assignment_type = request.POST.get('assignment_type', 'temporary')
+        assignment_date = request.POST.get('assignment_date')
+        expected_return_date = request.POST.get('expected_return_date')
+        notes = request.POST.get('assignment_notes', '')
+        
+        # Validation
+        if not device_ids:
+            messages.error(request, 'No devices selected for assignment.')
+            return redirect('inventory:bulk_assignment')
+        
+        if not staff_id and not department_id:
+            messages.error(request, 'Please select either a staff member or department.')
+            return redirect('inventory:bulk_assignment')
+        
+        try:
+            # Get staff and department objects
+            staff = get_object_or_404(Staff, id=staff_id) if staff_id else None
+            department = get_object_or_404(Department, id=department_id) if department_id else None
+            
+            # Parse dates
+            assignment_date_parsed = timezone.now().date()
+            if assignment_date:
+                try:
+                    assignment_date_parsed = datetime.strptime(assignment_date, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+            
+            expected_return_date_parsed = None
+            if expected_return_date:
+                try:
+                    expected_return_date_parsed = datetime.strptime(expected_return_date, '%Y-%m-%d').date()
+                except ValueError:
+                    pass
+            
+            with transaction.atomic():
+                assigned_count = 0
+                skipped_count = 0
+                
+                for device_id in device_ids:
+                    try:
+                        device = Device.objects.get(device_id=device_id)
+                        
+                        # Check if device is available for assignment
+                        if device.status not in ['AVAILABLE', 'ACTIVE']:
+                            skipped_count += 1
+                            continue
+                        
+                        # Check for existing active assignments
+                        existing_assignment = Assignment.objects.filter(
+                            device=device,
+                            is_active=True
+                        ).first()
+                        
+                        if existing_assignment:
+                            skipped_count += 1
+                            continue
+                        
+                        # Create assignment
+                        assignment = Assignment.objects.create(
+                            device=device,
+                            assigned_to=staff,
+                            assigned_to_department=department,
+                            assignment_type=assignment_type,
+                            assignment_date=assignment_date_parsed,
+                            expected_return_date=expected_return_date_parsed,
+                            is_active=True,
+                            assigned_by=request.user,
+                            notes=notes
+                        )
+                        
+                        # Update device status
+                        device.status = 'ASSIGNED'
+                        device.updated_by = request.user
+                        device.save()
+                        
+                        assigned_count += 1
+                        
+                    except Device.DoesNotExist:
+                        skipped_count += 1
+                        continue
+                    except Exception as e:
+                        skipped_count += 1
+                        continue
+                
+                # Create audit log
+                try:
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='BULK_ASSIGNMENT',
+                        model_name='Assignment',
+                        object_id=','.join(device_ids),
+                        object_repr=f'Bulk assignment of {assigned_count} devices',
+                        changes={
+                            'staff_id': staff_id,
+                            'department_id': department_id,
+                            'assignment_type': assignment_type,
+                            'assigned_count': assigned_count,
+                            'skipped_count': skipped_count
+                        },
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                except:
+                    pass  # Skip if AuditLog model doesn't exist
+                
+                if assigned_count > 0:
+                    assignee = staff.full_name if staff else department.name
+                    messages.success(request, f'Successfully assigned {assigned_count} devices to {assignee}.')
+                    
+                if skipped_count > 0:
+                    messages.warning(request, f'{skipped_count} devices were skipped (already assigned or unavailable).')
+                
+        except Exception as e:
+            messages.error(request, f'Error performing bulk assignment: {str(e)}')
+        
+        return redirect('inventory:assignment_list')
+
+
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def bulk_qr_generate(request):
+    """
+    Handle bulk QR code generation for devices
+    This is the missing function referenced in your URLs
+    """
+    if request.method == 'GET':
+        # Show device selection for QR generation
+        search = request.GET.get('search', '')
+        category = request.GET.get('category')
+        status = request.GET.get('status')
+        has_qr = request.GET.get('has_qr')
+        
+        devices = Device.objects.select_related(
+            'device_type__subcategory__category', 'vendor'
+        ).order_by('device_id')
+        
+        # Apply filters
+        if search:
+            devices = devices.filter(
+                Q(device_id__icontains=search) |
+                Q(device_name__icontains=search) |
+                Q(asset_tag__icontains=search)
+            )
+        
+        if category:
+            devices = devices.filter(device_type__subcategory__category_id=category)
+            
+        if status:
+            devices = devices.filter(status=status)
+            
+        if has_qr == 'yes':
+            devices = devices.exclude(qr_code__isnull=True).exclude(qr_code='')
+        elif has_qr == 'no':
+            devices = devices.filter(Q(qr_code__isnull=True) | Q(qr_code=''))
+        
+        # Pagination
+        paginator = Paginator(devices, 50)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'title': 'Bulk QR Code Generation',
+            'page_obj': page_obj,
+            'categories': DeviceCategory.objects.all().order_by('name'),
+            'status_choices': Device.STATUS_CHOICES,
+            'filters': {
+                'search': search,
+                'category': category,
+                'status': status,
+                'has_qr': has_qr,
+            }
+        }
+        return render(request, 'inventory/bulk_qr_generate.html', context)
+    
+    elif request.method == 'POST':
+        device_ids = request.POST.getlist('device_ids')
+        regenerate = request.POST.get('regenerate', False)
+        
+        if not device_ids:
+            messages.error(request, 'No devices selected for QR code generation.')
+            return redirect('inventory:bulk_qr_generate')
+        
+        try:
+            generated_count = 0
+            skipped_count = 0
+            failed_count = 0
+            
+            with transaction.atomic():
+                for device_id in device_ids:
+                    try:
+                        device = Device.objects.get(device_id=device_id)
+                        
+                        # Skip if QR code exists and regenerate is not requested
+                        if device.qr_code and not regenerate:
+                            skipped_count += 1
+                            continue
+                        
+                        # Generate QR code data
+                        qr_data = {
+                            'device_id': device.device_id,
+                            'asset_tag': device.asset_tag,
+                            'device_name': device.device_name,
+                            'category': device.device_type.subcategory.category.name if device.device_type else '',
+                            'model': device.model,
+                            'serial_number': device.serial_number,
+                            'verification_url': request.build_absolute_uri(
+                                f'/verify/{device.device_id}/'
+                            ),
+                            'generated_at': timezone.now().isoformat(),
+                            'system': 'BPS_Inventory'
+                        }
+                        
+                        qr_json = json.dumps(qr_data)
+                        
+                        # Create QR code
+                        qr = qrcode.QRCode(
+                            version=1,
+                            error_correction=qrcode.constants.ERROR_CORRECT_L,
+                            box_size=10,
+                            border=4,
+                        )
+                        qr.add_data(qr_json)
+                        qr.make(fit=True)
+                        
+                        # Generate image
+                        img = qr.make_image(fill_color="black", back_color="white")
+                        
+                        # Convert to base64
+                        buffer = BytesIO()
+                        img.save(buffer, format='PNG')
+                        qr_code_data = base64.b64encode(buffer.getvalue()).decode()
+                        
+                        # Update device with QR code
+                        device.qr_code = qr_code_data
+                        device.updated_by = request.user
+                        device.save()
+                        
+                        generated_count += 1
+                        
+                    except Device.DoesNotExist:
+                        failed_count += 1
+                        continue
+                    except Exception as e:
+                        failed_count += 1
+                        continue
+                
+                # Create audit log
+                try:
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='BULK_QR_GENERATION',
+                        model_name='Device',
+                        object_id=','.join(device_ids),
+                        object_repr=f'Bulk QR generation for {generated_count} devices',
+                        changes={
+                            'generated_count': generated_count,
+                            'skipped_count': skipped_count,
+                            'failed_count': failed_count,
+                            'regenerate': regenerate
+                        },
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                except:
+                    pass  # Skip if AuditLog model doesn't exist
+                
+                # Success message
+                if generated_count > 0:
+                    messages.success(request, f'Generated QR codes for {generated_count} devices.')
+                
+                if skipped_count > 0:
+                    messages.info(request, f'{skipped_count} devices skipped (QR codes already exist).')
+                
+                if failed_count > 0:
+                    messages.warning(request, f'{failed_count} devices failed to generate QR codes.')
+                
+        except Exception as e:
+            messages.error(request, f'Error in bulk QR generation: {str(e)}')
+        
+        return redirect('inventory:bulk_qr_generate')
+
+@login_required
 @permission_required('inventory.change_assignment', raise_exception=True)
 def bulk_assignment_return(request):
     """Bulk return multiple assignments"""
@@ -3391,7 +3693,136 @@ def bulk_assignment_return(request):
             messages.error(request, f'Error performing bulk return: {str(e)}')
     
     return redirect('inventory:assignment_list')
+@login_required
+@permission_required('inventory.change_device', raise_exception=True)
+def bulk_actions(request):
+    """
+    Main bulk actions dispatcher - integrates with your existing bulk functions
+    This function acts as a router to your existing bulk operation functions
+    """
+    if request.method == 'GET':
+        # Show bulk actions selection page
+        context = {
+            'title': 'Bulk Actions',
+            'available_actions': [
+                ('device_update', 'Update Device Properties'),
+                ('assignment_return', 'Return Assignments'), 
+                ('device_assignment', 'Assign Devices'),
+                ('export_selected', 'Export Selected Items'),
+            ]
+        }
+        return render(request, 'inventory/bulk_actions_dispatcher.html', context)
+    
+    elif request.method == 'POST':
+        action = request.POST.get('action')
+        
+        # Route to your existing bulk functions based on action
+        if action == 'device_update':
+            # Use your existing bulk_device_update function
+            return bulk_device_update(request)
+            
+        elif action == 'assignment_return':
+            # Use your existing bulk_assignment_return function  
+            return bulk_assignment_return(request)
+            
+        elif action == 'device_assignment':
+            # Handle new device assignments
+            return handle_bulk_device_assignment(request)
+            
+        elif action == 'export_selected':
+            # Handle export functionality
+            return handle_bulk_export_dispatcher(request)
+            
+        else:
+            messages.error(request, f'Unknown bulk action: {action}')
+            return redirect('inventory:device_list')
 
+
+def handle_bulk_device_assignment(request):
+    """Handle bulk device assignments - extends your existing functionality"""
+    if request.method == 'POST':
+        device_ids = request.POST.getlist('device_ids')
+        staff_id = request.POST.get('assigned_staff')
+        assignment_type = request.POST.get('assignment_type', 'temporary')
+        
+        if not device_ids:
+            messages.error(request, 'No devices selected.')
+            return redirect('inventory:device_list')
+            
+        if not staff_id:
+            messages.error(request, 'Please select a staff member.')
+            return redirect('inventory:device_list')
+        
+        try:
+            staff = get_object_or_404(Staff, id=staff_id)
+            
+            with transaction.atomic():
+                assigned_count = 0
+                
+                for device_id in device_ids:
+                    try:
+                        device = Device.objects.get(device_id=device_id)
+                        
+                        # Check if device is available for assignment
+                        if device.status not in ['AVAILABLE', 'ACTIVE']:
+                            continue
+                            
+                        # Check for existing active assignments
+                        existing_assignment = Assignment.objects.filter(
+                            device=device,
+                            is_active=True
+                        ).first()
+                        
+                        if existing_assignment:
+                            continue  # Skip already assigned devices
+                        
+                        # Create new assignment using your existing model structure
+                        Assignment.objects.create(
+                            device=device,
+                            assigned_to=staff,
+                            assignment_type=assignment_type,
+                            is_active=True,
+                            assigned_by=request.user,
+                            assignment_date=timezone.now().date()
+                        )
+                        
+                        # Update device status
+                        device.status = 'ASSIGNED'
+                        device.updated_by = request.user
+                        device.save()
+                        
+                        assigned_count += 1
+                        
+                    except Device.DoesNotExist:
+                        continue
+                
+                # Create audit log (matching your existing pattern)
+                try:
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='BULK_ASSIGNMENT',
+                        model_name='Assignment',
+                        object_id=','.join(device_ids),
+                        object_repr=f'Bulk assignment of {assigned_count} devices to {staff.full_name}',
+                        changes={
+                            'staff_id': staff_id,
+                            'assignment_type': assignment_type,
+                            'device_count': assigned_count
+                        },
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                except:
+                    pass  # Skip if AuditLog model doesn't exist
+                
+                if assigned_count > 0:
+                    messages.success(request, f'Successfully assigned {assigned_count} devices to {staff.full_name}.')
+                else:
+                    messages.warning(request, 'No devices were assigned. They may already be assigned or unavailable.')
+                    
+        except Exception as e:
+            messages.error(request, f'Error performing bulk assignment: {str(e)}')
+    
+    return redirect('inventory:device_list')
 
 
 # ================================
@@ -3608,6 +4039,119 @@ def export_assignments_csv(request):
         
     except Exception as e:
         messages.error(request, f"Error exporting assignments: {str(e)}")
+        return redirect('inventory:assignment_list')
+
+def handle_bulk_export_dispatcher(request):
+    """Handle bulk export - works with your existing system"""
+    try:
+        item_type = request.POST.get('export_type', 'devices')
+        selected_ids = request.POST.getlist('device_ids') or request.POST.getlist('assignment_ids')
+        
+        if not selected_ids:
+            messages.error(request, 'No items selected for export.')
+            return redirect('inventory:device_list')
+        
+        if item_type == 'devices':
+            return export_selected_devices(request, selected_ids)
+        elif item_type == 'assignments':
+            return export_selected_assignments(request, selected_ids)
+        else:
+            messages.error(request, 'Invalid export type.')
+            return redirect('inventory:device_list')
+            
+    except Exception as e:
+        messages.error(request, f'Error exporting data: {str(e)}')
+        return redirect('inventory:device_list')
+
+
+def export_selected_devices(request, device_ids):
+    """Export selected devices to CSV"""
+    try:
+        devices = Device.objects.filter(device_id__in=device_ids).select_related(
+            'category', 'subcategory', 'device_type', 'vendor', 'current_location'
+        )
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="selected_devices_export.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header (matching your existing export structure)
+        writer.writerow([
+            'Device ID', 'Asset Tag', 'Device Name', 'Category', 'Subcategory',
+            'Device Type', 'Brand', 'Model', 'Serial Number', 'Status',
+            'Condition', 'Current Location', 'Purchase Date', 'Purchase Price',
+            'Vendor', 'Warranty Start', 'Warranty End'
+        ])
+        
+        # Write device data
+        for device in devices:
+            writer.writerow([
+                device.device_id,
+                device.asset_tag,
+                device.device_name,
+                device.category.name if device.category else '',
+                device.subcategory.name if device.subcategory else '',
+                device.device_type.name if device.device_type else '',
+                device.brand,
+                device.model,
+                device.serial_number,
+                device.get_status_display(),
+                device.get_condition_display(),
+                str(device.current_location) if device.current_location else '',
+                device.purchase_date,
+                device.purchase_price,
+                device.vendor.name if device.vendor else '',
+                device.warranty_start_date,
+                device.warranty_end_date,
+            ])
+        
+        messages.success(request, f'Exported {devices.count()} devices successfully.')
+        return response
+        
+    except Exception as e:
+        messages.error(request, f'Error exporting devices: {str(e)}')
+        return redirect('inventory:device_list')
+
+
+def export_selected_assignments(request, assignment_ids):
+    """Export selected assignments to CSV"""
+    try:
+        assignments = Assignment.objects.filter(assignment_id__in=assignment_ids).select_related(
+            'device', 'assigned_to', 'assigned_by'
+        )
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="selected_assignments_export.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header
+        writer.writerow([
+            'Assignment ID', 'Device ID', 'Device Name', 'Assigned To', 'Assignment Type',
+            'Assignment Date', 'Expected Return', 'Actual Return', 'Status', 'Assigned By'
+        ])
+        
+        # Write assignment data
+        for assignment in assignments:
+            writer.writerow([
+                assignment.assignment_id,
+                assignment.device.device_id,
+                assignment.device.device_name,
+                assignment.assigned_to.full_name,
+                assignment.get_assignment_type_display(),
+                assignment.assignment_date,
+                assignment.expected_return_date,
+                assignment.actual_return_date,
+                'Active' if assignment.is_active else 'Returned',
+                assignment.assigned_by.username if assignment.assigned_by else '',
+            ])
+        
+        messages.success(request, f'Exported {assignments.count()} assignments successfully.')
+        return response
+        
+    except Exception as e:
+        messages.error(request, f'Error exporting assignments: {str(e)}')
         return redirect('inventory:assignment_list')
 
 # ================================
@@ -4755,7 +5299,7 @@ def export_maintenance_csv(request):
         return redirect('inventory:maintenance_list')
     
 # ================================
-# ADVANCED SEARCH VIEWS - MEDIUM PRIORITY
+# ADVANCED SEARCH VIEWS 
 # ================================
 
 @login_required
@@ -4963,6 +5507,293 @@ class AdvancedSearchForm(forms.Form):
             raise ValidationError("Start date cannot be after end date.")
         
         return cleaned_data
+@login_required
+def device_search(request):
+    """
+    Device-specific search functionality
+    This is the missing function referenced in your URLs
+    """
+    try:
+        query = request.GET.get('q', '').strip()
+        category = request.GET.get('category', '')
+        status = request.GET.get('status', '')
+        condition = request.GET.get('condition', '')
+        vendor = request.GET.get('vendor', '')
+        
+        # Start with all devices
+        devices = Device.objects.select_related(
+            'device_type__subcategory__category', 'vendor', 'current_location'
+        ).prefetch_related('assignments')
+        
+        # Apply text search if query provided
+        if query:
+            devices = devices.filter(
+                Q(device_id__icontains=query) |
+                Q(device_name__icontains=query) |
+                Q(asset_tag__icontains=query) |
+                Q(serial_number__icontains=query) |
+                Q(brand__icontains=query) |
+                Q(model__icontains=query) |
+                Q(description__icontains=query)
+            )
+        
+        # Apply filters
+        if category:
+            devices = devices.filter(device_type__subcategory__category_id=category)
+        
+        if status:
+            devices = devices.filter(status=status)
+            
+        if condition:
+            devices = devices.filter(condition=condition)
+            
+        if vendor:
+            devices = devices.filter(vendor_id=vendor)
+        
+        # Order results
+        devices = devices.order_by('device_id')
+        
+        # Pagination
+        paginator = Paginator(devices, 25)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Get filter choices for form
+        context = {
+            'title': 'Device Search',
+            'page_obj': page_obj,
+            'query': query,
+            'categories': DeviceCategory.objects.filter(is_active=True).order_by('name'),
+            'vendors': Vendor.objects.filter(is_active=True).order_by('name'),
+            'status_choices': Device.STATUS_CHOICES,
+            'condition_choices': Device.CONDITION_CHOICES,
+            'filters': {
+                'category': category,
+                'status': status,
+                'condition': condition,
+                'vendor': vendor,
+            },
+            'total_results': devices.count() if query or any([category, status, condition, vendor]) else 0,
+            'search_performed': bool(query or any([category, status, condition, vendor]))
+        }
+        
+        return render(request, 'inventory/search/device_search.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error in device search: {str(e)}")
+        return render(request, 'inventory/search/device_search.html', {
+            'title': 'Device Search',
+            'error': str(e)
+        })
+
+
+@login_required
+def assignment_search(request):
+    """
+    Assignment-specific search functionality  
+    This is the missing function referenced in your URLs
+    """
+    try:
+        query = request.GET.get('q', '').strip()
+        status = request.GET.get('status', '')
+        assignment_type = request.GET.get('assignment_type', '')
+        department = request.GET.get('department', '')
+        date_from = request.GET.get('date_from', '')
+        date_to = request.GET.get('date_to', '')
+        
+        # Start with all assignments
+        assignments = Assignment.objects.select_related(
+            'device__device_type__subcategory__category',
+            'assigned_to_staff__user',
+            'assigned_to_department',
+            'assigned_to_location',
+            'assigned_by'
+        )
+        
+        # Apply text search if query provided
+        if query:
+            assignments = assignments.filter(
+                Q(assignment_id__icontains=query) |
+                Q(device__device_id__icontains=query) |
+                Q(device__device_name__icontains=query) |
+                Q(device__asset_tag__icontains=query) |
+                Q(assigned_to_staff__user__first_name__icontains=query) |
+                Q(assigned_to_staff__user__last_name__icontains=query) |
+                Q(assigned_to_staff__employee_id__icontains=query) |
+                Q(assigned_to_department__name__icontains=query) |
+                Q(notes__icontains=query)
+            )
+        
+        # Apply filters
+        if status == 'active':
+            assignments = assignments.filter(is_active=True)
+        elif status == 'inactive':
+            assignments = assignments.filter(is_active=False)
+        elif status == 'overdue':
+            from datetime import date
+            assignments = assignments.filter(
+                is_active=True,
+                expected_return_date__lt=date.today()
+            )
+        
+        if assignment_type:
+            assignments = assignments.filter(assignment_type=assignment_type)
+            
+        if department:
+            assignments = assignments.filter(assigned_to_department_id=department)
+        
+        # Date range filters
+        if date_from:
+            try:
+                from datetime import datetime
+                date_from_parsed = datetime.strptime(date_from, '%Y-%m-%d').date()
+                assignments = assignments.filter(assignment_date__gte=date_from_parsed)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                from datetime import datetime
+                date_to_parsed = datetime.strptime(date_to, '%Y-%m-%d').date()
+                assignments = assignments.filter(assignment_date__lte=date_to_parsed)
+            except ValueError:
+                pass
+        
+        # Order results
+        assignments = assignments.order_by('-assignment_date')
+        
+        # Pagination
+        paginator = Paginator(assignments, 25)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Get filter choices for form
+        context = {
+            'title': 'Assignment Search',
+            'page_obj': page_obj,
+            'query': query,
+            'departments': Department.objects.filter(is_active=True).order_by('name'),
+            'assignment_type_choices': Assignment.ASSIGNMENT_TYPES,
+            'filters': {
+                'status': status,
+                'assignment_type': assignment_type,
+                'department': department,
+                'date_from': date_from,
+                'date_to': date_to,
+            },
+            'total_results': assignments.count() if query or any([status, assignment_type, department, date_from, date_to]) else 0,
+            'search_performed': bool(query or any([status, assignment_type, department, date_from, date_to]))
+        }
+        
+        return render(request, 'inventory/search/assignment_search.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error in assignment search: {str(e)}")
+        return render(request, 'inventory/search/assignment_search.html', {
+            'title': 'Assignment Search',
+            'error': str(e)
+        })
+
+
+# ================================
+# SEARCH API ENDPOINTS
+# ================================
+
+@login_required
+@require_http_methods(["GET"])
+def device_search_api(request):
+    """API endpoint for device search - for AJAX calls"""
+    try:
+        query = request.GET.get('q', '').strip()
+        limit = int(request.GET.get('limit', 10))
+        
+        if len(query) < 2:
+            return JsonResponse({
+                'results': [],
+                'message': 'Please enter at least 2 characters'
+            })
+        
+        devices = Device.objects.filter(
+            Q(device_id__icontains=query) |
+            Q(device_name__icontains=query) |
+            Q(asset_tag__icontains=query) |
+            Q(serial_number__icontains=query)
+        ).select_related('device_type__subcategory__category')[:limit]
+        
+        results = []
+        for device in devices:
+            results.append({
+                'id': device.device_id,
+                'device_id': device.device_id,
+                'device_name': device.device_name,
+                'asset_tag': device.asset_tag,
+                'status': device.get_status_display(),
+                'category': device.device_type.subcategory.category.name if device.device_type else 'N/A',
+                'url': f'/inventory/devices/{device.device_id}/'
+            })
+        
+        return JsonResponse({
+            'results': results,
+            'total': len(results),
+            'query': query
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def assignment_search_api(request):
+    """API endpoint for assignment search - for AJAX calls"""
+    try:
+        query = request.GET.get('q', '').strip()
+        limit = int(request.GET.get('limit', 10))
+        
+        if len(query) < 2:
+            return JsonResponse({
+                'results': [],
+                'message': 'Please enter at least 2 characters'
+            })
+        
+        assignments = Assignment.objects.filter(
+            Q(assignment_id__icontains=query) |
+            Q(device__device_id__icontains=query) |
+            Q(device__device_name__icontains=query) |
+            Q(assigned_to_staff__user__first_name__icontains=query) |
+            Q(assigned_to_staff__user__last_name__icontains=query)
+        ).select_related(
+            'device', 'assigned_to_staff__user', 'assigned_to_department'
+        )[:limit]
+        
+        results = []
+        for assignment in assignments:
+            assigned_to = "N/A"
+            if assignment.assigned_to_staff:
+                assigned_to = f"{assignment.assigned_to_staff.user.first_name} {assignment.assigned_to_staff.user.last_name}"
+            elif assignment.assigned_to_department:
+                assigned_to = assignment.assigned_to_department.name
+            
+            results.append({
+                'id': assignment.assignment_id,
+                'assignment_id': assignment.assignment_id,
+                'device_id': assignment.device.device_id,
+                'device_name': assignment.device.device_name,
+                'assigned_to': assigned_to,
+                'assignment_type': assignment.get_assignment_type_display(),
+                'is_active': assignment.is_active,
+                'url': f'/inventory/assignments/{assignment.assignment_id}/'
+            })
+        
+        return JsonResponse({
+            'results': results,
+            'total': len(results),
+            'query': query
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    
 # ================================
 # BACKUP & RECOVERY VIEWS - LOW PRIORITY
 # ================================

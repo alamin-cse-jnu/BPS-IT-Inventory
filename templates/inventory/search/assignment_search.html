@@ -1,0 +1,286 @@
+<!-- File location: D:\IT Inventory\inventory\templates\inventory\search\assignment_search.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - BPS Inventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-search"></i> {{ title }}
+        </h1>
+        <a href="{% url 'inventory:assignment_list' %}" class="btn btn-secondary">
+            <i class="fas fa-list"></i> All Assignments
+        </a>
+    </div>
+
+    <!-- Search Form -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Search Filters</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="q">Search Text:</label>
+                        <input type="text" class="form-control" name="q" id="q" 
+                               value="{{ query }}" placeholder="Assignment ID, Device, Staff Name...">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="status">Status:</label>
+                        <select class="form-control" name="status" id="status">
+                            <option value="">All Status</option>
+                            <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                            <option value="overdue" {% if filters.status == 'overdue' %}selected{% endif %}>Overdue</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="assignment_type">Type:</label>
+                        <select class="form-control" name="assignment_type" id="assignment_type">
+                            <option value="">All Types</option>
+                            {% for type_code, type_name in assignment_type_choices %}
+                                <option value="{{ type_code }}" {% if filters.assignment_type == type_code %}selected{% endif %}>
+                                    {{ type_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="department">Department:</label>
+                        <select class="form-control" name="department" id="department">
+                            <option value="">All Departments</option>
+                            {% for dept in departments %}
+                                <option value="{{ dept.id }}" {% if filters.department == dept.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ dept.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <div class="form-group">
+                        <label for="date_from">From Date:</label>
+                        <input type="date" class="form-control" name="date_from" id="date_from" 
+                               value="{{ filters.date_from }}">
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <div class="form-group">
+                        <label for="date_to">To Date:</label>
+                        <input type="date" class="form-control" name="date_to" id="date_to" 
+                               value="{{ filters.date_to }}">
+                    </div>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    {% if search_performed %}
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Search Results 
+                    {% if total_results %}
+                        <span class="badge badge-info">{{ total_results }} found</span>
+                    {% endif %}
+                </h6>
+                {% if query %}
+                    <small class="text-muted">Results for: "{{ query }}"</small>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if page_obj.object_list %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="assignmentTable">
+                            <thead>
+                                <tr>
+                                    <th>Assignment ID</th>
+                                    <th>Device</th>
+                                    <th>Assigned To</th>
+                                    <th>Type</th>
+                                    <th>Assignment Date</th>
+                                    <th>Expected Return</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ assignment.assignment_id }}</strong>
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'inventory:device_detail' assignment.device.device_id %}">
+                                                {{ assignment.device.device_id }}
+                                            </a>
+                                            <br>
+                                            <small class="text-muted">{{ assignment.device.device_name }}</small>
+                                        </td>
+                                        <td>
+                                            {% if assignment.assigned_to_staff %}
+                                                <i class="fas fa-user text-primary"></i>
+                                                {{ assignment.assigned_to_staff.user.first_name }} {{ assignment.assigned_to_staff.user.last_name }}
+                                                <br>
+                                                <small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                                            {% elif assignment.assigned_to_department %}
+                                                <i class="fas fa-building text-info"></i>
+                                                {{ assignment.assigned_to_department.name }}
+                                            {% elif assignment.assigned_to_location %}
+                                                <i class="fas fa-map-marker text-success"></i>
+                                                {{ assignment.assigned_to_location.name }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% else %}info{% endif %}">
+                                                {{ assignment.get_assignment_type_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ assignment.assignment_date|default:"-" }}</td>
+                                        <td>
+                                            {% if assignment.expected_return_date %}
+                                                {{ assignment.expected_return_date }}
+                                                {% if assignment.is_active and assignment.expected_return_date < today %}
+                                                    <span class="badge badge-danger ml-1">Overdue</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignment.is_active %}
+                                                <span class="badge badge-success">Active</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                            {% if assignment.is_active %}
+                                                <a href="{% url 'inventory:assignment_edit' assignment.assignment_id %}" 
+                                                   class="btn btn-sm btn-outline-success">
+                                                    <i class="fas fa-edit"></i> Edit
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if page_obj.has_other_pages %}
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div>
+                                <small class="text-muted">
+                                    Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} 
+                                    of {{ page_obj.paginator.count }} results
+                                </small>
+                            </div>
+                            <nav>
+                                <ul class="pagination pagination-sm mb-0">
+                                    {% if page_obj.has_previous %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                                Previous
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    {% for num in page_obj.paginator.page_range %}
+                                        {% if page_obj.number == num %}
+                                            <li class="page-item active">
+                                                <span class="page-link">{{ num }}</span>
+                                            </li>
+                                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                                    {{ num }}
+                                                </a>
+                                            </li>
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if page_obj.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                                Next
+                                            </a>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No assignments found</h5>
+                        <p class="text-muted">Try adjusting your search criteria or filters.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="card shadow mb-4">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">Assignment Search</h5>
+                <p class="text-muted">Use the filters above to search for specific assignments.</p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Focus on search input
+    $('#q').focus();
+    
+    // Add clear filters button
+    if ($('#clear-filters').length === 0) {
+        $('.card-header .text-primary').parent().append(
+            '<a href="{% url "inventory:assignment_search" %}" class="btn btn-sm btn-outline-secondary" id="clear-filters">' +
+            '<i class="fas fa-times"></i> Clear Filters</a>'
+        );
+    }
+    
+    // Date validation
+    $('#date_from, #date_to').on('change', function() {
+        const fromDate = $('#date_from').val();
+        const toDate = $('#date_to').val();
+        
+        if (fromDate && toDate && fromDate > toDate) {
+            alert('From date cannot be later than To date');
+            $(this).val('');
+        }
+    });
+});
+</script>
+{% endblock %}

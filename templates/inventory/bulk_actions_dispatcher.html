@@ -1,0 +1,262 @@
+<!-- File location: D:\IT Inventory\inventory\templates\inventory\bulk_actions_dispatcher.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - BPS Inventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-tasks"></i> {{ title }}
+        </h1>
+        <a href="{% url 'inventory:device_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Select Bulk Action</h6>
+                </div>
+                <div class="card-body">
+                    <!-- Device Update Form -->
+                    <div class="bulk-action-section mb-4">
+                        <h5><i class="fas fa-edit text-primary"></i> Update Device Properties</h5>
+                        <p class="text-muted">Update status, condition, or location for multiple devices</p>
+                        <form method="post" class="border p-3 rounded">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="device_update">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Device IDs (comma-separated):</label>
+                                        <textarea name="device_ids" class="form-control" rows="3" 
+                                                placeholder="DEV001,DEV002,DEV003" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Update Field:</label>
+                                        <select name="update_field" class="form-control" required>
+                                            <option value="">Select field...</option>
+                                            <option value="status">Status</option>
+                                            <option value="condition">Condition</option>
+                                            <option value="current_location">Location</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>New Value:</label>
+                                        <input type="text" name="new_value" class="form-control" 
+                                               placeholder="New value" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Update Devices
+                            </button>
+                        </form>
+                    </div>
+
+                    <hr>
+
+                    <!-- Assignment Return Form -->
+                    <div class="bulk-action-section mb-4">
+                        <h5><i class="fas fa-undo text-success"></i> Return Assignments</h5>
+                        <p class="text-muted">Process returns for multiple assignments</p>
+                        <form method="post" class="border p-3 rounded">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="assignment_return">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Assignment IDs (comma-separated):</label>
+                                        <textarea name="assignment_ids" class="form-control" rows="3" 
+                                                placeholder="ASG001,ASG002,ASG003" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Return Date:</label>
+                                        <input type="date" name="return_date" class="form-control" 
+                                               value="{% now 'Y-m-d' %}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Return Notes:</label>
+                                        <textarea name="return_notes" class="form-control" rows="2" 
+                                                placeholder="Optional notes"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-check"></i> Process Returns
+                            </button>
+                        </form>
+                    </div>
+
+                    <hr>
+
+                    <!-- Device Assignment Form -->
+                    <div class="bulk-action-section mb-4">
+                        <h5><i class="fas fa-user-plus text-warning"></i> Assign Devices</h5>
+                        <p class="text-muted">Assign multiple devices to a staff member</p>
+                        <form method="post" class="border p-3 rounded">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="device_assignment">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Device IDs (comma-separated):</label>
+                                        <textarea name="device_ids" class="form-control" rows="3" 
+                                                placeholder="DEV001,DEV002,DEV003" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Staff Member ID:</label>
+                                        <input type="text" name="assigned_staff" class="form-control" 
+                                               placeholder="Staff ID" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Assignment Type:</label>
+                                        <select name="assignment_type" class="form-control">
+                                            <option value="temporary">Temporary</option>
+                                            <option value="permanent">Permanent</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-plus"></i> Assign Devices
+                            </button>
+                        </form>
+                    </div>
+
+                    <hr>
+
+                    <!-- Export Form -->
+                    <div class="bulk-action-section">
+                        <h5><i class="fas fa-download text-info"></i> Export Selected</h5>
+                        <p class="text-muted">Export selected items to CSV</p>
+                        <form method="post" class="border p-3 rounded">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="export_selected">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Item IDs (comma-separated):</label>
+                                        <textarea name="device_ids" class="form-control" rows="3" 
+                                                placeholder="DEV001,DEV002,DEV003" required></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Export Type:</label>
+                                        <select name="export_type" class="form-control">
+                                            <option value="devices">Devices</option>
+                                            <option value="assignments">Assignments</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-info">
+                                <i class="fas fa-file-csv"></i> Export to CSV
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Usage Instructions</h6>
+                </div>
+                <div class="card-body">
+                    <h6>Field Values Reference:</h6>
+                    
+                    <div class="mb-3">
+                        <strong>Status Values:</strong>
+                        <ul class="small">
+                            <li>ACTIVE</li>
+                            <li>INACTIVE</li>
+                            <li>MAINTENANCE</li>
+                            <li>ASSIGNED</li>
+                            <li>RETIRED</li>
+                            <li>LOST</li>
+                            <li>DAMAGED</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Condition Values:</strong>
+                        <ul class="small">
+                            <li>EXCELLENT</li>
+                            <li>GOOD</li>
+                            <li>FAIR</li>
+                            <li>POOR</li>
+                            <li>DAMAGED</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Location Value:</strong>
+                        <p class="small">Use the Location ID number (e.g., 1, 2, 3)</p>
+                    </div>
+
+                    <div class="alert alert-warning small">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Note:</strong> Separate multiple IDs with commas. Invalid IDs will be skipped.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Add form validation
+    $('form').on('submit', function(e) {
+        const textarea = $(this).find('textarea[name$="_ids"]');
+        const value = textarea.val().trim();
+        
+        if (!value) {
+            e.preventDefault();
+            alert('Please enter at least one ID.');
+            textarea.focus();
+            return false;
+        }
+        
+        // Validate ID format (basic check)
+        const ids = value.split(',');
+        for (let id of ids) {
+            if (!id.trim()) {
+                e.preventDefault();
+                alert('Please remove empty IDs (extra commas).');
+                textarea.focus();
+                return false;
+            }
+        }
+        
+        return true;
+    });
+});
+</script>
+{% endblock %>}
