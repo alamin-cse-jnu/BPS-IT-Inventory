@@ -183,7 +183,7 @@ class DeviceCategory(models.Model):
     def __str__(self):
         return self.name
 
-class DeviceSubcategory(models.Model):
+class DeviceSubCategory(models.Model):
     """Device subcategories under main categories"""
     category = models.ForeignKey(DeviceCategory, on_delete=models.CASCADE, related_name='subcategories')
     name = models.CharField(max_length=100)
@@ -202,7 +202,7 @@ class DeviceSubcategory(models.Model):
 
 class DeviceType(models.Model):
     """Specific device types under subcategories"""
-    subcategory = models.ForeignKey(DeviceSubcategory, on_delete=models.CASCADE, related_name='device_types')
+    subcategory = models.ForeignKey(DeviceSubCategory, on_delete=models.CASCADE, related_name='device_types')
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     specifications_template = models.JSONField(default=dict, blank=True, help_text="Template for device specifications")
@@ -246,7 +246,7 @@ class Device(models.Model):
     
     # Status and location
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
-    current_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='devices')
+    #current_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='devices')
     
     # Financial information
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -259,7 +259,63 @@ class Device(models.Model):
     warranty_provider = models.CharField(max_length=200, blank=True)
     
     # Technical specifications
-    specifications = models.JSONField(default=dict, blank=True, help_text="Device technical specifications")
+    #specifications = models.JSONField(default=dict, blank=True, help_text="Device technical specifications")
+    
+    # Technical specifications - individual fields 
+    processor = models.CharField(
+        max_length=200, 
+        blank=True, 
+        help_text="e.g., Intel Core i7-1165G7"
+    )
+    memory_ram = models.CharField(
+        max_length=100, 
+        blank=True, 
+        help_text="e.g., 16GB DDR4",
+        db_column='ram'  
+    )
+    storage_capacity = models.CharField(
+        max_length=100, 
+        blank=True, 
+        help_text="e.g., 512GB SSD",
+        db_column='storage'  
+    )
+    operating_system = models.CharField(
+        max_length=100, 
+        blank=True, 
+        help_text="e.g., Windows 11 Pro"
+    )
+    
+    # Device condition for forms
+    CONDITION_CHOICES = [
+        ('EXCELLENT', 'Excellent'),
+        ('GOOD', 'Good'),
+        ('FAIR', 'Fair'),
+        ('POOR', 'Poor'),
+        ('DAMAGED', 'Damaged'),
+        ('DEFECTIVE', 'Defective'),
+    ]
+    
+    device_condition = models.CharField(
+        max_length=20, 
+        choices=CONDITION_CHOICES, 
+        default='GOOD',
+        db_column='condition'  
+    )
+    
+    # Location field for forms
+    location = models.ForeignKey(
+        Location, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='assigned_devices'
+    )
+    
+    # Critical device flag
+    is_critical = models.BooleanField(
+        default=False, 
+        help_text="Mark as critical infrastructure device"
+    )
     
     # Lifecycle information
     expected_life_years = models.PositiveIntegerField(null=True, blank=True, help_text="Expected useful life in years")
@@ -683,3 +739,273 @@ class Notification(models.Model):
     @property
     def is_read(self):
         return self.status == 'READ' or self.read_at is not None
+
+# ================================
+# 10. AssignmentHistory MODELS
+# ================================
+
+class AssignmentHistory(models.Model):
+    """Track changes to device assignments"""
+    CHANGE_TYPES = [
+        ('CREATED', 'Assignment Created'),
+        ('MODIFIED', 'Assignment Modified'),
+        ('RETURNED', 'Device Returned'),
+        ('TRANSFERRED', 'Assignment Transferred'),
+        ('CANCELLED', 'Assignment Cancelled'),
+        ('EXPIRED', 'Assignment Expired'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    assignment = models.ForeignKey(
+        Assignment, 
+        on_delete=models.CASCADE, 
+        related_name='assignment_history'
+    )
+    changed_by = models.ForeignKey(
+        User, 
+        on_delete=models.PROTECT, 
+        related_name='assignment_changes'
+    )
+    change_type = models.CharField(max_length=20, choices=CHANGE_TYPES)
+    
+    # Store before and after values
+    old_values = models.JSONField(
+        default=dict, 
+        blank=True, 
+        help_text="Previous assignment values"
+    )
+    new_values = models.JSONField(
+        default=dict, 
+        blank=True, 
+        help_text="New assignment values"
+    )
+    
+    # Change details
+    reason = models.CharField(max_length=200, blank=True)
+    notes = models.TextField(blank=True)
+    
+    # Metadata
+    timestamp = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['assignment', '-timestamp']),
+            models.Index(fields=['changed_by', '-timestamp']),
+            models.Index(fields=['change_type', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.assignment.assignment_id} - {self.get_change_type_display()} by {self.changed_by.username}"
+
+    @property
+    def change_summary(self):
+        """Return a human-readable summary of changes"""
+        if self.change_type == 'CREATED':
+            return f"Assignment created for {self.assignment.device.device_name}"
+        elif self.change_type == 'MODIFIED':
+            changes = []
+            for field, new_value in self.new_values.items():
+                old_value = self.old_values.get(field, 'None')
+                if old_value != new_value:
+                    changes.append(f"{field}: {old_value} → {new_value}")
+            return "; ".join(changes) if changes else "No specific changes recorded"
+        elif self.change_type == 'RETURNED':
+            return f"Device {self.assignment.device.device_name} returned"
+        elif self.change_type == 'TRANSFERRED':
+            return f"Assignment transferred"
+        return f"{self.get_change_type_display()}"
+
+# ================================
+# 11. ServiceRequest MODELS
+# ================================
+
+class ServiceRequest(models.Model):
+    """Service requests for devices - repairs, maintenance, etc."""
+    SERVICE_TYPES = [
+        ('REPAIR', 'Repair Request'),
+        ('MAINTENANCE', 'Preventive Maintenance'),
+        ('UPGRADE', 'Hardware/Software Upgrade'),
+        ('REPLACEMENT', 'Component Replacement'),
+        ('CLEANING', 'Device Cleaning'),
+        ('INSPECTION', 'Safety Inspection'),
+        ('CALIBRATION', 'Device Calibration'),
+        ('OTHER', 'Other Service'),
+    ]
+
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('ON_HOLD', 'On Hold'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    PRIORITY_CHOICES = [
+        ('LOW', 'Low Priority'),
+        ('MEDIUM', 'Medium Priority'),
+        ('HIGH', 'High Priority'),
+        ('URGENT', 'Urgent'),
+        ('CRITICAL', 'Critical'),
+    ]
+
+    # Primary identification
+    request_id = models.CharField(
+        max_length=50, 
+        unique=True, 
+        help_text="Auto-generated service request ID"
+    )
+    
+    # Related objects
+    device = models.ForeignKey(
+        Device, 
+        on_delete=models.CASCADE, 
+        related_name='service_requests'
+    )
+    requested_by = models.ForeignKey(
+        User, 
+        on_delete=models.PROTECT, 
+        related_name='requested_services'
+    )
+    assigned_to = models.ForeignKey(
+        Staff, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='assigned_service_requests'
+    )
+    
+    # Service details
+    service_type = models.CharField(max_length=20, choices=SERVICE_TYPES)
+    title = models.CharField(max_length=200)
+    description = models.TextField(help_text="Detailed description of the service required")
+    
+    # Request metadata
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='MEDIUM')
+    
+    # Scheduling
+    requested_date = models.DateField(
+        help_text="Preferred date for service"
+    )
+    scheduled_date = models.DateField(null=True, blank=True)
+    completed_date = models.DateField(null=True, blank=True)
+    
+    # Cost and approval
+    estimated_cost = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True
+    )
+    actual_cost = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True
+    )
+    approved_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='approved_service_requests'
+    )
+    approval_date = models.DateTimeField(null=True, blank=True)
+    
+    # Additional details
+    vendor = models.ForeignKey(
+        Vendor, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        help_text="External service provider if applicable"
+    )
+    work_notes = models.TextField(
+        blank=True, 
+        help_text="Notes from technician performing the work"
+    )
+    completion_notes = models.TextField(
+        blank=True, 
+        help_text="Final notes upon completion"
+    )
+    
+    # Attachments and references
+    attachments = models.JSONField(
+        default=list, 
+        blank=True, 
+        help_text="List of attachment file references"
+    )
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User, 
+        on_delete=models.PROTECT, 
+        related_name='created_service_requests'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['device', '-created_at']),
+            models.Index(fields=['status', 'priority']),
+            models.Index(fields=['requested_date']),
+            models.Index(fields=['assigned_to', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.request_id} - {self.title}"
+
+    def save(self, *args, **kwargs):
+        if not self.request_id:
+            # Auto-generate request ID
+            from django.utils import timezone
+            current_year = timezone.now().year
+            count = ServiceRequest.objects.filter(
+                created_at__year=current_year
+            ).count() + 1
+            self.request_id = f"SR-{current_year}-{count:04d}"
+        super().save(*args, **kwargs)
+
+    @property
+    def is_overdue(self):
+        """Check if service request is overdue"""
+        if self.status not in ['COMPLETED', 'CANCELLED', 'REJECTED']:
+            if self.scheduled_date and self.scheduled_date < timezone.now().date():
+                return True
+        return False
+
+    @property
+    def days_pending(self):
+        """Calculate days since request was created"""
+        return (timezone.now().date() - self.created_at.date()).days
+
+    def get_status_color(self):
+        """Return Bootstrap color class for status"""
+        status_colors = {
+            'PENDING': 'warning',
+            'APPROVED': 'info',
+            'IN_PROGRESS': 'primary',
+            'ON_HOLD': 'secondary',
+            'COMPLETED': 'success',
+            'CANCELLED': 'dark',
+            'REJECTED': 'danger',
+        }
+        return status_colors.get(self.status, 'secondary')
+
+    def get_priority_color(self):
+        """Return Bootstrap color class for priority"""
+        priority_colors = {
+            'LOW': 'success',
+            'MEDIUM': 'info',
+            'HIGH': 'warning',
+            'URGENT': 'danger',
+            'CRITICAL': 'dark',
+        }
+        return priority_colors.get(self.priority, 'secondary')

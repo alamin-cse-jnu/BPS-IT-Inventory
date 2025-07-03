@@ -15,7 +15,7 @@ from .models import (
     # Core models
     Device, Staff, Department, Location, Assignment,
     # Category models
-    DeviceCategory, DeviceSubcategory, DeviceType,
+    DeviceCategory, DeviceSubCategory, DeviceType,
     # Support models
     Vendor, MaintenanceSchedule, AssignmentHistory,
     AuditLog, ServiceRequest, Notification
@@ -147,8 +147,8 @@ class MaintenanceInline(admin.TabularInline):
     )
 
 
-class DeviceSubcategoryInline(admin.TabularInline):
-    model = DeviceSubcategory
+class DeviceSubCategoryInline(admin.TabularInline):
+    model = DeviceSubCategory
     extra = 0
     fields = ('name', 'description', 'is_active')
 
@@ -169,7 +169,7 @@ class DeviceCategoryAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'description')
     readonly_fields = ('created_at', 'updated_at')
-    inlines = [DeviceSubcategoryInline]
+    inlines = [DeviceSubCategoryInline]
     
     fieldsets = (
         (None, {
@@ -186,8 +186,8 @@ class DeviceCategoryAdmin(admin.ModelAdmin):
     subcategory_count.short_description = 'Subcategories'
 
 
-@admin.register(DeviceSubcategory)
-class DeviceSubcategoryAdmin(admin.ModelAdmin):
+@admin.register(DeviceSubCategory)
+class DeviceSubCategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'device_type_count', 'is_active', 'created_at')
     list_filter = ('category', 'is_active', 'created_at')
     search_fields = ('name', 'description', 'category__name')

@@ -9,7 +9,7 @@ import re
 from .models import (
     Device, Assignment, Staff, Department, Location, Vendor,
     DeviceCategory, DeviceType, DeviceSubCategory, MaintenanceSchedule,
-    Building, Room, AuditLog
+    Building, Room, AuditLog, Floor, Room
 )
 
 
@@ -18,16 +18,16 @@ from .models import (
 # ================================
 
 class DeviceForm(forms.ModelForm):
-    """Comprehensive form for creating and editing devices"""
+    """Comprehensive form for creating and editing devices - CORRECTED FIELD MAPPING"""
     
     class Meta:
         model = Device
         fields = [
             'device_id', 'asset_tag', 'device_name', 'device_type', 'brand', 'model',
-            'serial_number', 'processor', 'ram', 'storage', 'operating_system',
+            'serial_number', 'processor', 'memory_ram', 'storage_capacity', 'operating_system',
             'purchase_date', 'purchase_price', 'vendor', 'warranty_start_date',
-            'warranty_end_date', 'condition', 'status', 'location', 'notes',
-            'specifications', 'is_critical'
+            'warranty_end_date', 'device_condition', 'status', 'location', 'notes',
+            'is_critical'
         ]
         
         widgets = {
@@ -51,11 +51,11 @@ class DeviceForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'e.g., Intel Core i7-1165G7'
             }),
-            'ram': forms.TextInput(attrs={
+            'memory_ram': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'e.g., 16GB DDR4'
             }),
-            'storage': forms.TextInput(attrs={
+            'storage_capacity': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'e.g., 512GB SSD'
             }),
@@ -81,166 +81,226 @@ class DeviceForm(forms.ModelForm):
                 'class': 'form-control',
                 'type': 'date'
             }),
-            'condition': forms.Select(attrs={'class': 'form-control'}),
+            'device_condition': forms.Select(attrs={'class': 'form-control'}),
             'status': forms.Select(attrs={'class': 'form-control'}),
             'location': forms.Select(attrs={'class': 'form-control'}),
             'notes': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': 'Additional notes about the device...'
+                'placeholder': 'Additional notes about this device'
             }),
-            'specifications': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 4,
-                'placeholder': 'Detailed technical specifications...'
-            }),
-            'is_critical': forms.CheckboxInput(attrs={
-                'class': 'form-check-input'
-            })
+            'is_critical': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
-    
+        
+        labels = {
+            'device_id': 'Device ID',
+            'asset_tag': 'Asset Tag',
+            'device_name': 'Device Name',
+            'device_type': 'Device Type',
+            'brand': 'Brand/Manufacturer',
+            'model': 'Model',
+            'serial_number': 'Serial Number',
+            'processor': 'Processor/CPU',
+            'memory_ram': 'Memory (RAM)',
+            'storage_capacity': 'Storage',
+            'operating_system': 'Operating System',
+            'purchase_date': 'Purchase Date',
+            'purchase_price': 'Purchase Price',
+            'vendor': 'Vendor/Supplier',
+            'warranty_start_date': 'Warranty Start Date',
+            'warranty_end_date': 'Warranty End Date',
+            'device_condition': 'Physical Condition',
+            'status': 'Current Status',
+            'location': 'Current Location',
+            'notes': 'Additional Notes',
+            'is_critical': 'Critical Infrastructure Device'
+        }
+        
+        help_texts = {
+            'device_id': 'Unique identifier for this device (auto-generated if left blank)',
+            'asset_tag': 'Physical asset tag number attached to the device',
+            'memory_ram': 'RAM specification (e.g., 16GB DDR4)',
+            'storage_capacity': 'Storage specification (e.g., 512GB SSD)',
+            'is_critical': 'Mark this device as critical infrastructure'
+        }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Make certain fields required
-        self.fields['device_id'].required = True
+        # Set required fields
         self.fields['device_name'].required = True
         self.fields['device_type'].required = True
         
-        # Set queryset for related fields
-        self.fields['vendor'].queryset = Vendor.objects.filter(is_active=True)
-        self.fields['location'].queryset = Location.objects.filter(is_active=True)
-        self.fields['device_type'].queryset = DeviceType.objects.filter(is_active=True)
+        # Filter active device types only
+        if 'device_type' in self.fields:
+            self.fields['device_type'].queryset = DeviceType.objects.filter(
+                is_active=True
+            ).select_related('subcategory__category')
         
-        # Add help text
-        self.fields['device_id'].help_text = "Unique identifier for the device"
-        self.fields['asset_tag'].help_text = "Organization's asset tag number"
-        self.fields['warranty_end_date'].help_text = "When warranty coverage expires"
-    
+        # Filter active vendors only
+        if 'vendor' in self.fields:
+            self.fields['vendor'].queryset = Vendor.objects.filter(is_active=True)
+        
+        # Filter active locations only
+        if 'location' in self.fields:
+            self.fields['location'].queryset = Location.objects.filter(is_active=True)
+        
+        # Add CSS classes for better styling
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+            elif not field.widget.attrs.get('class'):
+                field.widget.attrs['class'] = 'form-control'
+
     def clean_device_id(self):
+        """Validate device ID format and uniqueness"""
         device_id = self.cleaned_data.get('device_id')
+        
         if device_id:
-            device_id = device_id.upper().strip()
+            # Check format (BPS-XXXX-XXX pattern)
+            import re
+            if not re.match(r'^BPS-[A-Z0-9]+-[A-Z0-9]+$', device_id):
+                raise ValidationError(
+                    "Device ID must follow format: BPS-XXXX-XXX (e.g., BPS-LT-001)"
+                )
             
-            # Check for duplicates
-            existing = Device.objects.filter(device_id=device_id)
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError(f"Device ID '{device_id}' already exists.")
+            # Check uniqueness
+            if Device.objects.filter(device_id=device_id).exclude(
+                pk=self.instance.pk if self.instance else None
+            ).exists():
+                raise ValidationError("A device with this ID already exists.")
         
         return device_id
-    
+
+    def clean_asset_tag(self):
+        """Validate asset tag uniqueness"""
+        asset_tag = self.cleaned_data.get('asset_tag')
+        
+        if asset_tag:
+            if Device.objects.filter(asset_tag=asset_tag).exclude(
+                pk=self.instance.pk if self.instance else None
+            ).exists():
+                raise ValidationError("A device with this asset tag already exists.")
+        
+        return asset_tag
+
     def clean_serial_number(self):
+        """Validate serial number"""
         serial_number = self.cleaned_data.get('serial_number')
+        
         if serial_number:
-            serial_number = serial_number.strip()
+            # Check for duplicates within same brand/model
+            brand = self.cleaned_data.get('brand')
+            model = self.cleaned_data.get('model')
             
-            # Check for duplicates if provided
-            existing = Device.objects.filter(serial_number=serial_number)
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError(f"Serial number '{serial_number}' already exists.")
+            if brand and model:
+                existing = Device.objects.filter(
+                    serial_number=serial_number,
+                    brand=brand,
+                    model=model
+                ).exclude(
+                    pk=self.instance.pk if self.instance else None
+                )
+                
+                if existing.exists():
+                    raise ValidationError(
+                        f"A {brand} {model} with this serial number already exists."
+                    )
         
         return serial_number
-    
+
+    def clean_purchase_price(self):
+        """Validate purchase price"""
+        price = self.cleaned_data.get('purchase_price')
+        
+        if price is not None and price < 0:
+            raise ValidationError("Purchase price cannot be negative.")
+        
+        return price
+
+    def clean_warranty_end_date(self):
+        """Validate warranty end date"""
+        start_date = self.cleaned_data.get('warranty_start_date')
+        end_date = self.cleaned_data.get('warranty_end_date')
+        
+        if start_date and end_date:
+            if end_date < start_date:
+                raise ValidationError(
+                    "Warranty end date cannot be before warranty start date."
+                )
+        
+        return end_date
+
     def clean(self):
+        """Perform cross-field validation"""
         cleaned_data = super().clean()
+        
+        # Validate purchase date
         purchase_date = cleaned_data.get('purchase_date')
-        warranty_start_date = cleaned_data.get('warranty_start_date')
-        warranty_end_date = cleaned_data.get('warranty_end_date')
+        if purchase_date:
+            from datetime import date
+            if purchase_date > date.today():
+                raise ValidationError({
+                    'purchase_date': "Purchase date cannot be in the future."
+                })
         
-        # Validate date relationships
-        if warranty_start_date and warranty_end_date:
-            if warranty_start_date >= warranty_end_date:
-                raise ValidationError("Warranty end date must be after warranty start date.")
+        # Validate warranty dates
+        warranty_start = cleaned_data.get('warranty_start_date')
+        warranty_end = cleaned_data.get('warranty_end_date')
         
-        if purchase_date and warranty_start_date:
-            if warranty_start_date < purchase_date:
-                raise ValidationError("Warranty start date cannot be before purchase date.")
+        if warranty_start and warranty_end:
+            if warranty_end <= warranty_start:
+                raise ValidationError({
+                    'warranty_end_date': "Warranty end date must be after start date."
+                })
         
         return cleaned_data
 
-
-class DeviceSearchForm(forms.Form):
-    """Form for searching and filtering devices"""
-    
-    search = forms.CharField(
-        max_length=200,
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Search by device ID, name, brand, model, or serial number...'
-        })
-    )
-    
-    status = forms.ChoiceField(
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    condition = forms.ChoiceField(
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    device_type = forms.ModelChoiceField(
-        queryset=DeviceType.objects.filter(is_active=True),
-        required=False,
-        empty_label="All Types",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    location = forms.ModelChoiceField(
-        queryset=Location.objects.filter(is_active=True),
-        required=False,
-        empty_label="All Locations",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    vendor = forms.ModelChoiceField(
-        queryset=Vendor.objects.filter(is_active=True),
-        required=False,
-        empty_label="All Vendors",
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    warranty_status = forms.ChoiceField(
-        choices=[
-            ('', 'All'),
-            ('active', 'Under Warranty'),
-            ('expired', 'Warranty Expired'),
-            ('expiring_soon', 'Expiring Soon (30 days)')
-        ],
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-control'})
-    )
-    
-    purchase_date_from = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={
-            'class': 'form-control',
-            'type': 'date'
-        })
-    )
-    
-    purchase_date_to = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={
-            'class': 'form-control',
-            'type': 'date'
-        })
-    )
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def save(self, commit=True):
+        """Override save to auto-generate device ID if needed"""
+        device = super().save(commit=False)
         
-        # Dynamic choices for status and condition
-        self.fields['status'].choices = [('', 'All Status')] + Device.STATUS_CHOICES
-        self.fields['condition'].choices = [('', 'All Conditions')] + Device.CONDITION_CHOICES
+        # Auto-generate device ID if not provided
+        if not device.device_id:
+            device.device_id = self._generate_device_id()
+        
+        if commit:
+            device.save()
+            self.save_m2m()
+        
+        return device
+
+    def _generate_device_id(self):
+        """Generate a unique device ID"""
+        from django.utils import timezone
+        import random
+        
+        # Get device type prefix
+        device_type = self.cleaned_data.get('device_type')
+        if device_type and hasattr(device_type, 'code'):
+            type_code = device_type.code.upper()
+        else:
+            type_code = 'DEV'
+        
+        # Generate ID with year and sequence
+        current_year = timezone.now().year
+        
+        # Find next sequence number
+        existing_devices = Device.objects.filter(
+            device_id__startswith=f'BPS-{type_code}-{current_year}'
+        ).count()
+        
+        sequence = existing_devices + 1
+        
+        # Generate device ID
+        device_id = f'BPS-{type_code}-{current_year}-{sequence:03d}'
+        
+        # Ensure uniqueness
+        while Device.objects.filter(device_id=device_id).exists():
+            sequence += 1
+            device_id = f'BPS-{type_code}-{current_year}-{sequence:03d}'
+        
+        return device_id
 
 
 # ================================
@@ -600,70 +660,138 @@ class StaffForm(forms.ModelForm):
 # ================================
 
 class LocationForm(forms.ModelForm):
-    """Form for creating and editing locations"""
+    """Form for creating and editing locations - FIXED FIELD MAPPING"""
     
     class Meta:
         model = Location
-        fields = [
-            'name', 'location_type', 'building', 'floor', 'room_number',
-            'description', 'contact_person', 'phone', 'email', 'coordinates',
-            'environmental_conditions', 'is_active'
-        ]
+        fields = ['building', 'floor', 'department', 'room', 'description', 'is_active']
         
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'location_type': forms.Select(attrs={'class': 'form-control'}),
-            'building': forms.TextInput(attrs={'class': 'form-control'}),
-            'floor': forms.TextInput(attrs={'class': 'form-control'}),
-            'room_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'building': forms.Select(attrs={'class': 'form-control'}),
+            'floor': forms.Select(attrs={'class': 'form-control'}),
+            'department': forms.Select(attrs={'class': 'form-control'}),
+            'room': forms.Select(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={
                 'class': 'form-control',
-                'rows': 3
-            }),
-            'contact_person': forms.TextInput(attrs={'class': 'form-control'}),
-            'phone': forms.TextInput(attrs={'class': 'form-control'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control'}),
-            'coordinates': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Latitude, Longitude'
-            }),
-            'environmental_conditions': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 2
+                'rows': 3,
+                'placeholder': 'Additional description of this location'
             }),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Set required fields
+        self.fields['building'].required = True
+        self.fields['floor'].required = True
+        self.fields['department'].required = True
+        self.fields['room'].required = False
+        
+        # Filter active records only
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+        self.fields['floor'].queryset = Floor.objects.filter(is_active=True)
+        self.fields['department'].queryset = Department.objects.filter(is_active=True)
+        self.fields['room'].queryset = Room.objects.filter(is_active=True)
+
+    def clean(self):
+        """Basic validation"""
+        cleaned_data = super().clean()
+        
+        building = cleaned_data.get('building')
+        floor = cleaned_data.get('floor')
+        department = cleaned_data.get('department')
+        room = cleaned_data.get('room')
+        
+        # Check for duplicate locations
+        if building and floor and department:
+            existing_location = Location.objects.filter(
+                building=building,
+                floor=floor,
+                department=department,
+                room=room
+            )
+            
+            if self.instance.pk:
+                existing_location = existing_location.exclude(pk=self.instance.pk)
+            
+            if existing_location.exists():
+                raise ValidationError('A location with this combination already exists.')
+        
+        return cleaned_data  
+
 
 class DepartmentForm(forms.ModelForm):
-    """Form for creating and editing departments"""
+    """Form for creating and editing departments - FIXED FIELD MAPPING"""
     
     class Meta:
         model = Department
         fields = [
-            'name', 'code', 'description', 'head_of_department',
-            'phone', 'email', 'location'
+            'floor', 'name', 'code', 'head_of_department', 
+            'contact_email', 'contact_phone', 'is_active'
         ]
         
         widgets = {
+            'floor': forms.Select(attrs={'class': 'form-control'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 3
-            }),
-            'head_of_department': forms.Select(attrs={'class': 'form-control'}),
-            'phone': forms.TextInput(attrs={'class': 'form-control'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control'}),
-            'location': forms.Select(attrs={'class': 'form-control'})
+            'head_of_department': forms.TextInput(attrs={'class': 'form-control'}),
+            'contact_email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'contact_phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
-    
+        
+        labels = {
+            'floor': 'Floor',
+            'name': 'Department Name',
+            'code': 'Department Code',
+            'head_of_department': 'Head of Department',
+            'contact_email': 'Contact Email',
+            'contact_phone': 'Contact Phone',
+            'is_active': 'Active Department'
+        }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['head_of_department'].queryset = Staff.objects.filter(is_active=True)
-        self.fields['location'].queryset = Location.objects.filter(is_active=True)
-        self.fields['head_of_department'].required = False
-        self.fields['location'].required = False
+        
+        # Set required fields
+        self.fields['floor'].required = True
+        self.fields['name'].required = True
+        self.fields['code'].required = True
+        
+        # Filter active floors only
+        self.fields['floor'].queryset = Floor.objects.filter(is_active=True)
+
+    def clean_code(self):
+        """Validate department code uniqueness within floor"""
+        code = self.cleaned_data.get('code', '').upper()
+        floor = self.cleaned_data.get('floor')
+        
+        if code and floor:
+            existing = Department.objects.filter(floor=floor, code=code)
+            
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError("This department code already exists on the selected floor.")
+        
+        return code
+
+    def clean(self):
+        """Additional validation"""
+        cleaned_data = super().clean()
+        
+        # Validate email format if provided
+        email = cleaned_data.get('contact_email')
+        if email:
+            try:
+                from django.core.validators import validate_email
+                validate_email(email)
+            except ValidationError:
+                raise ValidationError({'contact_email': 'Please enter a valid email address.'})
+        
+        return cleaned_data
 
 
 # ================================
@@ -701,83 +829,174 @@ class VendorForm(forms.ModelForm):
 # ================================
 
 class DeviceCategoryForm(forms.ModelForm):
-    """Form for device categories"""
+    """Form for device categories - FIXED FIELD MAPPING"""
     
     class Meta:
         model = DeviceCategory
-        fields = ['name', 'category_type', 'description', 'icon', 'is_active']
+        fields = ['name', 'description', 'is_active']
         
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'category_type': forms.Select(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'icon': forms.TextInput(attrs={
+            'name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'e.g., fas fa-laptop'
+                'placeholder': 'Enter category name (e.g., Computing Devices)'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control', 
+                'rows': 3,
+                'placeholder': 'Describe this device category'
             }),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
+        
+        labels = {
+            'name': 'Category Name',
+            'description': 'Description',
+            'is_active': 'Active Category'
+        }
+        
+        help_texts = {
+            'name': 'Enter a unique name for this device category',
+            'description': 'Provide a detailed description of this category',
+            'is_active': 'Uncheck to disable this category'
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Set required fields
+        self.fields['name'].required = True
+        self.fields['description'].required = False
+
+    def clean_name(self):
+        """Validate category name uniqueness"""
+        name = self.cleaned_data.get('name', '').strip()
+        
+        if name:
+            existing = DeviceCategory.objects.filter(name__iexact=name)
+            
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError("A device category with this name already exists.")
+        
+        return name
+
+    def clean(self):
+        """Additional validation"""
+        cleaned_data = super().clean()
+        
+        name = cleaned_data.get('name')
+        if name and len(name.strip()) < 2:
+            raise ValidationError({'name': 'Category name must be at least 2 characters long.'})
+        
+        return cleaned_data
 
 
 class DeviceSubCategoryForm(forms.ModelForm):
-    """Form for device subcategories"""
+    """Form for device subcategories - FIXED FIELD MAPPING"""
     
     class Meta:
         model = DeviceSubCategory
-        fields = ['category', 'name', 'code', 'description', 'is_active']
+        fields = ['category', 'name', 'description', 'is_active']
         
         widgets = {
             'category': forms.Select(attrs={'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter subcategory name (e.g., Laptops)'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control', 
+                'rows': 3,
+                'placeholder': 'Describe this device subcategory'
+            }),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
-    
-    def clean_code(self):
-        code = self.cleaned_data.get('code')
+        
+        labels = {
+            'category': 'Device Category',
+            'name': 'Subcategory Name',
+            'description': 'Description',
+            'is_active': 'Active Subcategory'
+        }
+        
+        help_texts = {
+            'category': 'Select the parent device category',
+            'name': 'Enter a unique name for this subcategory within the selected category',
+            'description': 'Provide a detailed description of this subcategory',
+            'is_active': 'Uncheck to disable this subcategory'
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Set required fields
+        self.fields['category'].required = True
+        self.fields['name'].required = True
+        self.fields['description'].required = False
+        
+        # Filter active categories only
+        self.fields['category'].queryset = DeviceCategory.objects.filter(is_active=True)
+
+    def clean_name(self):
+        """Validate subcategory name uniqueness within category"""
+        name = self.cleaned_data.get('name', '').strip()
         category = self.cleaned_data.get('category')
         
-        if code and category:
+        if name and category:
             existing = DeviceSubCategory.objects.filter(
                 category=category,
-                code=code
+                name__iexact=name
             )
             
             if self.instance.pk:
                 existing = existing.exclude(pk=self.instance.pk)
             
             if existing.exists():
-                raise ValidationError(f"Code '{code}' already exists in this category.")
+                raise ValidationError(f"A subcategory with name '{name}' already exists in this category.")
         
-        return code
+        return name
+
+    def clean(self):
+        """Additional validation"""
+        cleaned_data = super().clean()
+        
+        name = cleaned_data.get('name')
+        if name and len(name.strip()) < 2:
+            raise ValidationError({'name': 'Subcategory name must be at least 2 characters long.'})
+        
+        return cleaned_data
 
 
 class DeviceTypeForm(forms.ModelForm):
-    """Form for device types"""
+   """Form for device types - FIXED FIELD MAPPING"""
 
-    class Meta:
-        model = DeviceType
-        fields = ['subcategory', 'name', 'code', 'description', 'is_active']
+   class Meta:
+       model = DeviceType
+       fields = ['subcategory', 'name', 'description', 'specifications_template', 'is_active']
 
-        widgets = {
-            'subcategory': forms.Select(attrs={'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
+       widgets = {
+           'subcategory': forms.Select(attrs={'class': 'form-control'}),
+           'name': forms.TextInput(attrs={'class': 'form-control'}),
+           'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+           'specifications_template': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+           'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+       }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+   def __init__(self, *args, **kwargs):
+       super().__init__(*args, **kwargs)
 
-        # Add placeholders for better UX
-        self.fields['name'].widget.attrs['placeholder'] = 'Enter device type name'
-        self.fields['code'].widget.attrs['placeholder'] = 'Enter unique code'
-        self.fields['description'].widget.attrs['placeholder'] = 'Provide a description'
+       # Add placeholders for better UX
+       self.fields['name'].widget.attrs['placeholder'] = 'Enter device type name'
+       self.fields['description'].widget.attrs['placeholder'] = 'Provide a description'
+       self.fields['specifications_template'].widget.attrs['placeholder'] = 'JSON format: {"key": "value"}'
 
-        # Custom label override
-        self.fields['is_active'].label = "Is this device type currently active?"
+       # Custom label override
+       self.fields['is_active'].label = "Is this device type currently active?"
+       
+       # Filter active subcategories only
+       self.fields['subcategory'].queryset = DeviceSubCategory.objects.filter(is_active=True)
 
 
 # ================================
@@ -785,71 +1004,37 @@ class DeviceTypeForm(forms.ModelForm):
 # ================================
 
 class MaintenanceScheduleForm(forms.ModelForm):
-    """Form for creating and scheduling maintenance"""
-    
-    class Meta:
-        model = MaintenanceSchedule
-        fields = [
-            'device', 'maintenance_type', 'vendor', 'scheduled_date',
-            'estimated_duration', 'description', 'cost_estimate',
-            'priority', 'is_recurring', 'recurrence_interval'
-        ]
-        
-        widgets = {
-            'device': forms.Select(attrs={'class': 'form-control'}),
-            'maintenance_type': forms.Select(attrs={'class': 'form-control'}),
-            'vendor': forms.Select(attrs={'class': 'form-control'}),
-            'scheduled_date': forms.DateTimeInput(attrs={
-                'class': 'form-control',
-                'type': 'datetime-local'
-            }),
-            'estimated_duration': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1',
-                'placeholder': 'Hours'
-            }),
-            'description': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 3,
-                'placeholder': 'Maintenance details...'
-            }),
-            'cost_estimate': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.01',
-                'min': '0'
-            }),
-            'priority': forms.Select(attrs={'class': 'form-control'}),
-            'is_recurring': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'recurrence_interval': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '1',
-                'placeholder': 'Days'
-            })
-        }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['device'].queryset = Device.objects.all()
-        self.fields['vendor'].queryset = Vendor.objects.filter(
-            vendor_type__in=['SERVICE_PROVIDER', 'MAINTENANCE_CONTRACTOR'],
-            is_active=True
-        )
-        self.fields['vendor'].required = False
-        self.fields['recurrence_interval'].required = False
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        is_recurring = cleaned_data.get('is_recurring')
-        recurrence_interval = cleaned_data.get('recurrence_interval')
-        scheduled_date = cleaned_data.get('scheduled_date')
-        
-        if is_recurring and not recurrence_interval:
-            raise ValidationError("Recurrence interval is required for recurring maintenance.")
-        
-        if scheduled_date and scheduled_date < timezone.now():
-            raise ValidationError("Scheduled date cannot be in the past.")
-        
-        return cleaned_data
+   """Form for maintenance scheduling - FIXED FIELD MAPPING"""
+   
+   class Meta:
+       model = MaintenanceSchedule
+       fields = [
+           'device', 'maintenance_type', 'description', 'vendor', 'status'
+       ]
+       
+       widgets = {
+           'device': forms.Select(attrs={'class': 'form-control'}),
+           'maintenance_type': forms.Select(attrs={'class': 'form-control'}),
+           'description': forms.Textarea(attrs={
+               'class': 'form-control',
+               'rows': 3,
+               'placeholder': 'Describe the maintenance work required'
+           }),
+           'vendor': forms.Select(attrs={'class': 'form-control'}),
+           'status': forms.Select(attrs={'class': 'form-control'})
+       }
+
+   def __init__(self, *args, **kwargs):
+       super().__init__(*args, **kwargs)
+       
+       # Filter active devices and vendors
+       self.fields['device'].queryset = Device.objects.filter(status__in=['AVAILABLE', 'ASSIGNED', 'MAINTENANCE'])
+       self.fields['vendor'].queryset = Vendor.objects.filter(is_active=True)
+       
+       # Set required fields
+       self.fields['device'].required = True
+       self.fields['maintenance_type'].required = True
+       self.fields['description'].required = True
 
 
 # ================================

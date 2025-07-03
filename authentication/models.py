@@ -419,3 +419,479 @@ class APIToken(models.Model):
         if self.expires_at:
             return timezone.now() > self.expires_at
         return False
+
+# ================================
+# SecurityQuestion Models
+# ================================
+    
+class SecurityQuestion(models.Model):
+    """Security questions for password recovery and additional authentication"""
+    
+    PREDEFINED_QUESTIONS = [
+        ('mother_maiden', 'What is your mother\'s maiden name?'),
+        ('first_pet', 'What was the name of your first pet?'),
+        ('birth_city', 'What city were you born in?'),
+        ('first_school', 'What was the name of your first school?'),
+        ('favorite_teacher', 'What was the name of your favorite teacher?'),
+        ('childhood_friend', 'What was the name of your childhood best friend?'),
+        ('first_car', 'What was the make of your first car?'),
+        ('street_grew_up', 'What street did you grow up on?'),
+        ('custom', 'Custom Question'),
+    ]
+
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='security_questions'
+    )
+    question_type = models.CharField(
+        max_length=20, 
+        choices=PREDEFINED_QUESTIONS
+    )
+    custom_question = models.CharField(
+        max_length=200, 
+        blank=True, 
+        help_text="Used when question_type is 'custom'"
+    )
+    answer_hash = models.CharField(
+        max_length=128, 
+        help_text="Hashed security answer"
+    )
+    
+    # Metadata
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_used = models.DateTimeField(null=True, blank=True)
+    usage_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['user', '-created_at']
+        unique_together = ['user', 'question_type']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_question_display()}"
+
+    def get_question_display(self):
+        """Return the actual question text"""
+        if self.question_type == 'custom':
+            return self.custom_question
+        return dict(self.PREDEFINED_QUESTIONS).get(self.question_type, self.question_type)
+
+    def verify_answer(self, answer):
+        """Verify the provided answer against stored hash"""
+        import hashlib
+        answer_hash = hashlib.sha256(answer.lower().strip().encode()).hexdigest()
+        if answer_hash == self.answer_hash:
+            self.last_used = timezone.now()
+            self.usage_count += 1
+            self.save(update_fields=['last_used', 'usage_count'])
+            return True
+        return False
+
+    @staticmethod
+    def hash_answer(answer):
+        """Hash an answer for storage"""
+        import hashlib
+        return hashlib.sha256(answer.lower().strip().encode()).hexdigest()
+
+# ================================
+# UserPreference Models
+# ================================
+
+class UserPreference(models.Model):
+    """User preferences and settings"""
+    
+    THEME_CHOICES = [
+        ('light', 'Light Theme'),
+        ('dark', 'Dark Theme'),
+        ('auto', 'Auto (System)'),
+    ]
+    
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('bn', 'Bengali'),
+    ]
+    
+    PREFERENCE_TYPES = [
+        ('THEME', 'Theme Preference'),
+        ('LANGUAGE', 'Language Setting'),
+        ('NOTIFICATION', 'Notification Settings'),
+        ('DASHBOARD', 'Dashboard Layout'),
+        ('DISPLAY', 'Display Options'),
+        ('SECURITY', 'Security Settings'),
+        ('REPORTING', 'Report Preferences'),
+        ('SYSTEM', 'System Settings'),
+    ]
+
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='user_preferences'
+    )
+    preference_type = models.CharField(max_length=20, choices=PREFERENCE_TYPES)
+    preference_key = models.CharField(max_length=50)
+    preference_value = models.TextField()
+    
+    # Theme and display
+    theme = models.CharField(
+        max_length=10, 
+        choices=THEME_CHOICES, 
+        default='light'
+    )
+    language = models.CharField(
+        max_length=5, 
+        choices=LANGUAGE_CHOICES, 
+        default='en'
+    )
+    
+    # Notification settings
+    email_notifications = models.BooleanField(default=True)
+    sms_notifications = models.BooleanField(default=False)
+    desktop_notifications = models.BooleanField(default=True)
+    notification_frequency = models.CharField(
+        max_length=20,
+        choices=[
+            ('immediate', 'Immediate'),
+            ('hourly', 'Hourly Digest'),
+            ('daily', 'Daily Digest'),
+            ('weekly', 'Weekly Digest'),
+            ('never', 'Never'),
+        ],
+        default='immediate'
+    )
+    
+    # Dashboard preferences
+    dashboard_layout = models.JSONField(
+        default=dict, 
+        help_text="Dashboard widget layout and preferences"
+    )
+    default_page_size = models.PositiveIntegerField(default=25)
+    
+    # Security preferences
+    session_timeout = models.PositiveIntegerField(
+        default=60, 
+        help_text="Session timeout in minutes"
+    )
+    require_password_change = models.BooleanField(default=False)
+    
+    # Additional settings
+    additional_settings = models.JSONField(
+        default=dict, 
+        blank=True, 
+        help_text="Additional user-specific settings"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['user', 'preference_type']
+        unique_together = ['user', 'preference_type', 'preference_key']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_preference_type_display()}"
+
+    @classmethod
+    def get_user_preference(cls, user, preference_type, preference_key, default=None):
+        """Get a specific preference value for a user"""
+        try:
+            pref = cls.objects.get(
+                user=user, 
+                preference_type=preference_type,
+                preference_key=preference_key
+            )
+            return pref.preference_value
+        except cls.DoesNotExist:
+            return default
+
+    @classmethod
+    def set_user_preference(cls, user, preference_type, preference_key, value):
+        """Set a preference value for a user"""
+        pref, created = cls.objects.get_or_create(
+            user=user,
+            preference_type=preference_type,
+            preference_key=preference_key,
+            defaults={'preference_value': str(value)}
+        )
+        if not created:
+            pref.preference_value = str(value)
+            pref.save()
+        return pref
+
+# ================================
+# UserActivity Models
+# ================================
+
+class UserActivity(models.Model):
+    """Track user activities for audit and analytics"""
+    
+    ACTIVITY_TYPES = [
+        ('LOGIN', 'User Login'),
+        ('LOGOUT', 'User Logout'),
+        ('VIEW', 'View Record'),
+        ('CREATE', 'Create Record'),
+        ('UPDATE', 'Update Record'),
+        ('DELETE', 'Delete Record'),
+        ('EXPORT', 'Export Data'),
+        ('IMPORT', 'Import Data'),
+        ('PRINT', 'Print Document'),
+        ('DOWNLOAD', 'Download File'),
+        ('SEARCH', 'Search Operation'),
+        ('REPORT', 'Generate Report'),
+        ('ASSIGNMENT', 'Device Assignment'),
+        ('QR_SCAN', 'QR Code Scan'),
+        ('ADMIN', 'Admin Action'),
+        ('API', 'API Access'),
+        ('ERROR', 'Error/Exception'),
+        ('SECURITY', 'Security Event'),
+    ]
+
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='user_activities'
+    )
+    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES)
+    description = models.TextField(help_text="Detailed description of the activity")
+    
+    # Context information
+    object_type = models.CharField(
+        max_length=50, 
+        blank=True, 
+        help_text="Type of object affected (e.g., 'Device', 'Assignment')"
+    )
+    object_id = models.CharField(
+        max_length=50, 
+        blank=True, 
+        help_text="ID of the affected object"
+    )
+    
+    # Request metadata
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    session_key = models.CharField(max_length=40, blank=True)
+    
+    # Success/failure tracking
+    is_successful = models.BooleanField(default=True)
+    error_message = models.TextField(blank=True)
+    
+    # Additional data
+    additional_data = models.JSONField(
+        default=dict, 
+        blank=True, 
+        help_text="Additional activity-specific data"
+    )
+    
+    # Timing
+    timestamp = models.DateTimeField(auto_now_add=True)
+    duration_ms = models.PositiveIntegerField(
+        null=True, 
+        blank=True, 
+        help_text="Activity duration in milliseconds"
+    )
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', '-timestamp']),
+            models.Index(fields=['activity_type', '-timestamp']),
+            models.Index(fields=['is_successful', '-timestamp']),
+            models.Index(fields=['ip_address', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_activity_type_display()} at {self.timestamp}"
+
+    @property
+    def success_icon(self):
+        """Return appropriate icon for success status"""
+        return "✅" if self.is_successful else "❌"
+
+    @property
+    def activity_summary(self):
+        """Return a brief summary of the activity"""
+        summary = f"{self.get_activity_type_display()}"
+        if self.object_type and self.object_id:
+            summary += f" on {self.object_type} ({self.object_id})"
+        return summary
+
+    @classmethod
+    def log_activity(cls, user, activity_type, description, **kwargs):
+        """Convenience method to log an activity"""
+        return cls.objects.create(
+            user=user,
+            activity_type=activity_type,
+            description=description,
+            **kwargs
+        )
+
+# ================================
+# ApiKey Models
+# ================================
+
+class ApiKey(models.Model):
+    """API keys for external integrations and mobile apps"""
+    
+    KEY_TYPES = [
+        ('MOBILE', 'Mobile Application'),
+        ('INTEGRATION', 'System Integration'),
+        ('WEBHOOK', 'Webhook Access'),
+        ('REPORTING', 'Reporting API'),
+        ('READ_ONLY', 'Read-Only Access'),
+        ('FULL_ACCESS', 'Full Access'),
+    ]
+
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='api_keys'
+    )
+    name = models.CharField(
+        max_length=100, 
+        help_text="Descriptive name for this API key"
+    )
+    key = models.CharField(
+        max_length=128, 
+        unique=True, 
+        help_text="The actual API key"
+    )
+    key_type = models.CharField(
+        max_length=20, 
+        choices=KEY_TYPES, 
+        default='READ_ONLY'
+    )
+    
+    # Permissions and scopes
+    permissions = models.JSONField(
+        default=list, 
+        help_text="List of specific permissions for this key"
+    )
+    allowed_ips = models.JSONField(
+        default=list, 
+        blank=True, 
+        help_text="List of allowed IP addresses (empty = any IP)"
+    )
+    
+    # Usage tracking
+    usage_count = models.PositiveIntegerField(default=0)
+    last_used = models.DateTimeField(null=True, blank=True)
+    last_used_ip = models.GenericIPAddressField(null=True, blank=True)
+    
+    # Rate limiting
+    rate_limit_per_hour = models.PositiveIntegerField(
+        default=1000, 
+        help_text="Maximum API calls per hour"
+    )
+    current_hour_usage = models.PositiveIntegerField(default=0)
+    rate_limit_reset = models.DateTimeField(null=True, blank=True)
+    
+    # Status and lifecycle
+    is_active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        help_text="Optional expiration date"
+    )
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User, 
+        on_delete=models.PROTECT, 
+        related_name='created_api_keys'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['key']),
+            models.Index(fields=['is_active', 'expires_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            self.key = self.generate_api_key()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_api_key():
+        """Generate a secure API key"""
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        return ''.join(secrets.choice(alphabet) for _ in range(64))
+
+    @property
+    def key_preview(self):
+        """Return a preview of the API key for display"""
+        if self.key:
+            return f"{self.key[:8]}...{self.key[-4:]}"
+        return "Not generated"
+
+    @property
+    def is_expired(self):
+        """Check if the API key has expired"""
+        if self.expires_at:
+            return timezone.now() > self.expires_at
+        return False
+
+    @property
+    def is_rate_limited(self):
+        """Check if the API key has exceeded rate limits"""
+        if not self.rate_limit_reset:
+            return False
+        
+        # Reset counter if hour has passed
+        if timezone.now() > self.rate_limit_reset:
+            self.current_hour_usage = 0
+            self.rate_limit_reset = timezone.now() + timedelta(hours=1)
+            self.save(update_fields=['current_hour_usage', 'rate_limit_reset'])
+            return False
+        
+        return self.current_hour_usage >= self.rate_limit_per_hour
+
+    def record_usage(self, ip_address=None):
+        """Record API key usage"""
+        self.usage_count += 1
+        self.current_hour_usage += 1
+        self.last_used = timezone.now()
+        if ip_address:
+            self.last_used_ip = ip_address
+        
+        # Set rate limit reset if not set
+        if not self.rate_limit_reset:
+            self.rate_limit_reset = timezone.now() + timedelta(hours=1)
+        
+        self.save(update_fields=[
+            'usage_count', 'current_hour_usage', 'last_used', 
+            'last_used_ip', 'rate_limit_reset'
+        ])
+
+    def can_access_ip(self, ip_address):
+        """Check if the given IP address is allowed"""
+        if not self.allowed_ips:  # Empty list means any IP is allowed
+            return True
+        return ip_address in self.allowed_ips
+
+    def has_permission(self, permission):
+        """Check if the API key has a specific permission"""
+        return permission in self.permissions
+
+    def get_usage_stats(self):
+        """Return usage statistics for this API key"""
+        return {
+            'total_usage': self.usage_count,
+            'current_hour_usage': self.current_hour_usage,
+            'rate_limit': self.rate_limit_per_hour,
+            'rate_limit_remaining': max(0, self.rate_limit_per_hour - self.current_hour_usage),
+            'last_used': self.last_used,
+            'is_expired': self.is_expired,
+            'is_rate_limited': self.is_rate_limited,
+        }

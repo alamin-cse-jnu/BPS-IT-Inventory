@@ -14,7 +14,7 @@ import json
 
 from .models import (
     QRCodeScan, QRAnalytics, QRCampaign, QRMobileSession,
-    QRBulkVerification, QRCodeTemplate, QRPrintJob,
+    QRBulkVerification, QRCodeTemplate, QRCodePrintJob,
     QRVerificationRule, QRScanLocation, QRCodeBatch
 )
 

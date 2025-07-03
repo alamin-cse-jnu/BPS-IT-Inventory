@@ -1139,3 +1139,381 @@ class QRIntegrationLog(models.Model):
 
     def __str__(self):
         return f"{self.get_integration_type_display()}: {self.get_status_display()}"
+    
+# ================================
+# QRScanLocation MODELS 
+# ================================
+
+class QRScanLocation(models.Model):
+    """Enhanced location tracking for QR code scans with GPS and contextual data"""
+    
+    LOCATION_ACCURACY_LEVELS = [
+        ('HIGH', 'High (GPS < 5m)'),
+        ('MEDIUM', 'Medium (GPS 5-15m)'),
+        ('LOW', 'Low (GPS > 15m)'),
+        ('NETWORK', 'Network-based'),
+        ('MANUAL', 'Manually Entered'),
+        ('UNKNOWN', 'Unknown'),
+    ]
+    
+    LOCATION_SOURCES = [
+        ('GPS', 'GPS Coordinates'),
+        ('WIFI', 'WiFi-based Location'),
+        ('CELLULAR', 'Cellular Tower'),
+        ('BLUETOOTH', 'Bluetooth Beacon'),
+        ('MANUAL', 'Manual Entry'),
+        ('SYSTEM', 'System Location'),
+    ]
+
+    # Related scan
+    scan = models.OneToOneField(
+        'QRCodeScan',
+        on_delete=models.CASCADE,
+        related_name='scan_location',
+        primary_key=True
+    )
+    
+    # Location coordinates
+    latitude = models.DecimalField(
+        max_digits=10, 
+        decimal_places=8, 
+        null=True, 
+        blank=True,
+        help_text="GPS latitude coordinate"
+    )
+    longitude = models.DecimalField(
+        max_digits=11, 
+        decimal_places=8, 
+        null=True, 
+        blank=True,
+        help_text="GPS longitude coordinate"
+    )
+    altitude = models.FloatField(
+        null=True, 
+        blank=True,
+        help_text="Altitude in meters"
+    )
+    
+    # Location accuracy and metadata
+    accuracy_meters = models.FloatField(
+        null=True, 
+        blank=True,
+        help_text="Location accuracy radius in meters"
+    )
+    accuracy_level = models.CharField(
+        max_length=10, 
+        choices=LOCATION_ACCURACY_LEVELS,
+        default='UNKNOWN'
+    )
+    location_source = models.CharField(
+        max_length=15, 
+        choices=LOCATION_SOURCES,
+        default='GPS'
+    )
+    
+    # Administrative location mapping
+    detected_location = models.ForeignKey(
+        'inventory.Location',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='qr_scan_locations',
+        help_text="System-detected location based on coordinates"
+    )
+    verified_location = models.ForeignKey(
+        'inventory.Location',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_qr_scan_locations',
+        help_text="User-verified actual location"
+    )
+    
+    # Address information
+    street_address = models.CharField(max_length=200, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    
+    # Building/floor/room details
+    building_name = models.CharField(max_length=100, blank=True)
+    floor_number = models.CharField(max_length=10, blank=True)
+    room_number = models.CharField(max_length=20, blank=True)
+    
+    # Network context
+    wifi_ssid = models.CharField(
+        max_length=32, 
+        blank=True,
+        help_text="WiFi network SSID if available"
+    )
+    wifi_bssid = models.CharField(
+        max_length=17, 
+        blank=True,
+        help_text="WiFi access point MAC address"
+    )
+    cellular_tower_id = models.CharField(max_length=50, blank=True)
+    
+    # Environmental context
+    weather_conditions = models.CharField(max_length=50, blank=True)
+    temperature_celsius = models.FloatField(null=True, blank=True)
+    
+    # Device context during scan
+    device_orientation = models.CharField(
+        max_length=20, 
+        choices=[
+            ('PORTRAIT', 'Portrait'),
+            ('LANDSCAPE', 'Landscape'),
+            ('UNKNOWN', 'Unknown'),
+        ],
+        default='UNKNOWN'
+    )
+    battery_level = models.PositiveIntegerField(
+        null=True, 
+        blank=True,
+        help_text="Device battery percentage"
+    )
+    signal_strength = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="Cellular signal strength in dBm"
+    )
+    
+    # Verification and validation
+    location_verified = models.BooleanField(
+        default=False,
+        help_text="Whether the location has been manually verified"
+    )
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_scan_locations'
+    )
+    verification_date = models.DateTimeField(null=True, blank=True)
+    verification_notes = models.TextField(blank=True)
+    
+    # Distance calculations
+    distance_to_assigned_location = models.FloatField(
+        null=True, 
+        blank=True,
+        help_text="Distance in meters to device's assigned location"
+    )
+    is_location_anomaly = models.BooleanField(
+        default=False,
+        help_text="Flag for location that seems incorrect"
+    )
+    anomaly_reason = models.TextField(blank=True)
+    
+    # Additional metadata
+    scan_duration_seconds = models.PositiveIntegerField(
+        null=True, 
+        blank=True,
+        help_text="Time taken to complete the scan"
+    )
+    movement_detected = models.BooleanField(
+        default=False,
+        help_text="Whether device was moving during scan"
+    )
+    
+    # Raw location data
+    raw_location_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Raw location data from device sensors"
+    )
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['scan']),
+            models.Index(fields=['latitude', 'longitude']),
+            models.Index(fields=['detected_location']),
+            models.Index(fields=['location_verified']),
+            models.Index(fields=['is_location_anomaly']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        location_str = "Unknown Location"
+        if self.latitude and self.longitude:
+            location_str = f"({self.latitude}, {self.longitude})"
+        elif self.detected_location:
+            location_str = str(self.detected_location)
+        elif self.street_address:
+            location_str = self.street_address
+        
+        return f"Scan Location: {location_str}"
+
+    @property
+    def coordinates(self):
+        """Return coordinates as a tuple if available"""
+        if self.latitude and self.longitude:
+            return (float(self.latitude), float(self.longitude))
+        return None
+
+    @property
+    def has_gps_coordinates(self):
+        """Check if GPS coordinates are available"""
+        return self.latitude is not None and self.longitude is not None
+
+    @property
+    def location_display(self):
+        """Return a human-readable location description"""
+        parts = []
+        
+        if self.room_number:
+            parts.append(f"Room {self.room_number}")
+        if self.floor_number:
+            parts.append(f"Floor {self.floor_number}")
+        if self.building_name:
+            parts.append(self.building_name)
+        elif self.street_address:
+            parts.append(self.street_address)
+        
+        if parts:
+            return ", ".join(parts)
+        elif self.detected_location:
+            return str(self.detected_location)
+        elif self.has_gps_coordinates:
+            return f"GPS: {self.latitude}, {self.longitude}"
+        
+        return "Location not specified"
+
+    def calculate_distance_to_location(self, target_location):
+        """Calculate distance to a target location if GPS coordinates available"""
+        if not self.has_gps_coordinates:
+            return None
+        
+        # This would typically use a geospatial library like geopy
+        # For now, return a placeholder
+        # from geopy.distance import geodesic
+        # return geodesic((self.latitude, self.longitude), target_coordinates).meters
+        return None
+
+    def detect_location_from_coordinates(self):
+        """Attempt to detect system location based on GPS coordinates"""
+        if not self.has_gps_coordinates:
+            return None
+        
+        # This would query the Location model to find the closest match
+        # based on GPS coordinates or predefined location boundaries
+        from inventory.models import Location
+        
+        # Placeholder logic - would need actual geospatial queries
+        # For a complete implementation, you'd use PostGIS or similar
+        
+        return None
+
+    def validate_location(self):
+        """Validate the scan location against expected parameters"""
+        validation_issues = []
+        
+        # Check if coordinates are reasonable
+        if self.has_gps_coordinates:
+            if not (-90 <= float(self.latitude) <= 90):
+                validation_issues.append("Invalid latitude value")
+            if not (-180 <= float(self.longitude) <= 180):
+                validation_issues.append("Invalid longitude value")
+        
+        # Check distance to assigned location if available
+        if (self.scan.device and 
+            self.scan.device.current_location and 
+            self.distance_to_assigned_location and 
+            self.distance_to_assigned_location > 1000):  # More than 1km away
+            validation_issues.append("Location is far from assigned location")
+            self.is_location_anomaly = True
+            self.anomaly_reason = "Distance exceeds expected range"
+        
+        # Check for movement during scan
+        if self.movement_detected and self.scan.scan_type == 'VERIFICATION':
+            validation_issues.append("Device was moving during verification scan")
+        
+        return validation_issues
+
+    def geocode_address(self):
+        """Convert GPS coordinates to street address"""
+        if not self.has_gps_coordinates:
+            return False
+        
+        # This would use a geocoding service like Google Maps API
+        # Placeholder implementation
+        try:
+            # geocoded = geocoding_service.reverse(self.latitude, self.longitude)
+            # self.street_address = geocoded.address
+            # self.city = geocoded.city
+            # self.country = geocoded.country
+            # self.postal_code = geocoded.postal_code
+            # return True
+            pass
+        except Exception:
+            pass
+        
+        return False
+
+    def save(self, *args, **kwargs):
+        """Override save to perform validation and geocoding"""
+        # Validate location data
+        validation_issues = self.validate_location()
+        
+        # Attempt to detect system location
+        if not self.detected_location and self.has_gps_coordinates:
+            self.detected_location = self.detect_location_from_coordinates()
+        
+        # Calculate distance to assigned location
+        if (self.scan.device and 
+            self.scan.device.current_location and 
+            self.has_gps_coordinates):
+            # This would calculate actual distance
+            # self.distance_to_assigned_location = self.calculate_distance_to_location(
+            #     self.scan.device.current_location
+            # )
+            pass
+        
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_location_analytics(cls, date_range=None):
+        """Get analytics about scan locations"""
+        queryset = cls.objects.all()
+        
+        if date_range:
+            start_date, end_date = date_range
+            queryset = queryset.filter(
+                created_at__date__range=[start_date, end_date]
+            )
+        
+        analytics = {
+            'total_scans_with_location': queryset.count(),
+            'gps_enabled_scans': queryset.filter(
+                latitude__isnull=False,
+                longitude__isnull=False
+            ).count(),
+            'verified_locations': queryset.filter(
+                location_verified=True
+            ).count(),
+            'location_anomalies': queryset.filter(
+                is_location_anomaly=True
+            ).count(),
+            'accuracy_distribution': queryset.values('accuracy_level').annotate(
+                count=models.Count('accuracy_level')
+            ),
+            'source_distribution': queryset.values('location_source').annotate(
+                count=models.Count('location_source')
+            ),
+        }
+        
+        return analytics
+
+    @classmethod
+    def find_nearby_scans(cls, latitude, longitude, radius_meters=100):
+        """Find scans within a specified radius"""
+        # This would use geospatial queries in a production system
+        # For now, return a placeholder queryset
+        return cls.objects.filter(
+            latitude__isnull=False,
+            longitude__isnull=False
+        )

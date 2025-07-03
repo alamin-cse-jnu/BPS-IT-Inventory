@@ -6,6 +6,7 @@ from django.utils import timezone
 from django.core.files.storage import default_storage
 import uuid
 import json
+import hashlib
 
 # ================================
 # REPORTING & ANALYTICS MODELS
@@ -572,3 +573,580 @@ class DataExport(models.Model):
         if self.expires_at:
             return timezone.now() > self.expires_at
         return False
+
+# ================================
+# ReportSubscription MODELS
+# ================================
+
+class ReportSubscription(models.Model):
+    """User subscriptions to automatic report generation and delivery"""
+    
+    FREQUENCY_CHOICES = [
+        ('DAILY', 'Daily'),
+        ('WEEKLY', 'Weekly'),
+        ('MONTHLY', 'Monthly'),
+        ('QUARTERLY', 'Quarterly'),
+        ('YEARLY', 'Yearly'),
+        ('ON_DEMAND', 'On Demand Only'),
+    ]
+    
+    DELIVERY_METHODS = [
+        ('EMAIL', 'Email'),
+        ('DOWNLOAD', 'Download Link'),
+        ('DASHBOARD', 'Dashboard Notification'),
+        ('SMS', 'SMS Alert'),
+        ('WEBHOOK', 'Webhook'),
+    ]
+    
+    DAY_OF_WEEK_CHOICES = [
+        (0, 'Monday'),
+        (1, 'Tuesday'),
+        (2, 'Wednesday'),
+        (3, 'Thursday'),
+        (4, 'Friday'),
+        (5, 'Saturday'),
+        (6, 'Sunday'),
+    ]
+
+    # Core subscription details
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='report_subscriptions'
+    )
+    report_template = models.ForeignKey(
+        'ReportTemplate', 
+        on_delete=models.CASCADE, 
+        related_name='subscriptions'
+    )
+    
+    # Subscription configuration
+    frequency = models.CharField(max_length=15, choices=FREQUENCY_CHOICES)
+    delivery_method = models.CharField(max_length=15, choices=DELIVERY_METHODS, default='EMAIL')
+    
+    # Scheduling details
+    delivery_time = models.TimeField(
+        default='09:00',
+        help_text="Time of day to deliver reports"
+    )
+    day_of_week = models.IntegerField(
+        choices=DAY_OF_WEEK_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Day of week for weekly reports"
+    )
+    day_of_month = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Day of month for monthly reports (1-28)"
+    )
+    
+    # Delivery settings
+    email_recipients = models.JSONField(
+        default=list,
+        help_text="Additional email recipients"
+    )
+    include_charts = models.BooleanField(default=True)
+    include_raw_data = models.BooleanField(default=False)
+    export_format = models.CharField(
+        max_length=10,
+        choices=[
+            ('PDF', 'PDF'),
+            ('EXCEL', 'Excel'),
+            ('CSV', 'CSV'),
+            ('JSON', 'JSON'),
+        ],
+        default='PDF'
+    )
+    
+    # Filtering and parameters
+    filter_parameters = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Report-specific filter parameters"
+    )
+    
+    # Status and tracking
+    is_active = models.BooleanField(default=True)
+    last_generated = models.DateTimeField(null=True, blank=True)
+    next_scheduled = models.DateTimeField(null=True, blank=True)
+    generation_count = models.PositiveIntegerField(default=0)
+    failure_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    
+    # Audit fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='created_subscriptions'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ['user', 'report_template', 'frequency']
+        indexes = [
+            models.Index(fields=['is_active', 'next_scheduled']),
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['report_template', 'frequency']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.report_template.name} ({self.get_frequency_display()})"
+
+    def calculate_next_scheduled(self):
+        """Calculate the next scheduled generation time"""
+        from datetime import datetime, timedelta
+        import calendar
+        
+        now = timezone.now()
+        
+        if self.frequency == 'DAILY':
+            next_run = now.replace(
+                hour=self.delivery_time.hour,
+                minute=self.delivery_time.minute,
+                second=0,
+                microsecond=0
+            )
+            if next_run <= now:
+                next_run += timedelta(days=1)
+                
+        elif self.frequency == 'WEEKLY':
+            days_ahead = self.day_of_week - now.weekday()
+            if days_ahead <= 0:  # Target day already happened this week
+                days_ahead += 7
+            next_run = now + timedelta(days=days_ahead)
+            next_run = next_run.replace(
+                hour=self.delivery_time.hour,
+                minute=self.delivery_time.minute,
+                second=0,
+                microsecond=0
+            )
+            
+        elif self.frequency == 'MONTHLY':
+            next_month = now.replace(day=1) + timedelta(days=32)
+            next_month = next_month.replace(day=1)
+            
+            # Handle end of month scenarios
+            max_day = calendar.monthrange(next_month.year, next_month.month)[1]
+            target_day = min(self.day_of_month or 1, max_day)
+            
+            next_run = next_month.replace(
+                day=target_day,
+                hour=self.delivery_time.hour,
+                minute=self.delivery_time.minute,
+                second=0,
+                microsecond=0
+            )
+            
+        elif self.frequency == 'QUARTERLY':
+            # Next quarter start
+            current_quarter = (now.month - 1) // 3
+            next_quarter_month = (current_quarter + 1) * 3 + 1
+            if next_quarter_month > 12:
+                next_quarter_month = 1
+                year = now.year + 1
+            else:
+                year = now.year
+            
+            next_run = now.replace(
+                year=year,
+                month=next_quarter_month,
+                day=1,
+                hour=self.delivery_time.hour,
+                minute=self.delivery_time.minute,
+                second=0,
+                microsecond=0
+            )
+            
+        elif self.frequency == 'YEARLY':
+            next_run = now.replace(
+                year=now.year + 1,
+                month=1,
+                day=1,
+                hour=self.delivery_time.hour,
+                minute=self.delivery_time.minute,
+                second=0,
+                microsecond=0
+            )
+        else:
+            return None
+        
+        return next_run
+
+    def save(self, *args, **kwargs):
+        if self.is_active and not self.next_scheduled:
+            self.next_scheduled = self.calculate_next_scheduled()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_due(self):
+        """Check if the subscription is due for generation"""
+        if not self.is_active or not self.next_scheduled:
+            return False
+        return timezone.now() >= self.next_scheduled
+
+    def record_generation(self, success=True, error_message=''):
+        """Record a generation attempt"""
+        self.generation_count += 1
+        self.last_generated = timezone.now()
+        
+        if success:
+            self.failure_count = 0  # Reset failure count on success
+            self.last_error = ''
+            self.next_scheduled = self.calculate_next_scheduled()
+        else:
+            self.failure_count += 1
+            self.last_error = error_message
+            # Disable subscription after 5 consecutive failures
+            if self.failure_count >= 5:
+                self.is_active = False
+        
+        self.save()
+
+# ================================
+# CustomQuery MODELS
+# ================================
+
+class CustomQuery(models.Model):
+    """Custom SQL queries for advanced reporting and data analysis"""
+    
+    QUERY_TYPES = [
+        ('SELECT', 'Data Selection'),
+        ('ANALYSIS', 'Data Analysis'),
+        ('AGGREGATION', 'Data Aggregation'),
+        ('DASHBOARD', 'Dashboard Widget'),
+        ('EXPORT', 'Data Export'),
+        ('MONITORING', 'System Monitoring'),
+    ]
+    
+    SECURITY_LEVELS = [
+        ('PUBLIC', 'Public Access'),
+        ('INTERNAL', 'Internal Use'),
+        ('RESTRICTED', 'Restricted Access'),
+        ('CONFIDENTIAL', 'Confidential'),
+    ]
+
+    # Query identification
+    name = models.CharField(max_length=200)
+    description = models.TextField(help_text="Description of what this query does")
+    query_type = models.CharField(max_length=15, choices=QUERY_TYPES)
+    
+    # Query definition
+    sql_query = models.TextField(help_text="The SQL query to execute")
+    parameters = models.JSONField(
+        default=list,
+        help_text="List of parameter definitions for this query"
+    )
+    
+    # Security and permissions
+    security_level = models.CharField(
+        max_length=15,
+        choices=SECURITY_LEVELS,
+        default='INTERNAL'
+    )
+    allowed_users = models.ManyToManyField(
+        User,
+        blank=True,
+        related_name='accessible_custom_queries'
+    )
+    allowed_groups = models.JSONField(
+        default=list,
+        help_text="List of user groups allowed to execute this query"
+    )
+    
+    # Execution settings
+    timeout_seconds = models.PositiveIntegerField(
+        default=30,
+        help_text="Query timeout in seconds"
+    )
+    max_results = models.PositiveIntegerField(
+        default=1000,
+        help_text="Maximum number of results to return"
+    )
+    cache_duration = models.PositiveIntegerField(
+        default=300,
+        help_text="Cache duration in seconds"
+    )
+    
+    # Usage tracking
+    execution_count = models.PositiveIntegerField(default=0)
+    last_executed = models.DateTimeField(null=True, blank=True)
+    last_executed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='last_executed_queries'
+    )
+    avg_execution_time = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Average execution time in seconds"
+    )
+    
+    # Status and validation
+    is_active = models.BooleanField(default=True)
+    is_validated = models.BooleanField(default=False)
+    validation_error = models.TextField(blank=True)
+    last_validation = models.DateTimeField(null=True, blank=True)
+    
+    # Audit fields
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='created_custom_queries'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name_plural = 'Custom Queries'
+        indexes = [
+            models.Index(fields=['query_type', 'is_active']),
+            models.Index(fields=['created_by', '-created_at']),
+            models.Index(fields=['security_level']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_query_type_display()})"
+
+    def validate_query(self):
+        """Validate the SQL query syntax and security"""
+        import re
+        
+        # Basic security checks
+        dangerous_keywords = [
+            'DROP', 'DELETE', 'INSERT', 'UPDATE', 'ALTER', 'TRUNCATE',
+            'CREATE', 'GRANT', 'REVOKE', 'EXEC', 'EXECUTE'
+        ]
+        
+        query_upper = self.sql_query.upper()
+        for keyword in dangerous_keywords:
+            if keyword in query_upper:
+                self.validation_error = f"Query contains dangerous keyword: {keyword}"
+                self.is_validated = False
+                self.last_validation = timezone.now()
+                return False
+        
+        # Check for SELECT only
+        if not query_upper.strip().startswith('SELECT'):
+            self.validation_error = "Only SELECT queries are allowed"
+            self.is_validated = False
+            self.last_validation = timezone.now()
+            return False
+        
+        self.validation_error = ''
+        self.is_validated = True
+        self.last_validation = timezone.now()
+        return True
+
+    def execute_query(self, parameters=None, user=None):
+        """Execute the custom query with given parameters"""
+        from django.db import connection
+        import time
+        
+        if not self.is_active:
+            raise ValueError("Query is not active")
+        
+        if not self.is_validated:
+            if not self.validate_query():
+                raise ValueError(f"Query validation failed: {self.validation_error}")
+        
+        # Record execution attempt
+        start_time = time.time()
+        
+        try:
+            with connection.cursor() as cursor:
+                if parameters:
+                    cursor.execute(self.sql_query, parameters)
+                else:
+                    cursor.execute(self.sql_query)
+                
+                # Fetch results with limit
+                results = cursor.fetchmany(self.max_results)
+                columns = [desc[0] for desc in cursor.description]
+            
+            execution_time = time.time() - start_time
+            
+            # Update statistics
+            self.execution_count += 1
+            self.last_executed = timezone.now()
+            if user:
+                self.last_executed_by = user
+            
+            # Update average execution time
+            if self.avg_execution_time:
+                self.avg_execution_time = (
+                    (self.avg_execution_time * (self.execution_count - 1) + execution_time) 
+                    / self.execution_count
+                )
+            else:
+                self.avg_execution_time = execution_time
+            
+            self.save()
+            
+            return {
+                'columns': columns,
+                'data': results,
+                'execution_time': execution_time,
+                'row_count': len(results)
+            }
+            
+        except Exception as e:
+            raise ValueError(f"Query execution failed: {str(e)}")
+
+    def can_execute(self, user):
+        """Check if user can execute this query"""
+        if not self.is_active:
+            return False
+        
+        if user.is_superuser:
+            return True
+        
+        if self.security_level == 'PUBLIC':
+            return True
+        
+        if user in self.allowed_users.all():
+            return True
+        
+        # Check group membership
+        user_groups = user.groups.values_list('name', flat=True)
+        return bool(set(user_groups) & set(self.allowed_groups))
+
+
+# ================================
+# ReportCache MODELS
+# ================================
+
+class ReportCache(models.Model):
+    """Cache system for generated reports to improve performance"""
+    
+    CACHE_STATUS = [
+        ('VALID', 'Valid'),
+        ('EXPIRED', 'Expired'),
+        ('GENERATING', 'Being Generated'),
+        ('FAILED', 'Generation Failed'),
+        ('PURGED', 'Purged'),
+    ]
+
+    # Cache identification
+    cache_key = models.CharField(max_length=128, unique=True)
+    report_template = models.ForeignKey(
+        'ReportTemplate',
+        on_delete=models.CASCADE,
+        related_name='cached_reports'
+    )
+    
+    # Cache metadata
+    parameters_hash = models.CharField(
+        max_length=64,
+        help_text="Hash of the parameters used to generate this report"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='cached_reports'
+    )
+    
+    # Cache content
+    cached_data = models.BinaryField(help_text="Compressed report data")
+    file_format = models.CharField(max_length=10, default='PDF')
+    file_size = models.PositiveIntegerField(help_text="File size in bytes")
+    data_hash = models.CharField(
+        max_length=64,
+        help_text="Hash of the cached data for integrity checking"
+    )
+    
+    # Cache timing
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    last_accessed = models.DateTimeField(null=True, blank=True)
+    
+    # Usage tracking
+    hit_count = models.PositiveIntegerField(default=0)
+    generation_time = models.FloatField(
+        help_text="Time taken to generate this report in seconds"
+    )
+    
+    # Status
+    status = models.CharField(max_length=15, choices=CACHE_STATUS, default='VALID')
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['cache_key']),
+            models.Index(fields=['report_template', 'expires_at']),
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['status', 'expires_at']),
+        ]
+
+    def __str__(self):
+        return f"Cache: {self.report_template.name} - {self.created_at}"
+
+    @property
+    def is_expired(self):
+        """Check if the cache entry has expired"""
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self):
+        """Check if the cache entry is valid and can be used"""
+        return self.status == 'VALID' and not self.is_expired
+
+    @property
+    def file_size_human(self):
+        """Return human-readable file size"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if self.file_size < 1024.0:
+                return f"{self.file_size:.1f} {unit}"
+            self.file_size /= 1024.0
+        return f"{self.file_size:.1f} TB"
+
+    def access(self):
+        """Record an access to this cached report"""
+        self.hit_count += 1
+        self.last_accessed = timezone.now()
+        self.save(update_fields=['hit_count', 'last_accessed'])
+
+    def validate_integrity(self):
+        """Validate the integrity of cached data"""
+        import hashlib
+        
+        if not self.cached_data:
+            return False
+        
+        calculated_hash = hashlib.sha256(self.cached_data).hexdigest()
+        return calculated_hash == self.data_hash
+
+    @classmethod
+    def cleanup_expired(cls):
+        """Remove expired cache entries"""
+        expired_count = cls.objects.filter(
+            expires_at__lt=timezone.now()
+        ).delete()[0]
+        return expired_count
+
+    @classmethod
+    def get_cache_stats(cls):
+        """Get cache statistics"""
+        total_entries = cls.objects.count()
+        valid_entries = cls.objects.filter(status='VALID').count()
+        expired_entries = cls.objects.filter(expires_at__lt=timezone.now()).count()
+        total_size = cls.objects.aggregate(
+            total=models.Sum('file_size')
+        )['total'] or 0
+        
+        return {
+            'total_entries': total_entries,
+            'valid_entries': valid_entries,
+            'expired_entries': expired_entries,
+            'total_size_bytes': total_size,
+            'total_size_mb': total_size / (1024 * 1024),
+            'hit_rate': cls.objects.aggregate(
+                avg_hits=models.Avg('hit_count')
+            )['avg_hits'] or 0
+        }
