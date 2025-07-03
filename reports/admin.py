@@ -187,7 +187,7 @@ class ReportTemplateAdmin(admin.ModelAdmin):
         }),
     )
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         actions_html = []
         
         # Generate report action
@@ -203,7 +203,7 @@ class ReportTemplateAdmin(admin.ModelAdmin):
         actions_html.append('<a class="button" href="#" onclick="cloneTemplate(\'{}\')">Clone</a>'.format(obj.id))
         
         return format_html(' '.join(actions_html))
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = list(self.readonly_fields)
@@ -224,8 +224,8 @@ class ReportTemplateAdmin(admin.ModelAdmin):
 @admin.register(ReportGeneration)
 class ReportGenerationAdmin(admin.ModelAdmin):
     list_display = (
-        'report_name', 'template_name', 'generated_by', 'status_display',
-        'file_format', 'progress_bar', 'created_at', 'file_size_human', 'actions'
+   'report_name', 'template_name', 'generated_by', 'status_display',
+   'file_format', 'progress_bar', 'created_at', 'file_size_human', 'action_buttons'
     )
     list_filter = (
         ReportStatusFilter, 'file_format', 'priority', 'created_at',
@@ -330,7 +330,7 @@ class ReportGenerationAdmin(admin.ModelAdmin):
         return '-'
     progress_bar.short_description = 'Progress'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         actions_html = []
         
         if obj.status == 'COMPLETED' and obj.file_path:
@@ -346,7 +346,7 @@ class ReportGenerationAdmin(admin.ModelAdmin):
             actions_html.append('<span style="color: blue;">🔗 Shared</span>')
         
         return format_html(' '.join(actions_html))
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
     def has_add_permission(self, request):
         return False  # Reports are generated through the system
@@ -355,8 +355,8 @@ class ReportGenerationAdmin(admin.ModelAdmin):
 @admin.register(ReportSchedule)
 class ReportScheduleAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'template', 'frequency', 'time_of_day',
-        'next_run_display', 'is_active', 'run_count', 'actions'
+   'name', 'template', 'frequency', 'time_of_day',
+   'next_run_display', 'is_active', 'run_count', 'action_buttons'
     )
     list_filter = (
         ScheduleFrequencyFilter, 'is_active', 'start_date',
@@ -414,7 +414,7 @@ class ReportScheduleAdmin(admin.ModelAdmin):
         return 'Not scheduled'
     next_run_display.short_description = 'Next Run'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         actions_html = []
         
         if obj.is_active:
@@ -424,14 +424,14 @@ class ReportScheduleAdmin(admin.ModelAdmin):
             actions_html.append(f'<a class="button" href="#" onclick="resumeSchedule(\'{obj.id}\')">Resume</a>')
         
         return format_html(' '.join(actions_html))
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
 
 @admin.register(ReportAccess)
 class ReportAccessAdmin(admin.ModelAdmin):
     list_display = (
-        'report_generation', 'accessed_by', 'access_type',
-        'accessed_at', 'ip_address', 'user_agent_short'
+   'report_generation', 'accessed_by', 'access_type',
+   'accessed_at', 'ip_address', 'user_agent_short', 'action_buttons'
     )
     list_filter = (ReportAccessTypeFilter, 'accessed_at')
     search_fields = (
@@ -540,21 +540,21 @@ class DataExportAdmin(admin.ModelAdmin):
         'file_size', 'record_count', 'download_count'
     )
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         if obj.status == 'COMPLETED' and obj.file_path:
             return format_html(
                 '<a class="button" href="/reports/export/download/{}/">Download</a>',
                 obj.id
             )
         return '-'
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
 
 @admin.register(AnalyticsMetric)
 class AnalyticsMetricAdmin(admin.ModelAdmin):
     list_display = (
-        'metric_name', 'metric_type', 'period_start', 'period_end',
-        'value', 'department', 'location'
+   'metric_name', 'metric_type', 'period_start', 'period_end',
+   'value', 'department', 'location', 'action_buttons'
     )
     list_filter = ('metric_type', 'aggregation_period', 'period_start')
     search_fields = ('metric_name',)

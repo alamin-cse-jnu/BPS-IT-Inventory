@@ -829,68 +829,68 @@ class VendorForm(forms.ModelForm):
 # ================================
 
 class DeviceCategoryForm(forms.ModelForm):
-    """Form for device categories - FIXED FIELD MAPPING"""
-    
-    class Meta:
-        model = DeviceCategory
-        fields = ['name', 'description', 'is_active']
-        
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter category name (e.g., Computing Devices)'
-            }),
-            'description': forms.Textarea(attrs={
-                'class': 'form-control', 
-                'rows': 3,
-                'placeholder': 'Describe this device category'
-            }),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
-        }
-        
-        labels = {
-            'name': 'Category Name',
-            'description': 'Description',
-            'is_active': 'Active Category'
-        }
-        
-        help_texts = {
-            'name': 'Enter a unique name for this device category',
-            'description': 'Provide a detailed description of this category',
-            'is_active': 'Uncheck to disable this category'
-        }
+   """Form for device categories - FIXED FIELD MAPPING"""
+   
+   class Meta:
+       model = DeviceCategory
+       fields = ['name', 'description', 'is_active']
+       
+       widgets = {
+           'name': forms.TextInput(attrs={
+               'class': 'form-control',
+               'placeholder': 'Enter category name (e.g., Computing Devices)'
+           }),
+           'description': forms.Textarea(attrs={
+               'class': 'form-control', 
+               'rows': 3,
+               'placeholder': 'Describe this device category'
+           }),
+           'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+       }
+       
+       labels = {
+           'name': 'Category Name',
+           'description': 'Description',
+           'is_active': 'Active Category'
+       }
+       
+       help_texts = {
+           'name': 'Enter a unique name for this device category',
+           'description': 'Provide a detailed description of this category',
+           'is_active': 'Uncheck to disable this category'
+       }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        # Set required fields
-        self.fields['name'].required = True
-        self.fields['description'].required = False
+   def __init__(self, *args, **kwargs):
+       super().__init__(*args, **kwargs)
+       
+       # Set required fields
+       self.fields['name'].required = True
+       self.fields['description'].required = False
 
-    def clean_name(self):
-        """Validate category name uniqueness"""
-        name = self.cleaned_data.get('name', '').strip()
-        
-        if name:
-            existing = DeviceCategory.objects.filter(name__iexact=name)
-            
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError("A device category with this name already exists.")
-        
-        return name
+   def clean_name(self):
+       """Validate category name uniqueness"""
+       name = self.cleaned_data.get('name', '').strip()
+       
+       if name:
+           existing = DeviceCategory.objects.filter(name__iexact=name)
+           
+           if self.instance.pk:
+               existing = existing.exclude(pk=self.instance.pk)
+           
+           if existing.exists():
+               raise ValidationError("A device category with this name already exists.")
+       
+       return name
 
-    def clean(self):
-        """Additional validation"""
-        cleaned_data = super().clean()
-        
-        name = cleaned_data.get('name')
-        if name and len(name.strip()) < 2:
-            raise ValidationError({'name': 'Category name must be at least 2 characters long.'})
-        
-        return cleaned_data
+   def clean(self):
+       """Additional validation"""
+       cleaned_data = super().clean()
+       
+       name = cleaned_data.get('name')
+       if name and len(name.strip()) < 2:
+           raise ValidationError({'name': 'Category name must be at least 2 characters long.'})
+       
+       return cleaned_data
 
 
 class DeviceSubCategoryForm(forms.ModelForm):

@@ -488,22 +488,22 @@ class DeviceAdmin(admin.ModelAdmin):
         return '-'
     qr_code_image.short_description = 'QR Code'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         return format_html(
             '<a class="button" href="{}">View Details</a> '
             '<a class="button" href="{}">QR Code</a>',
             reverse('inventory:device_detail', args=[obj.device_id]),
             reverse('inventory:device_qr_code', args=[obj.device_id])
         )
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
 
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):
     list_display = (
-        'assignment_id', 'device', 'assignment_target', 'assignment_type',
-        'start_date', 'expected_return_date', 'status_display', 'actions'
-    )
+    'device_id', 'device_name', 'device_type', 'status',
+    'current_assignment', 'warranty_status', 'action_buttons'
+)
     list_filter = (
         AssignmentStatusFilter, 'assignment_type', 'is_temporary',
         'start_date', 'expected_return_date'
@@ -568,7 +568,7 @@ class AssignmentAdmin(admin.ModelAdmin):
             return format_html('<span style="color: gray;">📋 Returned</span>')
     status_display.short_description = 'Status'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         actions_html = []
         if obj.is_active:
             if obj.is_temporary:
@@ -584,14 +584,14 @@ class AssignmentAdmin(admin.ModelAdmin):
         )
         
         return format_html(' '.join(actions_html))
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
 
 @admin.register(MaintenanceSchedule)
 class MaintenanceScheduleAdmin(admin.ModelAdmin):
     list_display = (
-        'device', 'maintenance_type', 'scheduled_date', 'status',
-        'vendor', 'estimated_cost', 'completion_date'
+   'device', 'maintenance_type', 'scheduled_date', 'status',
+   'vendor', 'estimated_cost', 'completion_date', 'action_buttons'
     )
     list_filter = ('maintenance_type', 'status', 'scheduled_date', 'vendor')
     search_fields = ('device__device_id', 'device__device_name', 'description')

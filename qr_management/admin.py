@@ -213,7 +213,7 @@ class QRCodeScanAdmin(admin.ModelAdmin):
         )
     verification_status_display.short_description = 'Status'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         actions_html = []
         
         # View device details
@@ -231,17 +231,14 @@ class QRCodeScanAdmin(admin.ModelAdmin):
         )
         
         return format_html(' '.join(actions_html))
-    actions.short_description = 'Actions'
-
-    def has_add_permission(self, request):
-        return False  # QR scans are created automatically
+    action_buttons.short_description = 'Actions'
 
 
 @admin.register(QRAnalytics)
 class QRAnalyticsAdmin(admin.ModelAdmin):
     list_display = (
-        'metric_type', 'aggregation_period', 'period_start', 'period_end',
-        'value', 'department', 'location', 'calculated_at'
+   'metric_type', 'aggregation_period', 'period_start', 'period_end',
+   'value', 'department', 'location', 'calculated_at', 'action_buttons'
     )
     list_filter = (
         'metric_type', 'aggregation_period', 'department',

@@ -55,7 +55,7 @@ from .models import (
 # CORRECTED: Import the correct DeviceTransferForm
 from .forms import (
     DeviceForm, AssignmentForm, StaffForm, ReturnForm, 
-    LocationForm, DeviceSearchForm, BulkDeviceActionForm,  
+    LocationForm, AdvancedSearchForm, BulkDeviceActionForm,  
     BulkAssignmentForm, MaintenanceScheduleForm, DeviceTransferForm, AssignmentSearchForm,
     VendorForm, CSVImportForm, DepartmentForm, DeviceTypeForm
 )
@@ -442,40 +442,6 @@ def device_list(request):
         'device_type', 'vendor', 'current_location'
     ).all()
     
-    # Apply search and filters
-    form = DeviceSearchForm(request.GET)
-    if form.is_valid():
-        search = form.cleaned_data.get('search')
-        if search:
-            devices = devices.filter(
-                Q(device_id__icontains=search) |
-                Q(device_name__icontains=search) |
-                Q(asset_tag__icontains=search) |
-                Q(brand__icontains=search) |
-                Q(model__icontains=search) |
-                Q(serial_number__icontains=search)
-            )
-        
-        status = form.cleaned_data.get('status')
-        if status:
-            devices = devices.filter(status=status)
-        
-        condition = form.cleaned_data.get('condition')
-        if condition:
-            devices = devices.filter(condition=condition)
-        
-        category = form.cleaned_data.get('category')
-        if category:
-            devices = devices.filter(device_type__subcategory__category=category)
-        
-        location = form.cleaned_data.get('location')
-        if location:
-            devices = devices.filter(current_location=location)
-        
-        vendor = form.cleaned_data.get('vendor')
-        if vendor:
-            devices = devices.filter(vendor=vendor)
-    
     # Pagination
     paginator = Paginator(devices, 25)
     page_number = request.GET.get('page')
@@ -491,7 +457,6 @@ def device_list(request):
     
     context = {
         'devices': devices_page,
-        'form': form,
         'stats': stats,
         'title': 'Device Management'
     }
@@ -1027,58 +992,7 @@ def ajax_device_types_by_subcategory(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-# Additional form needed for forms.py
-class DeviceCategoryForm(forms.ModelForm):
-    """Form for device categories"""
-    
-    class Meta:
-        model = DeviceCategory
-        fields = ['name', 'category_type', 'description', 'icon', 'is_active']
-        
-        widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'category_type': forms.Select(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'icon': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'e.g., fas fa-laptop'
-            }),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
-        }
 
-class DeviceSubCategoryForm(forms.ModelForm):
-    """Form for device subcategories"""
-    
-    class Meta:
-        model = DeviceSubCategory
-        fields = ['category', 'name', 'code', 'description', 'is_active']
-        
-        widgets = {
-            'category': forms.Select(attrs={'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
-        }
-    
-    def clean_code(self):
-        code = self.cleaned_data.get('code')
-        category = self.cleaned_data.get('category')
-        
-        if code and category:
-            # Check for duplicate codes within the same category
-            existing = DeviceSubCategory.objects.filter(
-                category=category,
-                code=code
-            )
-            
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError(f"Code '{code}' already exists in this category.")
-        
-        return code
 # ================================
 # ASSIGNMENT MANAGEMENT VIEWS
 # ================================
@@ -2583,6 +2497,60 @@ def vendor_edit(request, vendor_id):
     except Exception as e:
         messages.error(request, f"Error loading vendor: {str(e)}")
         return redirect('inventory:vendor_list')
+
+@login_required
+@permission_required('inventory.delete_vendor', raise_exception=True)
+def vendor_delete(request, vendor_id):
+   """Delete vendor with safety checks"""
+   try:
+       vendor = get_object_or_404(Vendor, id=vendor_id)
+       
+       # Check if vendor has associated devices
+       device_count = Device.objects.filter(vendor=vendor).count()
+       maintenance_count = MaintenanceSchedule.objects.filter(vendor=vendor).count()
+       
+       if request.method == 'POST':
+           if device_count > 0 or maintenance_count > 0:
+               messages.error(
+                   request, 
+                   f'Cannot delete vendor "{vendor.name}". It has {device_count} devices and {maintenance_count} maintenance records.'
+               )
+               return redirect('inventory:vendor_detail', vendor_id=vendor.id)
+           
+           try:
+               vendor_name = vendor.name
+               
+               # Create audit log before deletion
+               AuditLog.objects.create(
+                   user=request.user,
+                   action='DELETE',
+                   model_name='Vendor',
+                   object_id=str(vendor.id),
+                   object_repr=str(vendor),
+                   changes={'deleted': 'Vendor deleted'},
+                   ip_address=request.META.get('REMOTE_ADDR')
+               )
+               
+               vendor.delete()
+               messages.success(request, f'Vendor "{vendor_name}" deleted successfully.')
+               return redirect('inventory:vendor_list')
+               
+           except Exception as e:
+               messages.error(request, f'Error deleting vendor: {str(e)}')
+               return redirect('inventory:vendor_detail', vendor_id=vendor.id)
+       
+       context = {
+           'vendor': vendor,
+           'device_count': device_count,
+           'maintenance_count': maintenance_count,
+           'can_delete': device_count == 0 and maintenance_count == 0,
+       }
+       
+       return render(request, 'inventory/vendor_confirm_delete.html', context)
+       
+   except Exception as e:
+       messages.error(request, f"Error loading vendor: {str(e)}")
+       return redirect('inventory:vendor_list')
 
 # ================================
 # MAINTENANCE MANAGEMENT VIEWS

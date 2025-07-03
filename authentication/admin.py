@@ -284,7 +284,7 @@ class UserProfileAdmin(admin.ModelAdmin):
             return format_html('<span style="color: red;">❌ Inactive</span>')
     is_active.short_description = 'Status'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         actions_html = []
         
         if obj.user.is_active:
@@ -296,15 +296,15 @@ class UserProfileAdmin(admin.ModelAdmin):
             actions_html.append('<span style="color: red;">🔒 Locked</span>')
         
         return format_html(' '.join(actions_html))
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
 
 # Extend the default User admin
 class UserAdmin(BaseUserAdmin):
     inlines = (UserProfileInline, UserSessionInline, LoginAttemptInline, PasswordHistoryInline)
     list_display = (
-        'username', 'email', 'first_name', 'last_name', 'role_display',
-        'last_login', 'is_active', 'is_staff', 'login_attempts'
+   'username', 'email', 'first_name', 'last_name', 'role_display',
+   'last_login', 'is_active', 'is_staff', 'login_attempts', 'action_buttons'
     )
     list_filter = (UserStatusFilter, 'is_staff', 'is_superuser', 'is_active', 'date_joined')
     
@@ -437,16 +437,16 @@ class UserSessionAdmin(admin.ModelAdmin):
             return f"{int(hours / 24)}d {int(hours % 24)}h"
     duration.short_description = 'Duration'
 
-    def actions(self, obj):
+    def action_buttons(self, obj):
         if obj.is_active:
             return format_html('<a class="button" href="#" onclick="endSession(\'{}\')">End Session</a>', obj.pk)
         return '-'
-    actions.short_description = 'Actions'
+    action_buttons.short_description = 'Actions'
 
 
 @admin.register(PasswordHistory)
 class PasswordHistoryAdmin(admin.ModelAdmin):
-    list_display = ('user', 'created_at', 'is_current', 'password_strength')
+    list_display = ('user', 'created_at', 'is_current', 'password_strength', 'action_buttons')
     list_filter = ('is_current', 'created_at')
     search_fields = ('user__username',)
     readonly_fields = ('created_at', 'password_hash')
