@@ -2810,6 +2810,67 @@ def maintenance_complete(request, maintenance_id):
     except Exception as e:
         messages.error(request, f"Error loading maintenance for completion: {str(e)}")
         return redirect('inventory:maintenance_list')
+    
+@login_required
+def maintenance_schedule(request):
+    """View for managing maintenance schedules - calendar/overview view"""
+    try:
+        # Get all active maintenance schedules
+        schedules = MaintenanceSchedule.objects.select_related(
+            'device', 'vendor', 'assigned_technician'
+        ).filter(is_active=True).order_by('next_due_date')
+        
+        # Filter by status if provided
+        status_filter = request.GET.get('status')
+        if status_filter:
+            schedules = schedules.filter(status=status_filter)
+        
+        # Filter by date range
+        date_from = request.GET.get('date_from')
+        date_to = request.GET.get('date_to')
+        
+        if date_from:
+            schedules = schedules.filter(next_due_date__gte=date_from)
+        if date_to:
+            schedules = schedules.filter(next_due_date__lte=date_to)
+        
+        # Get overdue schedules
+        overdue_schedules = schedules.filter(
+            next_due_date__lt=timezone.now().date(),
+            status='SCHEDULED'
+        )
+        
+        # Get upcoming schedules (next 30 days)
+        upcoming_schedules = schedules.filter(
+            next_due_date__gte=timezone.now().date(),
+            next_due_date__lte=timezone.now().date() + timedelta(days=30),
+            status='SCHEDULED'
+        )
+        
+        # Statistics
+        stats = {
+            'total_schedules': schedules.count(),
+            'overdue_count': overdue_schedules.count(),
+            'upcoming_count': upcoming_schedules.count(),
+            'completed_this_month': schedules.filter(
+                status='COMPLETED',
+                last_completed_date__month=timezone.now().month
+            ).count(),
+        }
+        
+        context = {
+            'schedules': schedules,
+            'overdue_schedules': overdue_schedules,
+            'upcoming_schedules': upcoming_schedules,
+            'stats': stats,
+            'status_choices': MaintenanceSchedule.STATUS_CHOICES,
+        }
+        
+        return render(request, 'inventory/maintenance/schedule.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error loading maintenance schedule: {str(e)}")
+        return render(request, 'inventory/maintenance/schedule.html', {})
 
 # ================================
 # DEVICE TYPE MANAGEMENT VIEWS
