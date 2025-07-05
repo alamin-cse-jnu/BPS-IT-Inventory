@@ -93,50 +93,64 @@ def public_qr_verify(request, device_id):
         return render(request, 'public/qr_verify.html', context, status=404)
 
 
-def public_qr_verify(request, device_id):
-    """Public QR verification view (no login required)"""
+def system_health_check(request):
+    """System health check endpoint"""
     try:
-        device = get_object_or_404(Device, device_id=device_id)
-        
-        # Get current assignment info
-        current_assignment = None
-        try:
-            from inventory.models import Assignment
-            current_assignment = Assignment.objects.filter(
-                device=device, is_active=True
-            ).select_related('assigned_to_staff__user', 'assigned_to_department').first()
-        except:
-            pass
-        
-        # Create verification context
-        context = {
-            'device': device,
-            'current_assignment': current_assignment,
-            'verification_time': timezone.now(),
-            'system_name': 'BPS IT Inventory Management System',
-        }
-        
-        # Log QR scan if model exists
-        try:
-            from qr_management.models import QRCodeScan
-            QRCodeScan.objects.create(
-                device=device,
-                scanned_at=timezone.now(),
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')[:200]
-            )
-        except:
-            pass
-        
-        return render(request, 'public/qr_verify.html', context)
-        
+        # Database connectivity check
+        device_count = Device.objects.count()
+        db_status = "OK"
     except Exception as e:
-        context = {
-            'error': 'Device not found or invalid QR code',
-            'device_id': device_id,
-            'system_name': 'BPS IT Inventory Management System',
+        device_count = 0
+        db_status = f"ERROR: {str(e)}"
+    
+    # Check cache if configured
+    cache_status = "OK"
+    try:
+        from django.core.cache import cache
+        cache.set('health_check', 'test', 30)
+        if cache.get('health_check') != 'test':
+            cache_status = "ERROR: Cache not working"
+    except Exception as e:
+        cache_status = f"ERROR: {str(e)}"
+    
+    # Media directory check
+    import os
+    media_status = "OK" if os.path.exists(settings.MEDIA_ROOT) else "ERROR: Media directory not found"
+    
+    # Static files check
+    static_status = "OK" if os.path.exists(settings.STATIC_ROOT) else "WARNING: Static directory not found"
+    
+    health_data = {
+        'status': 'healthy' if db_status == "OK" and cache_status == "OK" else 'unhealthy',
+        'timestamp': timezone.now().isoformat(),
+        'checks': {
+            'database': {
+                'status': db_status,
+                'device_count': device_count
+            },
+            'cache': {
+                'status': cache_status
+            },
+            'media': {
+                'status': media_status,
+                'path': str(settings.MEDIA_ROOT)
+            },
+            'static': {
+                'status': static_status,
+                'path': str(settings.STATIC_ROOT)
+            }
+        },
+        'system_info': {
+            'debug_mode': settings.DEBUG,
+            'allowed_hosts': settings.ALLOWED_HOSTS,
+            'database_engine': settings.DATABASES['default']['ENGINE']
         }
-        return render(request, 'public/qr_verify.html', context, status=404)
+    }
+    
+    if request.GET.get('format') == 'json':
+        return JsonResponse(health_data)
+    
+    return render(request, 'system/health_check.html', {'health_data': health_data})
 
 
 @login_required
