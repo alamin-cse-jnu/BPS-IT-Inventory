@@ -361,49 +361,14 @@ class QRIntegrationLogAdmin(admin.ModelAdmin):
         'integration_type', 'status', 'method', 'created_at'
     )
     search_fields = ('endpoint', 'error_message', 'user__username')
-    readonly_fields = (
-        'id', 'response_time_ms', 'created_at'
-    )
+    readonly_fields = ('id', 'response_time_ms', 'created_at')
     date_hierarchy = 'created_at'
-    
-    fieldsets = (
-        ('Integration Information', {
-            'fields': (
-                'id', 'integration_type', 'status', 'user'
-            )
-        }),
-        ('Request Details', {
-            'fields': (
-                'endpoint', 'method', 'request_data'
-            )
-        }),
-        ('Response Details', {
-            'fields': (
-                'response_data', 'response_time_ms', 'records_processed'
-            )
-        }),
-        ('Error Information', {
-            'fields': (
-                'error_message', 'error_code'
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Metadata', {
-            'fields': (
-                'ip_address', 'user_agent', 'created_at'
-            ),
-            'classes': ('collapse',)
-        })
-    )
     
     def has_add_permission(self, request):
         return False  # Log entries should not be manually created
     
     def has_change_permission(self, request, obj=None):
         return False  # Log entries should not be modified
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('user')
 
 # ================================
 # CUSTOM ADMIN ACTIONS
