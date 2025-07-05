@@ -1,3 +1,6 @@
+# authentication/admin.py
+# Location: bps_inventory/apps/authentication/admin.py
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
@@ -69,25 +72,21 @@ class UserRoleAdmin(admin.ModelAdmin):
 class UserRoleAssignmentAdmin(admin.ModelAdmin):
     list_display = (
         'user', 'role', 'department', 'is_active', 
-        'effective_from', 'effective_until', 'assigned_by'
+        'created_at', 'assigned_by'  # Removed non-existent fields
     )
     list_filter = (
-        'is_active', 'role', 'department', 
-        'effective_from', 'created_at'
+        'is_active', 'role', 'department', 'created_at'  # Removed non-existent fields
     )
     search_fields = (
         'user__username', 'user__first_name', 'user__last_name',
         'user__email', 'role__display_name'
     )
-    date_hierarchy = 'effective_from'
+    date_hierarchy = 'created_at'  # Changed from non-existent 'effective_from'
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         ('Assignment Details', {
             'fields': ('user', 'role', 'department', 'is_active')
-        }),
-        ('Effective Period', {
-            'fields': ('effective_from', 'effective_until')
         }),
         ('Assignment Context', {
             'fields': ('assignment_reason', 'assigned_by'),
@@ -111,10 +110,10 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'theme', 'language', 'is_active', 'created_at'
+        'user', 'theme', 'language', 'created_at'  # Removed 'is_active' if it doesn't exist
     )
     list_filter = (
-        'is_active', 'theme', 'language', 'created_at'
+        'theme', 'language', 'created_at'  # Removed 'is_active' if it doesn't exist
     )
     search_fields = (
         'user__username', 'user__first_name', 'user__last_name', 'user__email'
@@ -123,7 +122,7 @@ class UserProfileAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('User Information', {
-            'fields': ('user', 'is_active')
+            'fields': ('user',)
         }),
         ('Preferences', {
             'fields': ('theme', 'language')
@@ -172,15 +171,11 @@ class UserSessionAdmin(admin.ModelAdmin):
         ('Activity Tracking', {
             'fields': ('login_time', 'last_activity', 'logout_time'),
             'classes': ('collapse',)
-        }),
-        ('Security', {
-            'fields': ('is_suspicious', 'failed_login_attempts', 'location_data'),
-            'classes': ('collapse',)
         })
     )
     
     def session_key_short(self, obj):
-        return f"{obj.session_key[:8]}..."
+        return obj.session_key[:8] + '...' if obj.session_key else ''
     session_key_short.short_description = 'Session Key'
     
     def get_queryset(self, request):
@@ -190,37 +185,20 @@ class UserSessionAdmin(admin.ModelAdmin):
 # EXTEND DEFAULT USER ADMIN
 # ================================
 
-# Unregister the default User admin
-admin.site.unregister(User)
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Profile'
+    extra = 0
 
-@admin.register(User)
 class CustomUserAdmin(BaseUserAdmin):
-    list_display = (
-        'username', 'email', 'first_name', 'last_name', 
-        'staff_info', 'is_staff', 'is_active', 'last_login'
-    )
-    list_filter = (
-        'is_staff', 'is_superuser', 'is_active', 
-        'date_joined', 'last_login'
-    )
-    search_fields = ('username', 'first_name', 'last_name', 'email')
+    inlines = (UserProfileInline,)
     
-    def staff_info(self, obj):
-        try:
-            if hasattr(obj, 'staff_profile'):
-                staff = obj.staff_profile
-                return f"{staff.employee_id} - {staff.designation}"
-            return 'No Staff Profile'
-        except:
-            return 'No Staff Profile'
-    staff_info.short_description = 'Staff Info'
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('staff_profile')
+    def get_inline_instances(self, request, obj=None):
+        if not obj:
+            return list()
+        return super().get_inline_instances(request, obj)
 
-# ================================
-# ADMIN SITE CUSTOMIZATION
-# ================================
-admin.site.site_header = "BPS IT Inventory - Authentication Management"
-admin.site.site_title = "BPS Authentication Admin"
-admin.site.index_title = "User & Role Management"
+# Unregister and re-register User admin
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
