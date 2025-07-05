@@ -146,7 +146,7 @@ class DeviceAdmin(admin.ModelAdmin):
     search_fields = (
         'device_id', 'device_name', 'asset_tag', 'serial_number', 'brand', 'model'
     )
-    readonly_fields = ('created_at', 'updated_at', 'age_display', 'warranty_days_remaining')
+    readonly_fields = ('created_at', 'updated_at', 'warranty_days_remaining', 'age_display')
     list_select_related = ('device_type', 'vendor')
     
     fieldsets = (
@@ -172,7 +172,7 @@ class DeviceAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Technical Specifications', {
-            'fields': ('specifications',),
+            'fields': ('processor', 'memory_ram', 'storage_capacity', 'operating_system'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -180,6 +180,12 @@ class DeviceAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+    
+    def age_display(self, obj):
+        """Display device age in years"""
+        age = obj.age_in_years
+        return f"{age:.2f} years" if age is not None else "N/A"
+    age_display.short_description = 'Device Age'
     
     def assigned_display(self, obj):
         """Show current assignment status"""
@@ -328,15 +334,15 @@ class MaintenanceScheduleAdmin(admin.ModelAdmin):
         'device', 'maintenance_type', 'status', 'get_scheduled_date', 'created_at'
     )
     list_filter = (
-        'maintenance_type', 'status', 'due_date', 'created_at'
+        'maintenance_type', 'status', 'next_due_date', 'created_at'
     )
     search_fields = ('device__device_id', 'device__device_name')
-    date_hierarchy = 'due_date'
+    date_hierarchy = 'next_due_date'
     readonly_fields = ('created_at', 'updated_at')
     
     def get_scheduled_date(self, obj):
-        """Get the scheduled date (due_date field)"""
-        return obj.due_date
+        """Get the scheduled date (next_due_date field)"""
+        return obj.next_due_date
     get_scheduled_date.short_description = 'Scheduled Date'
 
 # ================================
