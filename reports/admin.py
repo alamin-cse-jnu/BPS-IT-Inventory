@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from .models import (
     Dashboard, DashboardWidget, CustomQuery, ReportTemplate,
-    ScheduledReport, ReportExecution
+    ReportSchedule, ReportGeneration
 )
 
 # ================================
@@ -19,25 +19,29 @@ from .models import (
 @admin.register(Dashboard)
 class DashboardAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'owner', 'dashboard_type', 'created_at'  # Fixed field names - removed 'is_shared'
+        'name', 'owner', 'dashboard_type', 'is_active', 'created_at'
     )
     list_filter = (
-        'dashboard_type', 'created_at'  # Fixed field names - removed 'is_shared'
+        'dashboard_type', 'is_active', 'created_at'
     )
     search_fields = ('name', 'description', 'owner__username')
-    readonly_fields = ('created_at', 'updated_at')  # Fixed field names
-    filter_horizontal = ('shared_with_users', 'shared_with_departments')
+    readonly_fields = ('created_at', 'updated_at')
+    filter_horizontal = ('shared_with_users',)
     
     fieldsets = (
         ('Dashboard Information', {
             'fields': ('name', 'description', 'dashboard_type', 'owner')
         }),
         ('Layout Configuration', {
-            'fields': ('layout_config', 'theme_settings'),
+            'fields': ('layout_config',),
             'classes': ('collapse',)
         }),
-        ('Sharing Settings', {
-            'fields': ('shared_with_users', 'shared_with_departments'),
+        ('Access Control', {
+            'fields': ('is_public', 'accessible_by_roles', 'shared_with_users'),
+            'classes': ('collapse',)
+        }),
+        ('Settings', {
+            'fields': ('is_active', 'is_default'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -53,23 +57,24 @@ class DashboardAdmin(admin.ModelAdmin):
 @admin.register(DashboardWidget)
 class DashboardWidgetAdmin(admin.ModelAdmin):
     list_display = (
-        'title', 'dashboard', 'widget_type', 'position_x', 'position_y', 'size_width', 'size_height'
+        'name', 'widget_type', 'is_active', 'created_by', 'created_at'
     )
     list_filter = (
-        'widget_type', 'dashboard'  # Fixed field names
+        'widget_type', 'is_active', 'created_at'
     )
-    search_fields = ('title', 'dashboard__name')
-    readonly_fields = ('created_at', 'updated_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('id', 'created_at', 'updated_at')
     
     fieldsets = (
         ('Widget Information', {
-            'fields': ('title', 'dashboard', 'widget_type')
-        }),
-        ('Position & Size', {
-            'fields': ('position_x', 'position_y', 'size_width', 'size_height')
+            'fields': ('id', 'name', 'description', 'widget_type')
         }),
         ('Configuration', {
-            'fields': ('widget_config', 'data_source_config'),
+            'fields': ('config', 'data_source', 'refresh_interval'),
+            'classes': ('collapse',)
+        }),
+        ('Status & Permissions', {
+            'fields': ('is_active', 'is_system_widget', 'created_by'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -85,26 +90,30 @@ class DashboardWidgetAdmin(admin.ModelAdmin):
 @admin.register(CustomQuery)
 class CustomQueryAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'query_type', 'created_by', 'is_public', 'execution_count', 'created_at'
+        'name', 'query_type', 'security_level', 'is_active', 'created_by', 'created_at'
     )
-    list_filter = ('query_type', 'is_public', 'created_at')
+    list_filter = ('query_type', 'security_level', 'is_active', 'created_at')
     search_fields = ('name', 'description', 'created_by__username')
-    readonly_fields = ('created_at', 'updated_at', 'execution_count')  # Fixed field names
+    readonly_fields = ('created_at', 'updated_at', 'last_executed', 'execution_count')
     
     fieldsets = (
         ('Query Information', {
             'fields': ('name', 'description', 'query_type', 'created_by')
         }),
         ('Query Definition', {
-            'fields': ('query_sql', 'query_parameters'),
+            'fields': ('sql_query', 'parameters'),
             'classes': ('collapse',)
         }),
-        ('Access Control', {
-            'fields': ('is_public', 'allowed_users', 'allowed_departments'),
+        ('Security & Access', {
+            'fields': ('security_level', 'allowed_users', 'allowed_groups'),
             'classes': ('collapse',)
         }),
-        ('Execution Stats', {
-            'fields': ('execution_count', 'last_executed_at', 'average_execution_time_ms'),
+        ('Settings', {
+            'fields': ('is_active', 'timeout_seconds', 'cache_duration'),
+            'classes': ('collapse',)
+        }),
+        ('Execution Statistics', {
+            'fields': ('last_executed', 'execution_count'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -120,12 +129,11 @@ class CustomQueryAdmin(admin.ModelAdmin):
 @admin.register(ReportTemplate)
 class ReportTemplateAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'report_type', 'category', 'is_system_template', 
-        'usage_count', 'created_by', 'created_at'
+        'name', 'report_type', 'category', 'is_active', 'is_system_template', 'usage_count', 'created_by'
     )
-    list_filter = ('report_type', 'category', 'is_system_template', 'created_at')
+    list_filter = ('report_type', 'category', 'is_active', 'is_system_template', 'created_at')
     search_fields = ('name', 'description', 'created_by__username')
-    readonly_fields = ('created_at', 'updated_at', 'usage_count', 'last_used_at')
+    readonly_fields = ('created_at', 'updated_at', 'usage_count', 'last_used')
     
     fieldsets = (
         ('Template Information', {
@@ -140,7 +148,7 @@ class ReportTemplateAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Usage Statistics', {
-            'fields': ('usage_count', 'last_used_at'),
+            'fields': ('usage_count', 'last_used'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -150,41 +158,44 @@ class ReportTemplateAdmin(admin.ModelAdmin):
     )
 
 # ================================
-# SCHEDULED REPORT MANAGEMENT
+# REPORT SCHEDULE MANAGEMENT (Previously ScheduledReport)
 # ================================
 
-@admin.register(ScheduledReport)
-class ScheduledReportAdmin(admin.ModelAdmin):
+@admin.register(ReportSchedule)
+class ReportScheduleAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'report_template', 'schedule_type', 'is_active', 
-        'next_execution', 'last_execution', 'created_by'
+        'name', 'template', 'frequency', 'is_active', 
+        'next_run', 'last_run', 'created_by'
     )
-    list_filter = ('schedule_type', 'is_active', 'created_at', 'next_execution')
+    list_filter = ('frequency', 'is_active', 'created_at', 'next_run')
     search_fields = ('name', 'description', 'created_by__username')
     readonly_fields = (
-        'created_at', 'updated_at', 'last_execution', 
-        'next_execution', 'execution_count'
+        'created_at', 'updated_at', 'last_run', 
+        'next_run', 'run_count'
     )
-    filter_horizontal = ('recipients',)
+    filter_horizontal = ('notify_users',)
     
     fieldsets = (
         ('Schedule Information', {
-            'fields': ('name', 'description', 'report_template', 'created_by')
+            'fields': ('name', 'description', 'template', 'created_by')
         }),
         ('Schedule Configuration', {
             'fields': (
-                'schedule_type', 'schedule_config', 'timezone', 
-                'is_active', 'start_date', 'end_date'
+                'frequency', 'time_of_day', 'day_of_week', 'day_of_month',
+                'custom_schedule', 'is_active', 'start_date', 'end_date'
             )
         }),
+        ('Report Settings', {
+            'fields': ('default_format', 'filters'),
+            'classes': ('collapse',)
+        }),
         ('Recipients', {
-            'fields': ('recipients', 'additional_emails'),
+            'fields': ('email_recipients', 'notify_users'),
             'classes': ('collapse',)
         }),
         ('Execution Status', {
             'fields': (
-                'last_execution', 'next_execution', 'execution_count', 
-                'last_execution_status', 'last_error_message'
+                'last_run', 'next_run', 'run_count', 'failure_count'
             ),
             'classes': ('collapse',)
         }),
@@ -195,40 +206,42 @@ class ScheduledReportAdmin(admin.ModelAdmin):
     )
 
 # ================================
-# REPORT EXECUTION MANAGEMENT
+# REPORT GENERATION MANAGEMENT (Previously ReportExecution)
 # ================================
 
-@admin.register(ReportExecution)
-class ReportExecutionAdmin(admin.ModelAdmin):
+@admin.register(ReportGeneration)
+class ReportGenerationAdmin(admin.ModelAdmin):
     list_display = (
-        'scheduled_report', 'execution_type', 'status', 'started_at', 
-        'completed_at', 'execution_time_seconds', 'file_size_bytes'
+        'report_name', 'template', 'status', 'file_format', 
+        'generated_by', 'created_at', 'file_size_human'
     )
-    list_filter = ('execution_type', 'status', 'started_at', 'completed_at')
-    search_fields = ('scheduled_report__name', 'executed_by__username')
+    list_filter = ('status', 'file_format', 'priority', 'created_at')
+    search_fields = ('report_name', 'template__name', 'generated_by__username')
     readonly_fields = (
-        'started_at', 'completed_at', 'execution_time_seconds', 
-        'file_size_bytes', 'error_message', 'execution_log'
+        'id', 'created_at', 'updated_at', 'file_size', 'file_size_human'
     )
-    date_hierarchy = 'started_at'
+    date_hierarchy = 'created_at'
     
     fieldsets = (
-        ('Execution Information', {
-            'fields': ('scheduled_report', 'execution_type', 'executed_by')
+        ('Report Information', {
+            'fields': ('report_name', 'template', 'generated_by')
         }),
-        ('Execution Status', {
-            'fields': ('status', 'started_at', 'completed_at', 'execution_time_seconds')
+        ('Generation Settings', {
+            'fields': ('file_format', 'priority', 'parameters')
+        }),
+        ('Status & Timing', {
+            'fields': ('status', 'created_at', 'updated_at')
         }),
         ('Output Details', {
-            'fields': ('output_format', 'file_path', 'file_size_bytes'),
-            'classes': ('collapse',)
-        }),
-        ('Parameters Used', {
-            'fields': ('parameters_used',),
+            'fields': ('file_path', 'file_size', 'file_size_human'),
             'classes': ('collapse',)
         }),
         ('Error Handling', {
-            'fields': ('error_message', 'execution_log'),
+            'fields': ('error_message', 'retry_count'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('id',),
             'classes': ('collapse',)
         })
     )
@@ -270,6 +283,6 @@ def deactivate_scheduled_reports(modeladmin, request, queryset):
     )
 deactivate_scheduled_reports.short_description = "Deactivate selected scheduled reports"
 
-# Add actions to respective admin classes
+# Add actions to the admin classes
 DashboardAdmin.actions = [mark_dashboards_as_private]
-ScheduledReportAdmin.actions = [activate_scheduled_reports, deactivate_scheduled_reports]
+ReportScheduleAdmin.actions = [activate_scheduled_reports, deactivate_scheduled_reports]

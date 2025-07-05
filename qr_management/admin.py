@@ -29,11 +29,11 @@ admin.site.index_title = "QR Code Management Dashboard"
 class QRCodeScanAdmin(admin.ModelAdmin):
     list_display = (
         'device_link', 'scan_type', 'scanned_by', 'verification_status_display', 
-        'timestamp', 'scan_location', 'discrepancy_count'
+        'timestamp', 'discrepancy_count'
     )
     list_filter = (
         'scan_type', 'verification_success', 'timestamp', 
-        'scan_location', 'device_status_at_scan'
+        'device_status_at_scan'
     )
     search_fields = (
         'device__device_id', 'device__device_name', 
@@ -44,8 +44,7 @@ class QRCodeScanAdmin(admin.ModelAdmin):
         'id', 'timestamp', 'has_discrepancies', 'scan_result_display', 'location_matches'
     )
     list_select_related = (
-        'device', 'scanned_by', 'scan_location', 
-        'device_location_at_scan', 'assigned_staff_at_scan'
+        'device', 'scanned_by', 'device_location_at_scan', 'assigned_staff_at_scan'
     )
     
     fieldsets = (
@@ -56,192 +55,135 @@ class QRCodeScanAdmin(admin.ModelAdmin):
         }),
         ('Location Data', {
             'fields': (
-                'scan_location', 'device_location_at_scan', 'gps_coordinates', 'location_matches'
+                'device_location_at_scan', 'gps_coordinates', 'location_matches'
             )
         }),
         ('Device State at Scan', {
             'fields': (
-                'device_status_at_scan', 'assigned_staff_at_scan'
-            )
-        }),
-        ('Verification Results', {
-            'fields': (
-                'verification_success', 'discrepancies_found', 'actions_taken',
-                'scan_notes', 'has_discrepancies', 'scan_result_display'
-            )
-        }),
-        ('Technical Details', {
-            'fields': (
-                'ip_address', 'user_agent', 'device_info', 'app_version',
-                'scan_duration_ms'
+                'device_status_at_scan', 'assigned_staff_at_scan', 
+                'device_condition_at_scan'
             ),
             'classes': ('collapse',)
         }),
-        ('Batch Information', {
+        ('Verification Results', {
             'fields': (
-                'batch_scan_id', 'batch_sequence'
-            ),
+                'verification_success', 'discrepancy_details', 'has_discrepancies',
+                'scan_result_display'
+            )
+        }),
+        ('Additional Data', {
+            'fields': ('additional_scan_data', 'notes'),
             'classes': ('collapse',)
         })
     )
     
     def device_link(self, obj):
-        """Link to device admin page"""
         if obj.device:
             url = reverse('admin:inventory_device_change', args=[obj.device.pk])
             return format_html('<a href="{}">{}</a>', url, obj.device.device_id)
-        return "Unknown Device"
+        return "No Device"
     device_link.short_description = 'Device'
-    device_link.admin_order_field = 'device__device_id'
     
     def verification_status_display(self, obj):
-        """Display verification status with color coding"""
         if obj.verification_success:
-            if obj.has_discrepancies:
-                return format_html(
-                    '<span style="color: orange;">✓ Success (with notes)</span>'
-                )
-            else:
-                return format_html(
-                    '<span style="color: green;">✓ Success</span>'
-                )
-        else:
-            return format_html(
-                '<span style="color: red;">✗ Failed</span>'
-            )
+            return format_html('<span style="color: green;">✓ Verified</span>')
+        return format_html('<span style="color: red;">✗ Failed</span>')
     verification_status_display.short_description = 'Status'
-    
-    def discrepancy_count(self, obj):
-        """Count of discrepancies found"""
-        if obj.discrepancies_found:
-            return len(obj.discrepancies_found.split('\n'))
-        return 0
-    discrepancy_count.short_description = 'Discrepancies'
 
 # ================================
-# QR CODE TEMPLATES
+# QR SCAN LOCATION MANAGEMENT
 # ================================
 
-@admin.register(QRCodeTemplate)
-class QRCodeTemplateAdmin(admin.ModelAdmin):
+@admin.register(QRScanLocation)
+class QRScanLocationAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'template_type', 'size', 'usage_count', 
-        'is_active', 'is_default', 'created_at'
+        'scan', 'location_display_short', 'accuracy_level', 
+        'location_source'
     )
     list_filter = (
-        'template_type', 'size', 'is_active', 'is_default', 
-        'is_system_template', 'created_at'
+        'accuracy_level', 'location_source'
     )
-    search_fields = ('name', 'description')
+    search_fields = (
+        'scan__device__device_id', 'detected_location__location_name'
+    )
     readonly_fields = (
-        'id', 'usage_count', 'created_at', 'updated_at'
+        'scan', 'latitude', 'longitude', 'altitude', 'accuracy_meters'
     )
-    actions = ['set_as_default', 'duplicate_template']
     
     fieldsets = (
-        ('Template Information', {
+        ('Scan Reference', {
+            'fields': ('scan',)
+        }),
+        ('GPS Coordinates', {
             'fields': (
-                'id', 'name', 'description', 'template_type'
+                'latitude', 'longitude', 'altitude', 
+                'accuracy_meters', 'accuracy_level', 'location_source'
             )
         }),
-        ('QR Code Settings', {
+        ('Location Mapping', {
             'fields': (
-                'size', 'custom_width', 'custom_height', 'qr_size', 
-                'qr_border', 'error_correction'
+                'detected_location', 'verified_location'
             )
         }),
-        ('Appearance', {
-            'fields': (
-                'foreground_color', 'background_color', 'include_logo',
-                'logo_file', 'logo_size_percentage'
-            )
-        }),
-        ('Template Status', {
-            'fields': (
-                'is_active', 'is_default', 'is_system_template', 'usage_count'
-            )
-        }),
-        ('Audit Information', {
-            'fields': ('created_by', 'created_at', 'updated_at'),
+        ('Environmental Data', {
+            'fields': ('environmental_data',),
             'classes': ('collapse',)
         })
     )
     
-    def set_as_default(self, request, queryset):
-        """Set selected template as default"""
-        if queryset.count() == 1:
-            QRCodeTemplate.objects.update(is_default=False)
-            queryset.update(is_default=True)
-            self.message_user(request, 'Template set as default.')
-        else:
-            self.message_user(request, 'Please select only one template.', level='error')
-    set_as_default.short_description = "Set as default template"
+    def location_display_short(self, obj):
+        """Short version of location display"""
+        if obj.detected_location:
+            return obj.detected_location.location_name
+        elif obj.latitude and obj.longitude:
+            return f"GPS: {obj.latitude:.4f}, {obj.longitude:.4f}"
+        return "Unknown"
+    location_display_short.short_description = 'Location'
 
 # ================================
-# QR CODE BATCH GENERATION
+# QR INTEGRATION LOGS
 # ================================
 
-@admin.register(QRCodeBatch)
-class QRCodeBatchAdmin(admin.ModelAdmin):
+@admin.register(QRIntegrationLog)
+class QRIntegrationLogAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'generation_type', 'device_count', 'status', 
-        'progress_display', 'created_at', 'created_by'
+        'integration_type', 'status', 'created_at', 'response_time_ms'
     )
-    list_filter = (
-        'generation_type', 'status', 'output_format', 'created_at'
-    )
-    search_fields = ('name', 'created_by__username')
+    list_filter = ('integration_type', 'status', 'created_at')
+    search_fields = ('integration_type', 'endpoint', 'error_message')
     readonly_fields = (
-        'id', 'device_count', 'generated_count', 'progress_percentage',
-        'created_at', 'started_at', 'completed_at'
+        'created_at', 'request_data', 'response_data', 
+        'response_time_ms', 'error_message'
     )
     date_hierarchy = 'created_at'
     
     fieldsets = (
-        ('Batch Information', {
-            'fields': (
-                'id', 'name', 'generation_type', 'template'
-            )
+        ('Integration Details', {
+            'fields': ('integration_type', 'status', 'created_at')
         }),
-        ('Generation Parameters', {
-            'fields': (
-                'device_filter', 'device_list', 'output_format'
-            )
+        ('Request Information', {
+            'fields': ('endpoint', 'method', 'request_data'),
+            'classes': ('collapse',)
         }),
-        ('Progress Tracking', {
-            'fields': (
-                'status', 'device_count', 'generated_count',
-                'progress_percentage', 'current_device'
-            )
+        ('Response Information', {
+            'fields': ('response_data', 'response_time_ms', 'records_processed'),
+            'classes': ('collapse',)
         }),
-        ('Timeline', {
-            'fields': (
-                'created_at', 'started_at', 'completed_at'
-            )
+        ('Error Handling', {
+            'fields': ('error_message', 'error_code'),
+            'classes': ('collapse',)
         }),
-        ('Created By', {
-            'fields': ('created_by',),
+        ('User Context', {
+            'fields': ('user', 'ip_address', 'user_agent'),
             'classes': ('collapse',)
         })
     )
     
-    def progress_display(self, obj):
-        """Display progress with progress bar"""
-        progress = obj.progress_percentage or 0
-        if progress == 100:
-            color = 'green'
-        elif progress > 50:
-            color = 'orange'
-        else:
-            color = 'red'
-        
-        return format_html(
-            '<div style="width: 100px; background-color: #f0f0f0;">'
-            '<div style="width: {}px; background-color: {}; height: 20px; text-align: center; color: white;">{:.0f}%</div>'
-            '</div>',
-            progress, color, progress
-        )
-    progress_display.short_description = 'Progress'
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
 
 # ================================
 # QR CAMPAIGNS
@@ -318,31 +260,26 @@ class QRAnalyticsAdmin(admin.ModelAdmin):
         'metric_value', 'department', 'location', 'calculated_at'
     )
     list_filter = (
-        'metric_type', 'aggregation_period', 'period_start',
-        'department', 'location', 'device_category'
+        'metric_type', 'aggregation_period', 'period_start', 
+        'department', 'location'
     )
-    search_fields = (
-        'department__name', 'location__name', 'device_category__name'
-    )
+    search_fields = ('metric_type', 'department__name', 'location__location_name')
     readonly_fields = (
         'calculated_at', 'calculation_time_ms', 'data_points_count'
     )
     date_hierarchy = 'period_start'
     
     fieldsets = (
-        ('Metric Information', {
+        ('Analytics Information', {
             'fields': (
-                'metric_type', 'aggregation_period', 
-                'period_start', 'period_end', 'metric_value'
+                'metric_type', 'aggregation_period', 'metric_value'
             )
         }),
-        ('Scope Filters', {
-            'fields': (
-                'department', 'location', 'device_category'
-            )
+        ('Time Period', {
+            'fields': ('period_start', 'period_end')
         }),
-        ('Additional Data', {
-            'fields': ('additional_data',),
+        ('Scope', {
+            'fields': ('department', 'location', 'device_category'),
             'classes': ('collapse',)
         }),
         ('Calculation Metadata', {
@@ -355,101 +292,80 @@ class QRAnalyticsAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         return False
-    
-    def has_change_permission(self, request, obj=None):
-        return False
 
 # ================================
-# QR SCAN LOCATION
+# QR CODE BATCH
 # ================================
 
-@admin.register(QRScanLocation)
-class QRScanLocationAdmin(admin.ModelAdmin):
+@admin.register(QRCodeBatch)
+class QRCodeBatchAdmin(admin.ModelAdmin):
     list_display = (
-        'scan', 'location_display_short', 'accuracy_level', 'location_source',
-        'is_location_verified', 'created_at'
+        'name', 'batch_type', 'total_codes', 'generated_codes', 
+        'status', 'created_at'
     )
-    list_filter = (
-        'accuracy_level', 'location_source', 'is_location_verified', 'created_at'
+    list_filter = ('batch_type', 'status', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = (
+        'id', 'generated_codes', 'failed_codes', 'progress_percentage',
+        'created_at', 'updated_at'
     )
-    search_fields = (
-        'scan__device__device_id', 'detected_location__name'
-    )
-    readonly_fields = ('scan', 'created_at', 'updated_at')
     
     fieldsets = (
-        ('Scan Reference', {
-            'fields': ('scan',)
-        }),
-        ('GPS Coordinates', {
-            'fields': ('latitude', 'longitude', 'altitude')
-        }),
-        ('Location Accuracy', {
-            'fields': ('accuracy_meters', 'accuracy_level', 'location_source')
-        }),
-        ('Location Mapping', {
-            'fields': ('detected_location', 'verified_location')
-        }),
-        ('Verification', {
+        ('Batch Information', {
             'fields': (
-                'is_location_verified', 'verified_by', 'verified_at'
+                'id', 'name', 'description', 'batch_type'
             )
         }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
+        ('Generation Settings', {
+            'fields': (
+                'total_codes', 'generation_config', 'template'
+            )
+        }),
+        ('Progress Tracking', {
+            'fields': (
+                'status', 'generated_codes', 'failed_codes', 'progress_percentage'
+            )
+        }),
+        ('Output', {
+            'fields': ('output_file', 'generation_log'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
-    
-    def location_display_short(self, obj):
-        """Short version of location display"""
-        if obj.detected_location:
-            return obj.detected_location.name
-        elif obj.latitude and obj.longitude:
-            return f"GPS: {obj.latitude:.4f}, {obj.longitude:.4f}"
-        return "Unknown"
-    location_display_short.short_description = 'Location'
 
 # ================================
-# QR INTEGRATION LOGS
+# QR CODE TEMPLATE
 # ================================
 
-@admin.register(QRIntegrationLog)
-class QRIntegrationLogAdmin(admin.ModelAdmin):
+@admin.register(QRCodeTemplate)
+class QRCodeTemplateAdmin(admin.ModelAdmin):
     list_display = (
-        'integration_type', 'status', 'timestamp', 'response_time_ms'
+        'name', 'template_type', 'is_active', 'usage_count', 'created_at'
     )
-    list_filter = ('integration_type', 'status', 'timestamp')
-    search_fields = ('integration_type', 'request_data', 'response_data')
-    readonly_fields = (
-        'timestamp', 'request_data', 'response_data', 
-        'response_time_ms', 'error_message'
-    )
-    date_hierarchy = 'timestamp'
+    list_filter = ('template_type', 'is_active', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('usage_count', 'last_used', 'created_at', 'updated_at')
     
     fieldsets = (
-        ('Integration Details', {
-            'fields': ('integration_type', 'status', 'timestamp')
+        ('Template Information', {
+            'fields': ('name', 'description', 'template_type')
         }),
-        ('Request Information', {
-            'fields': ('request_data',),
+        ('Template Configuration', {
+            'fields': ('template_config', 'style_config'),
             'classes': ('collapse',)
         }),
-        ('Response Information', {
-            'fields': ('response_data', 'response_time_ms'),
+        ('Status & Usage', {
+            'fields': ('is_active', 'usage_count', 'last_used'),
             'classes': ('collapse',)
         }),
-        ('Error Handling', {
-            'fields': ('error_message',),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )
-    
-    def has_add_permission(self, request):
-        return False
-    
-    def has_change_permission(self, request, obj=None):
-        return False
 
 # ================================
 # ADMIN ACTIONS
@@ -473,20 +389,16 @@ def cancel_qr_batches(modeladmin, request, queryset):
     )
 cancel_qr_batches.short_description = "Cancel selected QR batches"
 
-def verify_scan_locations(modeladmin, request, queryset):
-    """Mark selected scan locations as verified"""
-    updated = queryset.update(
-        is_location_verified=True,
-        verified_by=request.user,
-        verified_at=timezone.now()
-    )
+def activate_campaigns(modeladmin, request, queryset):
+    """Activate selected campaigns"""
+    updated = queryset.update(status='ACTIVE')
     modeladmin.message_user(
         request,
-        f'{updated} scan location(s) marked as verified.'
+        f'{updated} campaign(s) activated.'
     )
-verify_scan_locations.short_description = "Verify selected scan locations"
+activate_campaigns.short_description = "Activate selected campaigns"
 
-# Add actions to respective admin classes
+# Add actions to admin classes
 QRCodeScanAdmin.actions = [mark_scans_as_verified]
 QRCodeBatchAdmin.actions = [cancel_qr_batches]
-QRScanLocationAdmin.actions = [verify_scan_locations]
+QRCampaignAdmin.actions = [activate_campaigns]

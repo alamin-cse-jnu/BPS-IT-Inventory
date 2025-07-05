@@ -59,9 +59,9 @@ class DeviceSubCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(DeviceType)
 class DeviceTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'subcategory', 'code', 'device_count', 'is_active')
+    list_display = ('name', 'subcategory', 'device_count', 'is_active')
     list_filter = ('subcategory', 'is_active', 'created_at')
-    search_fields = ('name', 'code', 'description')
+    search_fields = ('name', 'description', 'subcategory__name')
     readonly_fields = ('created_at', 'updated_at')
     
     def device_count(self, obj):
@@ -74,83 +74,10 @@ class DeviceTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = (
-        'name', 'location_type', 'parent_location', 'device_count', 'created_at'  # Fixed field names
-    )
-    list_filter = (
-        'location_type', 'created_at'  # Removed non-existent 'parent_location' from filter
-    )
-    search_fields = ('name', 'description')
+    list_display = ('location_name', 'location_code', 'location_type', 'is_active')
+    list_filter = ('location_type', 'is_active')
+    search_fields = ('location_name', 'location_code', 'description')
     readonly_fields = ('created_at', 'updated_at')
-    
-    def device_count(self, obj):
-        return Assignment.objects.filter(
-            assigned_to_location=obj, is_active=True
-        ).count()
-    device_count.short_description = 'Assigned Devices'
-
-# ================================
-# STAFF MANAGEMENT
-# ================================
-
-@admin.register(Staff)
-class StaffAdmin(admin.ModelAdmin):
-    list_display = (
-        'employee_id', 'full_name', 'designation', 'department', 
-        'phone_number', 'assignment_count', 'is_active'
-    )
-    list_filter = ('department', 'is_active', 'employment_type', 'created_at')
-    search_fields = (
-        'employee_id', 'user__first_name', 'user__last_name', 
-        'user__email', 'phone_number'
-    )
-    readonly_fields = ('created_at', 'updated_at')
-    list_select_related = ('user', 'department')
-
-    def full_name(self, obj):
-        if obj.user:
-            return obj.user.get_full_name() or obj.user.username
-        return obj.employee_id
-    full_name.short_description = 'Full Name'
-
-    def assignment_count(self, obj):
-        count = obj.device_assignments.filter(is_active=True).count()
-        if count > 0:
-            url = reverse('admin:inventory_assignment_changelist')
-            return format_html(
-                '<a href="{}?assigned_to_staff__id__exact={}">{}</a>',
-                url, obj.pk, count
-            )
-        return 0
-    assignment_count.short_description = 'Active Assignments'
-
-@admin.register(Department)
-class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'head_of_department', 'staff_count', 'device_count', 'is_active')
-    list_filter = ('is_active', 'created_at')
-    search_fields = ('name', 'code', 'description')
-    readonly_fields = ('created_at', 'updated_at')
-    
-    def staff_count(self, obj):
-        return obj.staff_members.filter(is_active=True).count()
-    staff_count.short_description = 'Staff'
-    
-    def device_count(self, obj):
-        return Assignment.objects.filter(
-            assigned_to_department=obj, is_active=True
-        ).count()
-    device_count.short_description = 'Devices'
-
-@admin.register(Vendor)
-class VendorAdmin(admin.ModelAdmin):
-    list_display = ('name', 'vendor_type', 'contact_person', 'phone', 'email', 'device_count', 'is_active')
-    list_filter = ('vendor_type', 'is_active', 'created_at')
-    search_fields = ('name', 'contact_person', 'email', 'phone')
-    readonly_fields = ('created_at', 'updated_at')
-
-    def device_count(self, obj):
-        return obj.devices.count()
-    device_count.short_description = 'Devices'
 
 # ================================
 # DEVICE MANAGEMENT
@@ -159,75 +86,82 @@ class VendorAdmin(admin.ModelAdmin):
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
     list_display = (
-        'device_id', 'device_name', 'device_type', 'status', 
-        'current_assignment', 'warranty_status', 'purchase_date'
+        'device_id', 'device_name', 'device_type', 'brand', 'model', 
+        'status', 'assigned_display', 'warranty_status'
     )
     list_filter = (
-        'status', 'device_type', 'vendor', 'purchase_date', 
-        'warranty_end_date', 'device_condition'
+        'status', 'device_type', 'brand', 'purchase_date', 'warranty_end_date'
     )
     search_fields = (
-        'device_id', 'device_name', 'asset_tag', 'serial_number'
+        'device_id', 'device_name', 'asset_tag', 'serial_number', 'brand', 'model'
     )
-    readonly_fields = ('created_at', 'updated_at', 'created_by', 'updated_by')
-    date_hierarchy = 'purchase_date'
+    readonly_fields = ('created_at', 'updated_at', 'age_display', 'warranty_days_remaining')
+    list_select_related = ('device_type', 'vendor')
     
     fieldsets = (
-        ('Basic Information', {
+        ('Device Information', {
             'fields': (
-                'device_id', 'device_name', 'device_type', 'status', 
-                'device_condition', 'asset_tag', 'serial_number'
+                'device_id', 'device_name', 'asset_tag', 'serial_number'
             )
         }),
-        ('Hardware Details', {
-            'fields': ('manufacturer', 'model', 'specifications'),
-            'classes': ('collapse',)
+        ('Classification', {
+            'fields': ('device_type', 'brand', 'model', 'status')
         }),
         ('Financial Information', {
             'fields': (
-                'vendor', 'purchase_date', 'purchase_price', 
-                'warranty_start_date', 'warranty_end_date'
+                'purchase_price', 'purchase_date', 'vendor'
             ),
             'classes': ('collapse',)
         }),
-        ('Lifecycle', {
-            'fields': ('expected_life_years', 'disposal_date', 'disposal_method'),
+        ('Warranty Information', {
+            'fields': (
+                'warranty_start_date', 'warranty_end_date', 
+                'warranty_provider', 'warranty_days_remaining'
+            ),
             'classes': ('collapse',)
         }),
-        ('Additional Info', {
+        ('Technical Specifications', {
+            'fields': ('specifications',),
+            'classes': ('collapse',)
+        }),
+        ('Additional Information', {
             'fields': ('notes', 'qr_code'),
             'classes': ('collapse',)
         }),
-        ('Audit Trail', {
-            'fields': ('created_by', 'updated_by', 'created_at', 'updated_at'),
+        ('Audit Information', {
+            'fields': (
+                'created_by', 'updated_by', 'created_at', 'updated_at'
+            ),
             'classes': ('collapse',)
         })
     )
     
-    def current_assignment(self, obj):
+    def assigned_display(self, obj):
         assignment = obj.assignments.filter(is_active=True).first()
         if assignment:
             if assignment.assigned_to_staff:
-                return assignment.assigned_to_staff
+                return f"Staff: {assignment.assigned_to_staff}"
             elif assignment.assigned_to_department:
-                return assignment.assigned_to_department
+                return f"Dept: {assignment.assigned_to_department}"
             elif assignment.assigned_to_location:
-                return assignment.assigned_to_location
+                return f"Location: {assignment.assigned_to_location}"
         return "Unassigned"
-    current_assignment.short_description = 'Current Assignment'
+    assigned_display.short_description = 'Current Assignment'
     
     def warranty_status(self, obj):
-        if obj.warranty_end_date:
-            days_remaining = obj.warranty_days_remaining
-            if days_remaining > 0:
-                return format_html(
-                    '<span style="color: green;">{} days</span>',
-                    days_remaining
-                )
-            else:
-                return format_html('<span style="color: red;">Expired</span>')
-        return "No warranty"
+        if obj.is_under_warranty:
+            return format_html(
+                '<span style="color: green;">✓ Active ({} days)</span>',
+                obj.warranty_days_remaining
+            )
+        return format_html('<span style="color: red;">✗ Expired</span>')
     warranty_status.short_description = 'Warranty'
+    
+    def age_display(self, obj):
+        if obj.age_in_years:
+            return f"{obj.age_in_years:.1f} years"
+        return "Unknown"
+    age_display.short_description = 'Age'
 
 # ================================
 # ASSIGNMENT MANAGEMENT
@@ -236,18 +170,40 @@ class DeviceAdmin(admin.ModelAdmin):
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):
     list_display = (
-        'assignment_id', 'device', 'assigned_target', 'assignment_type', 
-        'start_date', 'is_active'  # Fixed field names
+        'assignment_id', 'device', 'assigned_target', 'assignment_type',
+        'assigned_date', 'is_active'
     )
     list_filter = (
-        'assignment_type', 'is_active', 'start_date'  # Fixed field names
+        'assignment_type', 'is_active', 'assigned_date'
     )
     search_fields = (
         'device__device_id', 'device__device_name',
-        'assigned_to_staff__user__first_name', 'assigned_to_staff__user__last_name'
+        'assigned_to_staff__user__username', 'assigned_to_department__name'
     )
-    date_hierarchy = 'start_date'  # Fixed field name
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('assignment_id', 'created_at', 'updated_at')
+    date_hierarchy = 'assigned_date'
+    
+    fieldsets = (
+        ('Assignment Details', {
+            'fields': (
+                'assignment_id', 'device', 'assignment_type', 'assigned_date'
+            )
+        }),
+        ('Assignment Targets', {
+            'fields': (
+                'assigned_to_staff', 'assigned_to_department', 'assigned_to_location'
+            )
+        }),
+        ('Assignment Management', {
+            'fields': (
+                'assigned_by', 'is_active', 'notes'
+            )
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
     
     def assigned_target(self, obj):
         if obj.assigned_to_staff:
@@ -266,12 +222,50 @@ class AssignmentAdmin(admin.ModelAdmin):
 @admin.register(AssignmentHistory)
 class AssignmentHistoryAdmin(admin.ModelAdmin):
     list_display = (
-        'assignment', 'created_at'  # Simplified to only show existing fields
+        'assignment', 'change_type', 'changed_by', 'timestamp'
     )
-    list_filter = ('created_at',)  # Simplified filter
-    search_fields = ('assignment__device__device_id',)
-    date_hierarchy = 'created_at'  # Fixed field name
-    readonly_fields = ('created_at',)
+    list_filter = ('change_type', 'timestamp')
+    search_fields = ('assignment__device__device_id', 'changed_by__username')
+    date_hierarchy = 'timestamp'
+    readonly_fields = ('timestamp',)
+
+# ================================
+# STAFF MANAGEMENT
+# ================================
+
+@admin.register(Staff)
+class StaffAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'employee_id', 'department', 'position', 'is_active'
+    )
+    list_filter = ('department', 'position', 'is_active')
+    search_fields = (
+        'user__username', 'user__first_name', 'user__last_name',
+        'employee_id', 'position'
+    )
+    readonly_fields = ('created_at', 'updated_at')
+
+# ================================
+# DEPARTMENT MANAGEMENT
+# ================================
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'head_of_department', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'code', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+
+# ================================
+# VENDOR MANAGEMENT
+# ================================
+
+@admin.register(Vendor)
+class VendorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'contact_person', 'email', 'phone', 'is_active')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'contact_person', 'email', 'phone')
+    readonly_fields = ('created_at', 'updated_at')
 
 # ================================
 # MAINTENANCE SCHEDULE
@@ -280,13 +274,13 @@ class AssignmentHistoryAdmin(admin.ModelAdmin):
 @admin.register(MaintenanceSchedule)
 class MaintenanceScheduleAdmin(admin.ModelAdmin):
     list_display = (
-        'device', 'maintenance_type', 'created_at', 'status'  # Fixed field names
+        'device', 'maintenance_type', 'status', 'scheduled_date', 'created_at'
     )
     list_filter = (
-        'maintenance_type', 'status', 'created_at'  # Fixed field names
+        'maintenance_type', 'status', 'scheduled_date', 'created_at'
     )
     search_fields = ('device__device_id', 'device__device_name')
-    date_hierarchy = 'created_at'  # Fixed field name
+    date_hierarchy = 'scheduled_date'
     readonly_fields = ('created_at', 'updated_at')
 
 # ================================
@@ -296,9 +290,9 @@ class MaintenanceScheduleAdmin(admin.ModelAdmin):
 @admin.register(SystemConfiguration)
 class SystemConfigurationAdmin(admin.ModelAdmin):
     list_display = ('key', 'value', 'description', 'is_active')
-    list_filter = ('is_active', 'created_at')
+    list_filter = ('is_active',)
     search_fields = ('key', 'description')
-    readonly_fields = ('created_at', 'updated_at')  # Removed non-existent fields
+    readonly_fields = ('updated_at',)
 
 # ================================
 # AUDIT LOG
@@ -317,3 +311,38 @@ class AuditLogAdmin(admin.ModelAdmin):
     
     def has_change_permission(self, request, obj=None):
         return False
+
+# ================================
+# ADMIN ACTIONS
+# ================================
+
+def mark_devices_as_available(modeladmin, request, queryset):
+    """Mark selected devices as available"""
+    updated = queryset.update(status='AVAILABLE')
+    modeladmin.message_user(
+        request, 
+        f'{updated} device(s) marked as available.'
+    )
+mark_devices_as_available.short_description = "Mark selected devices as available"
+
+def mark_devices_as_maintenance(modeladmin, request, queryset):
+    """Mark selected devices as under maintenance"""
+    updated = queryset.update(status='MAINTENANCE')
+    modeladmin.message_user(
+        request,
+        f'{updated} device(s) marked as under maintenance.'
+    )
+mark_devices_as_maintenance.short_description = "Mark selected devices as under maintenance"
+
+def deactivate_assignments(modeladmin, request, queryset):
+    """Deactivate selected assignments"""
+    updated = queryset.update(is_active=False)
+    modeladmin.message_user(
+        request,
+        f'{updated} assignment(s) deactivated.'
+    )
+deactivate_assignments.short_description = "Deactivate selected assignments"
+
+# Add actions to admin classes
+DeviceAdmin.actions = [mark_devices_as_available, mark_devices_as_maintenance]
+AssignmentAdmin.actions = [deactivate_assignments]
