@@ -1,9 +1,9 @@
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import JsonResponse, HttpResponse, Http404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
-
+from django.conf import settings
 from inventory.models import Device
 
 def home_view(request):
