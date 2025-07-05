@@ -1,19 +1,16 @@
-
+# reports/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from django.db.models import Count, Q, Sum, Avg
-from django.contrib.admin import SimpleListFilter
+from django.db.models import Count, Q
 from django.utils import timezone
-from datetime import timedelta
-from django.http import HttpResponse
+from datetime import date, timedelta
 import json
 
 from .models import (
-    ReportTemplate, ReportGeneration, ReportSchedule, ReportAccess,
-    Dashboard, DashboardWidget, ReportSubscription, DataExport,
-    AnalyticsMetric, CustomQuery, ReportCache
+    ReportTemplate, ReportGeneration, ReportSubscription,
+    AnalyticsMetric, DashboardWidget, DataExport
 )
 
 
@@ -21,123 +18,63 @@ from .models import (
 # CUSTOM FILTERS
 # ================================
 
-class ReportTypeFilter(SimpleListFilter):
+class ReportStatusFilter(admin.SimpleListFilter):
+    title = 'Report Status'
+    parameter_name = 'report_status'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('completed', 'Completed'),
+            ('failed', 'Failed'),
+            ('pending', 'Pending'),
+            ('processing', 'Processing'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(status=self.value().upper())
+
+
+class ReportTypeFilter(admin.SimpleListFilter):
     title = 'Report Type'
     parameter_name = 'report_type'
 
     def lookups(self, request, model_admin):
-        return [
+        return (
             ('INVENTORY', 'Inventory Reports'),
             ('ASSIGNMENT', 'Assignment Reports'),
             ('MAINTENANCE', 'Maintenance Reports'),
-            ('AUDIT', 'Audit Reports'),
-            ('WARRANTY', 'Warranty Reports'),
             ('ANALYTICS', 'Analytics Reports'),
-            ('FINANCIAL', 'Financial Reports'),
-            ('CUSTOM', 'Custom Reports'),
-        ]
+            ('AUDIT', 'Audit Reports'),
+        )
 
     def queryset(self, request, queryset):
         if self.value():
             return queryset.filter(report_type=self.value())
-        return queryset
-
-
-class ReportStatusFilter(SimpleListFilter):
-    title = 'Generation Status'
-    parameter_name = 'status'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('PENDING', 'Pending'),
-            ('PROCESSING', 'Processing'),
-            ('COMPLETED', 'Completed'),
-            ('FAILED', 'Failed'),
-            ('EXPIRED', 'Expired'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(status=self.value())
-        return queryset
-
-
-class ReportAccessTypeFilter(SimpleListFilter):
-    title = 'Access Type'
-    parameter_name = 'access_type'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('VIEW', 'Viewed Online'),
-            ('DOWNLOAD', 'Downloaded'),
-            ('SHARE', 'Shared'),
-            ('PRINT', 'Printed'),
-            ('EMAIL', 'Emailed'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(access_type=self.value())
-        return queryset
-
-
-class ScheduleFrequencyFilter(SimpleListFilter):
-    title = 'Schedule Frequency'
-    parameter_name = 'frequency'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('DAILY', 'Daily'),
-            ('WEEKLY', 'Weekly'),
-            ('MONTHLY', 'Monthly'),
-            ('QUARTERLY', 'Quarterly'),
-            ('YEARLY', 'Yearly'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(frequency=self.value())
-        return queryset
 
 
 # ================================
 # INLINE ADMIN CLASSES
 # ================================
 
-class ReportGenerationInline(admin.TabularInline):
-    model = ReportGeneration
+class ReportSubscriptionInline(admin.TabularInline):
+    model = ReportSubscription
     extra = 0
-    readonly_fields = ('id', 'generated_by', 'status', 'created_at', 'file_size_human')
-    fields = ('id', 'report_name', 'status', 'file_format', 'generated_by', 'created_at')
-    show_change_link = True
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('generated_by').order_by('-created_at')[:10]
-
-
-class ReportScheduleInline(admin.TabularInline):
-    model = ReportSchedule
-    extra = 0
-    readonly_fields = ('id', 'last_run', 'next_run')
-    fields = ('name', 'frequency', 'is_active', 'last_run', 'next_run')
-    show_change_link = True
-
-
-class ReportAccessInline(admin.TabularInline):
-    model = ReportAccess
-    extra = 0
-    readonly_fields = ('accessed_by', 'access_type', 'accessed_at', 'ip_address')
-    fields = ('accessed_by', 'access_type', 'accessed_at', 'ip_address')
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('accessed_by').order_by('-accessed_at')[:10]
+    readonly_fields = ('created_at', 'last_generated')
+    fields = (
+        'user', 'frequency', 'email_delivery', 'is_active',
+        'created_at', 'last_generated'
+    )
 
 
 class DashboardWidgetInline(admin.TabularInline):
     model = DashboardWidget
     extra = 0
-    fields = ('name', 'widget_type', 'position', 'size', 'is_active')
-    ordering = ['position']
+    readonly_fields = ('created_at', 'updated_at')
+    fields = (
+        'widget_type', 'title', 'position_x', 'position_y',
+        'width', 'height', 'is_active'
+    )
 
 
 # ================================
@@ -148,428 +85,245 @@ class DashboardWidgetInline(admin.TabularInline):
 class ReportTemplateAdmin(admin.ModelAdmin):
     list_display = (
         'name', 'report_type', 'category', 'usage_count',
-        'last_used', 'is_active', 'is_system_template', 'actions'
+        'is_active', 'requires_approval', 'created_by', 'created_at'
     )
     list_filter = (
-        ReportTypeFilter, 'category', 'is_active', 'is_system_template',
-        'requires_approval', 'created_at'
+        ReportTypeFilter, 'category', 'is_active', 'requires_approval', 'created_at'
     )
-    search_fields = ('name', 'description')
-    readonly_fields = ('id', 'created_at', 'updated_at', 'last_used', 'usage_count')
-    inlines = [ReportGenerationInline, ReportScheduleInline]
+    search_fields = ('name', 'description', 'created_by__username')
+    readonly_fields = ('created_at', 'updated_at', 'usage_count')
+    inlines = [ReportSubscriptionInline, DashboardWidgetInline]
     
     fieldsets = (
         ('Basic Information', {
-            'fields': (
-                'id', 'name', 'description', 'report_type', 'category',
-                'is_active', 'is_system_template'
-            )
+            'fields': ('name', 'description', 'report_type', 'category', 'is_active')
         }),
-        ('Configuration', {
-            'fields': ('template_config', 'columns', 'filters', 'sorting'),
+        ('Template Configuration', {
+            'fields': ('template_config', 'sql_query'),
             'classes': ('collapse',)
         }),
-        ('Advanced', {
-            'fields': ('sql_query', 'requires_approval'),
+        ('Report Structure', {
+            'fields': ('columns', 'filters', 'sorting', 'grouping'),
             'classes': ('collapse',)
         }),
         ('Access Control', {
-            'fields': ('accessible_by_roles',),
+            'fields': (
+                'accessible_by_roles', 'requires_approval', 'approval_workflow',
+                'max_records_limit', 'execution_timeout'
+            ),
             'classes': ('collapse',)
         }),
-        ('Usage Statistics', {
-            'fields': ('usage_count', 'last_used', 'version'),
+        ('Scheduling & Automation', {
+            'fields': (
+                'can_be_scheduled', 'default_frequency', 'auto_cleanup_days'
+            ),
             'classes': ('collapse',)
         }),
         ('Metadata', {
-            'fields': ('created_by', 'created_at', 'updated_at'),
+            'fields': ('created_by', 'created_at', 'updated_at', 'usage_count'),
             'classes': ('collapse',)
         }),
     )
 
-    def action_buttons(self, obj):
-        actions_html = []
-        
-        # Generate report action
-        actions_html.append(
-            f'<a class="button" href="{reverse("reports:generate_custom_report")}?template_id={obj.id}">Generate</a>'
+    def usage_count(self, obj):
+        """Count how many times this template has been used"""
+        count = obj.report_generations.count() if hasattr(obj, 'report_generations') else 0
+        return format_html(
+            '<a href="{}?template__id__exact={}">{} times</a>',
+            reverse('admin:reports_reportgeneration_changelist'),
+            obj.id,
+            count
         )
-        
-        # Preview action
-        if obj.is_active:
-            actions_html.append('<a class="button" href="#" onclick="previewTemplate(\'{}\')">Preview</a>'.format(obj.id))
-        
-        # Clone action
-        actions_html.append('<a class="button" href="#" onclick="cloneTemplate(\'{}\')">Clone</a>'.format(obj.id))
-        
-        return format_html(' '.join(actions_html))
-    action_buttons.short_description = 'Actions'
+    usage_count.short_description = 'Usage'
 
-    def get_readonly_fields(self, request, obj=None):
-        readonly_fields = list(self.readonly_fields)
-        
-        # System templates cannot be modified
-        if obj and obj.is_system_template:
-            readonly_fields.extend(['name', 'report_type', 'category', 'template_config'])
-        
-        return readonly_fields
-
-    def has_delete_permission(self, request, obj=None):
-        # Prevent deletion of system templates
-        if obj and obj.is_system_template:
-            return False
-        return super().has_delete_permission(request, obj)
+    def save_model(self, request, obj, form, change):
+        if not change:  # Creating new template
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(ReportGeneration)
 class ReportGenerationAdmin(admin.ModelAdmin):
     list_display = (
-   'report_name', 'template_name', 'generated_by', 'status_display',
-   'file_format', 'progress_bar', 'created_at', 'file_size_human', 'action_buttons'
+        'report_name', 'template', 'status', 'generated_by',
+        'created_at', 'completion_time', 'file_size_display', 'actions'
     )
     list_filter = (
-        ReportStatusFilter, 'file_format', 'priority', 'created_at',
-        'completed_at', 'expires_at'
+        ReportStatusFilter, 'template__report_type', 'format',
+        'created_at', 'completion_time'
     )
-    search_fields = ('report_name', 'template__name', 'generated_by__username')
+    search_fields = (
+        'report_name', 'template__name', 'generated_by__username'
+    )
     readonly_fields = (
-        'id', 'created_at', 'started_at', 'completed_at', 'expires_at',
-        'file_size', 'record_count', 'generation_time_seconds',
-        'query_time_seconds', 'download_count'
+        'created_at', 'started_at', 'completion_time',
+        'execution_time_seconds', 'file_size', 'record_count'
     )
-    inlines = [ReportAccessInline]
     
     fieldsets = (
         ('Report Information', {
+            'fields': ('report_name', 'template', 'status', 'format')
+        }),
+        ('Generation Details', {
             'fields': (
-                'id', 'template', 'report_name', 'generated_by',
-                'status', 'file_format', 'priority'
+                'generated_by', 'parameters', 'filters_applied'
             )
         }),
-        ('Parameters', {
+        ('Execution Timeline', {
             'fields': (
-                'filters_applied', 'parameters', 'date_range_start', 'date_range_end'
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Progress Tracking', {
-            'fields': ('progress_percentage', 'current_step', 'error_message'),
-        }),
-        ('Timing', {
-            'fields': (
-                'created_at', 'started_at', 'completed_at', 'expires_at',
-                'generation_time_seconds', 'query_time_seconds'
-            ),
-            'classes': ('collapse',)
+                'created_at', 'started_at', 'completion_time',
+                'execution_time_seconds'
+            )
         }),
         ('Results', {
             'fields': (
-                'file_path', 'file_size', 'record_count', 'download_count'
+                'file_path', 'file_size', 'record_count',
+                'error_message', 'generation_notes'
             ),
             'classes': ('collapse',)
         }),
-        ('Request Details', {
-            'fields': ('ip_address', 'user_agent'),
-            'classes': ('collapse',)
-        }),
-        ('Sharing', {
-            'fields': ('is_shared', 'shared_with_users'),
+        ('Delivery & Access', {
+            'fields': (
+                'email_sent', 'download_count', 'expires_at',
+                'is_public', 'access_token'
+            ),
             'classes': ('collapse',)
         }),
     )
 
-    def template_name(self, obj):
-        if obj.template:
+    def report_name(self, obj):
+        """Display report name with download link if available"""
+        if obj.status == 'COMPLETED' and obj.file_path:
             return format_html(
-                '<a href="{}">{}</a>',
-                reverse('admin:reports_reporttemplate_change', args=[obj.template.id]),
-                obj.template.name
+                '<a href="/reports/download/{}" target="_blank">{}</a>',
+                obj.id,
+                obj.report_name or f"Report #{obj.id}"
             )
-        return 'Custom Report'
-    template_name.short_description = 'Template'
+        return obj.report_name or f"Report #{obj.id}"
+    report_name.short_description = 'Report Name'
 
-    def status_display(self, obj):
-        status_colors = {
-            'PENDING': 'orange',
-            'PROCESSING': 'blue',
-            'COMPLETED': 'green',
-            'FAILED': 'red',
-            'CANCELLED': 'gray',
-            'EXPIRED': 'brown'
-        }
-        color = status_colors.get(obj.status, 'black')
-        
-        status_icons = {
-            'PENDING': '⏳',
-            'PROCESSING': '⚙️',
-            'COMPLETED': '✅',
-            'FAILED': '❌',
-            'CANCELLED': '🚫',
-            'EXPIRED': '⏰'
-        }
-        icon = status_icons.get(obj.status, '❓')
-        
-        return format_html(
-            '<span style="color: {};">{} {}</span>',
-            color, icon, obj.get_status_display()
-        )
-    status_display.short_description = 'Status'
-
-    def progress_bar(self, obj):
-        if obj.status in ['PROCESSING', 'PENDING']:
-            return format_html(
-                '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
-                '<div style="width: {}px; background-color: #007cba; height: 20px; border-radius: 3px; '
-                'text-align: center; color: white; font-size: 12px; line-height: 20px;">{}</div></div>',
-                obj.progress_percentage, f'{obj.progress_percentage}%'
-            )
-        elif obj.status == 'COMPLETED':
-            return format_html('<span style="color: green;">✅ Complete</span>')
-        elif obj.status == 'FAILED':
-            return format_html('<span style="color: red;">❌ Failed</span>')
+    def completion_time(self, obj):
+        """Display formatted completion time"""
+        if obj.completion_time:
+            return obj.completion_time.strftime('%Y-%m-%d %H:%M:%S')
         return '-'
-    progress_bar.short_description = 'Progress'
+    completion_time.short_description = 'Completed At'
 
-    def action_buttons(self, obj):
+    def file_size_display(self, obj):
+        """Display formatted file size"""
+        if obj.file_size:
+            if obj.file_size < 1024:
+                return f"{obj.file_size} B"
+            elif obj.file_size < 1024 * 1024:
+                return f"{obj.file_size / 1024:.1f} KB"
+            else:
+                return f"{obj.file_size / (1024 * 1024):.1f} MB"
+        return '-'
+    file_size_display.short_description = 'File Size'
+
+    def actions(self, obj):
+        """Custom action links"""
         actions_html = []
         
         if obj.status == 'COMPLETED' and obj.file_path:
-            actions_html.append(f'<a class="button" href="/reports/download/{obj.id}/">Download</a>')
-        
-        if obj.status == 'PROCESSING':
-            actions_html.append(f'<a class="button" href="#" onclick="cancelReport(\'{obj.id}\')">Cancel</a>')
-        
-        if obj.status in ['FAILED', 'EXPIRED']:
-            actions_html.append(f'<a class="button" href="#" onclick="retryReport(\'{obj.id}\')">Retry</a>')
-        
-        if obj.is_shared:
-            actions_html.append('<span style="color: blue;">🔗 Shared</span>')
-        
-        return format_html(' '.join(actions_html))
-    action_buttons.short_description = 'Actions'
-
-    def has_add_permission(self, request):
-        return False  # Reports are generated through the system
-
-
-@admin.register(ReportSchedule)
-class ReportScheduleAdmin(admin.ModelAdmin):
-    list_display = (
-   'name', 'template', 'frequency', 'time_of_day',
-   'next_run_display', 'is_active', 'run_count', 'action_buttons'
-    )
-    list_filter = (
-        ScheduleFrequencyFilter, 'is_active', 'start_date',
-        'end_date', 'created_at'
-    )
-    search_fields = ('name', 'template__name')
-    readonly_fields = (
-        'id', 'last_run', 'next_run', 'run_count', 'failure_count',
-        'created_at', 'updated_at'
-    )
-    
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ('id', 'name', 'template', 'is_active')
-        }),
-        ('Schedule Configuration', {
-            'fields': (
-                'frequency', 'time_of_day', 'day_of_week', 'day_of_month',
-                'custom_schedule'
+            actions_html.append(
+                f'<a href="/reports/download/{obj.id}/" target="_blank">Download</a>'
             )
-        }),
-        ('Date Range', {
-            'fields': ('start_date', 'end_date'),
-        }),
-        ('Report Settings', {
-            'fields': ('default_format', 'filters'),
-            'classes': ('collapse',)
-        }),
-        ('Recipients', {
-            'fields': ('email_recipients', 'notify_users'),
-            'classes': ('collapse',)
-        }),
-        ('Execution History', {
-            'fields': ('last_run', 'next_run', 'run_count', 'failure_count'),
-            'classes': ('collapse',)
-        }),
-        ('Metadata', {
-            'fields': ('created_by', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def next_run_display(self, obj):
-        if obj.next_run:
-            if obj.next_run < timezone.now():
-                return format_html(
-                    '<span style="color: red;">⚠️ Overdue: {}</span>',
-                    obj.next_run.strftime('%Y-%m-%d %H:%M')
-                )
-            else:
-                return format_html(
-                    '<span style="color: green;">📅 {}</span>',
-                    obj.next_run.strftime('%Y-%m-%d %H:%M')
-                )
-        return 'Not scheduled'
-    next_run_display.short_description = 'Next Run'
-
-    def action_buttons(self, obj):
-        actions_html = []
         
-        if obj.is_active:
-            actions_html.append(f'<a class="button" href="#" onclick="runNow(\'{obj.id}\')">Run Now</a>')
-            actions_html.append(f'<a class="button" href="#" onclick="pauseSchedule(\'{obj.id}\')">Pause</a>')
-        else:
-            actions_html.append(f'<a class="button" href="#" onclick="resumeSchedule(\'{obj.id}\')">Resume</a>')
+        if obj.status == 'FAILED':
+            actions_html.append(
+                f'<a href="/reports/regenerate/{obj.id}/">Retry</a>'
+            )
         
-        return format_html(' '.join(actions_html))
-    action_buttons.short_description = 'Actions'
-
-
-@admin.register(ReportAccess)
-class ReportAccessAdmin(admin.ModelAdmin):
-    list_display = (
-   'report_generation', 'accessed_by', 'access_type',
-   'accessed_at', 'ip_address', 'user_agent_short', 'action_buttons'
-    )
-    list_filter = (ReportAccessTypeFilter, 'accessed_at')
-    search_fields = (
-        'report_generation__report_name', 'accessed_by__username', 'ip_address'
-    )
-    readonly_fields = ('accessed_at',)
-
-    def user_agent_short(self, obj):
-        if obj.user_agent:
-            return obj.user_agent[:50] + ('...' if len(obj.user_agent) > 50 else '')
-        return '-'
-    user_agent_short.short_description = 'User Agent'
+        if obj.email_sent:
+            actions_html.append('📧 Sent')
+        elif obj.status == 'COMPLETED':
+            actions_html.append(
+                f'<a href="/reports/email/{obj.id}/">Email</a>'
+            )
+        
+        return format_html(' | '.join(actions_html))
+    actions.short_description = 'Actions'
 
     def has_add_permission(self, request):
-        return False  # Access logs are created automatically
-
-
-@admin.register(Dashboard)
-class DashboardAdmin(admin.ModelAdmin):
-    list_display = (
-        'name', 'dashboard_type', 'owner', 'widget_count',
-        'is_active', 'is_public', 'created_at'
-    )
-    list_filter = ('dashboard_type', 'is_active', 'is_public', 'created_at')
-    search_fields = ('name', 'description', 'owner__username')
-    readonly_fields = ('id', 'created_at', 'updated_at')
-    inlines = [DashboardWidgetInline]
-    
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ('id', 'name', 'description', 'dashboard_type', 'owner')
-        }),
-        ('Configuration', {
-            'fields': ('layout_config', 'theme_config'),
-            'classes': ('collapse',)
-        }),
-        ('Access Control', {
-            'fields': ('is_active', 'is_public', 'allowed_users', 'allowed_roles'),
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def widget_count(self, obj):
-        count = obj.widgets.count()
-        return format_html(
-            '<a href="{}?dashboard__id__exact={}">{} widgets</a>',
-            reverse('admin:reports_dashboardwidget_changelist'),
-            obj.id,
-            count
-        )
-    widget_count.short_description = 'Widgets'
-
-
-@admin.register(DashboardWidget)
-class DashboardWidgetAdmin(admin.ModelAdmin):
-    list_display = (
-        'name', 'dashboard', 'widget_type', 'position', 'size',
-        'is_active', 'last_updated'
-    )
-    list_filter = ('widget_type', 'is_active', 'dashboard__dashboard_type')
-    search_fields = ('name', 'dashboard__name')
-    readonly_fields = ('id', 'created_at', 'last_updated')
-
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ('id', 'dashboard', 'name', 'widget_type')
-        }),
-        ('Layout', {
-            'fields': ('position', 'size', 'is_active')
-        }),
-        ('Configuration', {
-            'fields': ('data_source', 'widget_config', 'refresh_interval'),
-            'classes': ('collapse',)
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'last_updated'),
-            'classes': ('collapse',)
-        }),
-    )
+        return False
 
 
 @admin.register(ReportSubscription)
 class ReportSubscriptionAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'report_template', 'subscription_type', 'frequency',
-        'is_active', 'last_sent', 'next_send'
+        'user', 'template', 'frequency', 'email_delivery',
+        'is_active', 'last_generated', 'next_generation'
     )
-    list_filter = ('subscription_type', 'frequency', 'is_active')
-    search_fields = ('user__username', 'report_template__name')
-    readonly_fields = ('id', 'last_sent', 'next_send', 'send_count', 'created_at')
-
-
-@admin.register(DataExport)
-class DataExportAdmin(admin.ModelAdmin):
-    list_display = (
-        'name', 'export_type', 'requested_by', 'status',
-        'file_format', 'created_at', 'file_size_human', 'actions'
-    )
-    list_filter = ('export_type', 'status', 'file_format', 'created_at')
-    search_fields = ('name', 'requested_by__username')
-    readonly_fields = (
-        'id', 'created_at', 'started_at', 'completed_at',
-        'file_size', 'record_count', 'download_count'
-    )
-
-    def action_buttons(self, obj):
-        if obj.status == 'COMPLETED' and obj.file_path:
-            return format_html(
-                '<a class="button" href="/reports/export/download/{}/">Download</a>',
-                obj.id
+    list_filter = ('frequency', 'email_delivery', 'is_active', 'created_at')
+    search_fields = ('user__username', 'template__name')
+    readonly_fields = ('created_at', 'last_generated', 'generation_count')
+    
+    fieldsets = (
+        ('Subscription Details', {
+            'fields': ('user', 'template', 'frequency', 'is_active')
+        }),
+        ('Delivery Options', {
+            'fields': ('email_delivery', 'custom_parameters')
+        }),
+        ('Schedule & Status', {
+            'fields': (
+                'next_generation', 'last_generated', 'generation_count'
             )
-        return '-'
-    action_buttons.short_description = 'Actions'
+        }),
+        ('Metadata', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def next_generation(self, obj):
+        """Calculate next generation time"""
+        if obj.last_generated and obj.is_active:
+            from datetime import timedelta
+            
+            frequency_days = {
+                'DAILY': 1,
+                'WEEKLY': 7,
+                'MONTHLY': 30,
+                'QUARTERLY': 90,
+            }
+            
+            if obj.frequency in frequency_days:
+                days = frequency_days[obj.frequency]
+                next_date = obj.last_generated + timedelta(days=days)
+                return next_date.strftime('%Y-%m-%d')
+        
+        return 'Not scheduled'
+    next_generation.short_description = 'Next Generation'
 
 
 @admin.register(AnalyticsMetric)
 class AnalyticsMetricAdmin(admin.ModelAdmin):
     list_display = (
-   'metric_name', 'metric_type', 'period_start', 'period_end',
-   'value', 'department', 'location', 'action_buttons'
+        'metric_name', 'metric_type', 'value_display',
+        'department', 'location', 'calculated_at'
     )
-    list_filter = ('metric_type', 'aggregation_period', 'period_start')
-    search_fields = ('metric_name',)
-    readonly_fields = ('calculated_at', 'calculation_time_ms', 'data_points_count')
-
+    list_filter = (
+        'metric_type', 'aggregation_period', 'department',
+        'location', 'calculated_at'
+    )
+    search_fields = ('metric_name', 'description')
+    readonly_fields = (
+        'calculated_at', 'calculation_time_ms', 'data_points_count'
+    )
+    
     fieldsets = (
         ('Metric Information', {
-            'fields': ('metric_name', 'metric_type', 'value', 'unit')
+            'fields': ('metric_name', 'metric_type', 'description')
         }),
-        ('Time Period', {
-            'fields': ('period_start', 'period_end', 'aggregation_period')
+        ('Values & Aggregation', {
+            'fields': (
+                'value', 'aggregation_period', 'period_start', 'period_end'
+            )
         }),
-        ('Scope', {
-            'fields': ('department', 'location', 'device_category'),
-            'classes': ('collapse',)
+        ('Scope & Filters', {
+            'fields': ('department', 'location', 'device_category')
         }),
         ('Calculation Details', {
             'fields': (
@@ -579,31 +333,43 @@ class AnalyticsMetricAdmin(admin.ModelAdmin):
         }),
     )
 
+    def value_display(self, obj):
+        """Display formatted metric value"""
+        if obj.metric_type in ['COUNT', 'PERCENTAGE']:
+            return f"{obj.value:,.0f}"
+        else:
+            return f"{obj.value:,.2f}"
+    value_display.short_description = 'Value'
 
-@admin.register(CustomQuery)
-class CustomQueryAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(DashboardWidget)
+class DashboardWidgetAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'query_type', 'created_by', 'execution_count',
-        'is_active', 'last_executed', 'avg_execution_time'
+        'title', 'widget_type', 'template', 'position_display',
+        'size_display', 'is_active', 'created_by'
     )
-    list_filter = ('query_type', 'is_active', 'created_at')
-    search_fields = ('name', 'description')
-    readonly_fields = (
-        'id', 'execution_count', 'last_executed', 'avg_execution_time',
-        'created_at', 'updated_at'
-    )
-
+    list_filter = ('widget_type', 'is_active', 'created_at')
+    search_fields = ('title', 'description', 'template__name')
+    readonly_fields = ('created_at', 'updated_at')
+    
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('id', 'name', 'description', 'query_type', 'is_active')
+        ('Widget Information', {
+            'fields': ('title', 'description', 'widget_type', 'template')
         }),
-        ('Query Definition', {
-            'fields': ('sql_query', 'parameters'),
-        }),
-        ('Execution History', {
+        ('Layout & Position', {
             'fields': (
-                'execution_count', 'last_executed', 'avg_execution_time'
-            ),
+                'position_x', 'position_y', 'width', 'height', 'z_index'
+            )
+        }),
+        ('Configuration', {
+            'fields': ('widget_config', 'refresh_interval', 'is_active'),
+            'classes': ('collapse',)
+        }),
+        ('Access Control', {
+            'fields': ('accessible_by_roles', 'requires_data_permission'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -612,33 +378,67 @@ class CustomQueryAdmin(admin.ModelAdmin):
         }),
     )
 
+    def position_display(self, obj):
+        """Display widget position"""
+        return f"({obj.position_x}, {obj.position_y})"
+    position_display.short_description = 'Position'
 
-@admin.register(ReportCache)
-class ReportCacheAdmin(admin.ModelAdmin):
+    def size_display(self, obj):
+        """Display widget size"""
+        return f"{obj.width} × {obj.height}"
+    size_display.short_description = 'Size'
+
+    def save_model(self, request, obj, form, change):
+        if not change:  # Creating new widget
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(DataExport)
+class DataExportAdmin(admin.ModelAdmin):
     list_display = (
-        'cache_key_short', 'report_template', 'created_at',
-        'expires_at', 'hit_count', 'file_size_human', 'is_valid'
+        'export_name', 'export_type', 'status', 'exported_by',
+        'created_at', 'completion_time', 'file_size_display'
     )
-    list_filter = ('created_at', 'expires_at')
-    search_fields = ('cache_key', 'report_template__name')
+    list_filter = ('export_type', 'status', 'format', 'created_at')
+    search_fields = ('export_name', 'exported_by__username')
     readonly_fields = (
-        'cache_key', 'created_at', 'expires_at', 'hit_count',
-        'file_size', 'data_hash'
+        'created_at', 'completion_time', 'file_size', 'record_count'
+    )
+    
+    fieldsets = (
+        ('Export Information', {
+            'fields': ('export_name', 'export_type', 'status', 'format')
+        }),
+        ('Export Details', {
+            'fields': ('exported_by', 'query_parameters', 'filters_applied')
+        }),
+        ('Results', {
+            'fields': (
+                'file_path', 'file_size', 'record_count',
+                'created_at', 'completion_time'
+            )
+        }),
+        ('Access & Security', {
+            'fields': ('access_token', 'expires_at', 'download_count'),
+            'classes': ('collapse',)
+        }),
     )
 
-    def cache_key_short(self, obj):
-        return obj.cache_key[:20] + '...' if len(obj.cache_key) > 20 else obj.cache_key
-    cache_key_short.short_description = 'Cache Key'
-
-    def is_valid(self, obj):
-        if obj.expires_at > timezone.now():
-            return format_html('<span style="color: green;">✅ Valid</span>')
-        else:
-            return format_html('<span style="color: red;">❌ Expired</span>')
-    is_valid.short_description = 'Status'
+    def file_size_display(self, obj):
+        """Display formatted file size"""
+        if obj.file_size:
+            if obj.file_size < 1024:
+                return f"{obj.file_size} B"
+            elif obj.file_size < 1024 * 1024:
+                return f"{obj.file_size / 1024:.1f} KB"
+            else:
+                return f"{obj.file_size / (1024 * 1024):.1f} MB"
+        return '-'
+    file_size_display.short_description = 'File Size'
 
     def has_add_permission(self, request):
-        return False  # Cache entries are created automatically
+        return False
 
 
 # ================================
@@ -657,55 +457,21 @@ def deactivate_templates(modeladmin, request, queryset):
     modeladmin.message_user(request, f'{updated} templates were deactivated.')
 
 
-@admin.action(description='Cancel selected reports')
-def cancel_reports(modeladmin, request, queryset):
-    updated = queryset.filter(status__in=['PENDING', 'PROCESSING']).update(status='CANCELLED')
-    modeladmin.message_user(request, f'{updated} reports were cancelled.')
+@admin.action(description='Delete completed reports')
+def delete_completed_reports(modeladmin, request, queryset):
+    completed = queryset.filter(status='COMPLETED')
+    count = completed.count()
+    completed.delete()
+    modeladmin.message_user(request, f'{count} completed reports were deleted.')
 
 
-@admin.action(description='Delete expired reports')
-def delete_expired_reports(modeladmin, request, queryset):
-    now = timezone.now()
-    expired = queryset.filter(expires_at__lt=now)
-    count = expired.count()
-    expired.delete()
-    modeladmin.message_user(request, f'{count} expired reports were deleted.')
-
-
-@admin.action(description='Clear cache entries')
-def clear_cache_entries(modeladmin, request, queryset):
-    count = queryset.count()
-    queryset.delete()
-    modeladmin.message_user(request, f'{count} cache entries were cleared.')
-
-
-# Add actions to respective admin classes
+# Add actions to admin classes
 ReportTemplateAdmin.actions = [activate_templates, deactivate_templates]
-ReportGenerationAdmin.actions = [cancel_reports, delete_expired_reports]
-ReportCacheAdmin.actions = [clear_cache_entries]
-
+ReportGenerationAdmin.actions = [delete_completed_reports]
 
 # ================================
-# CUSTOM ADMIN VIEWS
+# ADMIN SITE CUSTOMIZATION
 # ================================
-
-class ReportAnalyticsView:
-    """Custom view for report analytics"""
-    
-    def get_report_statistics(self):
-        """Get comprehensive report statistics"""
-        from django.db.models import Count, Avg, Sum
-        
-        stats = {
-            'total_templates': ReportTemplate.objects.count(),
-            'active_templates': ReportTemplate.objects.filter(is_active=True).count(),
-            'total_generations': ReportGeneration.objects.count(),
-            'completed_reports': ReportGeneration.objects.filter(status='COMPLETED').count(),
-            'failed_reports': ReportGeneration.objects.filter(status='FAILED').count(),
-            'avg_generation_time': ReportGeneration.objects.filter(
-                status='COMPLETED',
-                generation_time_seconds__isnull=False
-            ).aggregate(avg_time=Avg('generation_time_seconds'))['avg_time'],
-        }
-        
-        return stats
+admin.site.site_header = "BPS IT Inventory Management - Reports"
+admin.site.site_title = "BPS Reports Admin"
+admin.site.index_title = "Reports & Analytics Management"
