@@ -12,7 +12,7 @@ from .models import (
     DeviceCategory, DeviceSubCategory, DeviceType, Device, 
     Assignment, Staff, Department, Location, Vendor, 
     MaintenanceSchedule, AuditLog, SystemConfiguration,
-    AssignmentHistory
+    AssignmentHistory, Building, Floor, Room
 )
 
 # ================================
@@ -72,12 +72,63 @@ class DeviceTypeAdmin(admin.ModelAdmin):
 # LOCATION MANAGEMENT
 # ================================
 
+@admin.register(Building)
+class BuildingAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'get_floors_count', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('name', 'code', 'address')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def get_floors_count(self, obj):
+        return obj.floors.count()
+    get_floors_count.short_description = 'Floors'
+
+@admin.register(Floor)
+class FloorAdmin(admin.ModelAdmin):
+    list_display = ('name', 'building', 'floor_number', 'get_departments_count', 'is_active')
+    list_filter = ('building', 'is_active', 'created_at')
+    search_fields = ('name', 'building__name')
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def get_departments_count(self, obj):
+        return obj.departments.count()
+    get_departments_count.short_description = 'Departments'
+
+@admin.register(Department)
+class DepartmentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'floor', 'head_of_department', 'is_active')
+    list_filter = ('floor__building', 'is_active', 'created_at')
+    search_fields = ('name', 'code', 'head_of_department')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(Room)
+class RoomAdmin(admin.ModelAdmin):
+    list_display = ('room_number', 'room_name', 'department', 'capacity', 'is_active')
+    list_filter = ('department', 'is_active', 'created_at')
+    search_fields = ('room_number', 'room_name', 'department__name')
+    readonly_fields = ('created_at', 'updated_at')
+
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('location_name', 'location_code', 'location_type', 'is_active')
-    list_filter = ('location_type', 'is_active')
-    search_fields = ('location_name', 'location_code', 'description')
+    list_display = ('get_location_name', 'get_location_code', 'get_location_type', 'is_active')
+    list_filter = ('building', 'is_active')
+    search_fields = ('building__name', 'department__name', 'description')
     readonly_fields = ('created_at', 'updated_at')
+    
+    def get_location_name(self, obj):
+        """Build location name from components"""
+        return str(obj)
+    get_location_name.short_description = 'Location Name'
+    
+    def get_location_code(self, obj):
+        """Build location code from components"""
+        return f"{obj.building.code}-{obj.floor.floor_number}-{obj.department.code}"
+    get_location_code.short_description = 'Location Code'
+    
+    def get_location_type(self, obj):
+        """Determine location type based on room presence"""
+        return "Room" if obj.room else "Department"
+    get_location_type.short_description = 'Location Type'
 
 # ================================
 # DEVICE MANAGEMENT
@@ -124,44 +175,49 @@ class DeviceAdmin(admin.ModelAdmin):
             'fields': ('specifications',),
             'classes': ('collapse',)
         }),
-        ('Additional Information', {
-            'fields': ('notes', 'qr_code'),
-            'classes': ('collapse',)
-        }),
-        ('Audit Information', {
-            'fields': (
-                'created_by', 'updated_by', 'created_at', 'updated_at'
-            ),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at', 'age_display'),
             'classes': ('collapse',)
         })
     )
     
     def assigned_display(self, obj):
-        assignment = obj.assignments.filter(is_active=True).first()
-        if assignment:
-            if assignment.assigned_to_staff:
-                return f"Staff: {assignment.assigned_to_staff}"
-            elif assignment.assigned_to_department:
-                return f"Dept: {assignment.assigned_to_department}"
-            elif assignment.assigned_to_location:
-                return f"Location: {assignment.assigned_to_location}"
-        return "Unassigned"
-    assigned_display.short_description = 'Current Assignment'
+        """Show current assignment status"""
+        current_assignment = Assignment.objects.filter(
+            device=obj, is_active=True
+        ).first()
+        
+        if current_assignment:
+            if current_assignment.assigned_to_staff:
+                return format_html(
+                    '<span style="color: green;">Staff: {}</span>',
+                    current_assignment.assigned_to_staff.user.get_full_name()
+                )
+            elif current_assignment.assigned_to_department:
+                return format_html(
+                    '<span style="color: blue;">Dept: {}</span>',
+                    current_assignment.assigned_to_department.name
+                )
+            elif current_assignment.assigned_to_location:
+                return format_html(
+                    '<span style="color: orange;">Location: {}</span>',
+                    current_assignment.assigned_to_location
+                )
+        return format_html('<span style="color: gray;">Unassigned</span>')
+    assigned_display.short_description = 'Assignment'
     
     def warranty_status(self, obj):
-        if obj.is_under_warranty:
-            return format_html(
-                '<span style="color: green;">✓ Active ({} days)</span>',
-                obj.warranty_days_remaining
-            )
-        return format_html('<span style="color: red;">✗ Expired</span>')
+        """Show warranty status with color coding"""
+        if obj.warranty_end_date:
+            days_remaining = (obj.warranty_end_date - timezone.now().date()).days
+            if days_remaining < 0:
+                return format_html('<span style="color: red;">Expired</span>')
+            elif days_remaining < 30:
+                return format_html('<span style="color: orange;">Expiring Soon</span>')
+            else:
+                return format_html('<span style="color: green;">Active</span>')
+        return format_html('<span style="color: gray;">No Warranty</span>')
     warranty_status.short_description = 'Warranty'
-    
-    def age_display(self, obj):
-        if obj.age_in_years:
-            return f"{obj.age_in_years:.1f} years"
-        return "Unknown"
-    age_display.short_description = 'Age'
 
 # ================================
 # ASSIGNMENT MANAGEMENT
@@ -170,23 +226,23 @@ class DeviceAdmin(admin.ModelAdmin):
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):
     list_display = (
-        'assignment_id', 'device', 'assigned_target', 'assignment_type',
-        'assigned_date', 'is_active'
+        'assignment_id', 'device', 'get_assigned_to', 'assignment_type', 
+        'get_assigned_date', 'is_active'
     )
     list_filter = (
-        'assignment_type', 'is_active', 'assigned_date'
+        'assignment_type', 'is_active', 'start_date'
     )
     search_fields = (
-        'device__device_id', 'device__device_name',
+        'assignment_id', 'device__device_id', 'device__device_name',
         'assigned_to_staff__user__username', 'assigned_to_department__name'
     )
     readonly_fields = ('assignment_id', 'created_at', 'updated_at')
-    date_hierarchy = 'assigned_date'
+    date_hierarchy = 'start_date'
     
     fieldsets = (
-        ('Assignment Details', {
+        ('Assignment Information', {
             'fields': (
-                'assignment_id', 'device', 'assignment_type', 'assigned_date'
+                'assignment_id', 'device', 'assignment_type', 'start_date', 'end_date'
             )
         }),
         ('Assignment Targets', {
@@ -205,15 +261,21 @@ class AssignmentAdmin(admin.ModelAdmin):
         })
     )
     
-    def assigned_target(self, obj):
+    def get_assigned_to(self, obj):
+        """Get the assignment target"""
         if obj.assigned_to_staff:
-            return f"Staff: {obj.assigned_to_staff}"
+            return f"Staff: {obj.assigned_to_staff.user.get_full_name()}"
         elif obj.assigned_to_department:
-            return f"Department: {obj.assigned_to_department}"
+            return f"Department: {obj.assigned_to_department.name}"
         elif obj.assigned_to_location:
             return f"Location: {obj.assigned_to_location}"
         return "No assignment"
-    assigned_target.short_description = 'Assigned To'
+    get_assigned_to.short_description = 'Assigned To'
+    
+    def get_assigned_date(self, obj):
+        """Get the assignment start date"""
+        return obj.start_date
+    get_assigned_date.short_description = 'Assigned Date'
 
 # ================================
 # ASSIGNMENT HISTORY MANAGEMENT
@@ -236,24 +298,13 @@ class AssignmentHistoryAdmin(admin.ModelAdmin):
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'employee_id', 'department', 'position', 'is_active'
+        'user', 'employee_id', 'department', 'designation', 'is_active'
     )
-    list_filter = ('department', 'position', 'is_active')
+    list_filter = ('department', 'employment_type', 'is_active')
     search_fields = (
         'user__username', 'user__first_name', 'user__last_name',
-        'employee_id', 'position'
+        'employee_id', 'designation'
     )
-    readonly_fields = ('created_at', 'updated_at')
-
-# ================================
-# DEPARTMENT MANAGEMENT
-# ================================
-
-@admin.register(Department)
-class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'head_of_department', 'is_active')
-    list_filter = ('is_active',)
-    search_fields = ('name', 'code', 'description')
     readonly_fields = ('created_at', 'updated_at')
 
 # ================================
@@ -262,8 +313,8 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Vendor)
 class VendorAdmin(admin.ModelAdmin):
-    list_display = ('name', 'contact_person', 'email', 'phone', 'is_active')
-    list_filter = ('is_active', 'created_at')
+    list_display = ('name', 'vendor_type', 'contact_person', 'email', 'phone', 'is_active')
+    list_filter = ('vendor_type', 'is_active', 'created_at')
     search_fields = ('name', 'contact_person', 'email', 'phone')
     readonly_fields = ('created_at', 'updated_at')
 
@@ -274,14 +325,19 @@ class VendorAdmin(admin.ModelAdmin):
 @admin.register(MaintenanceSchedule)
 class MaintenanceScheduleAdmin(admin.ModelAdmin):
     list_display = (
-        'device', 'maintenance_type', 'status', 'scheduled_date', 'created_at'
+        'device', 'maintenance_type', 'status', 'get_scheduled_date', 'created_at'
     )
     list_filter = (
-        'maintenance_type', 'status', 'scheduled_date', 'created_at'
+        'maintenance_type', 'status', 'due_date', 'created_at'
     )
     search_fields = ('device__device_id', 'device__device_name')
-    date_hierarchy = 'scheduled_date'
+    date_hierarchy = 'due_date'
     readonly_fields = ('created_at', 'updated_at')
+    
+    def get_scheduled_date(self, obj):
+        """Get the scheduled date (due_date field)"""
+        return obj.due_date
+    get_scheduled_date.short_description = 'Scheduled Date'
 
 # ================================
 # SYSTEM CONFIGURATION

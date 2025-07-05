@@ -58,6 +58,17 @@ class UserRoleAdmin(admin.ModelAdmin):
         })
     )
     
+    def permission_summary(self, obj):
+        permissions = []
+        if obj.can_system_admin:
+            permissions.append("System Admin")
+        if obj.can_manage_users:
+            permissions.append("User Management")
+        if obj.can_view_all_devices:
+            permissions.append("All Devices")
+        return ", ".join(permissions) if permissions else "Basic Access"
+    permission_summary.short_description = 'Key Permissions'
+    
     def user_count(self, obj):
         count = obj.user_assignments.count()
         if count > 0:
@@ -72,30 +83,58 @@ class UserRoleAdmin(admin.ModelAdmin):
 @admin.register(UserRoleAssignment)
 class UserRoleAssignmentAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'role', 'department', 'is_active', 'assigned_by'
+        'user', 'role', 'get_department', 'is_active', 'assigned_by', 'start_date', 'end_date', 'is_currently_active'
     )
     list_filter = (
-        'is_active', 'role', 'department'
+        'is_active', 'role', 'assigned_at', 'start_date', 'end_date'
     )
     search_fields = (
         'user__username', 'user__first_name', 'user__last_name',
         'user__email', 'role__display_name'
     )
-    readonly_fields = ('assigned_at', 'updated_at')
+    readonly_fields = ('assigned_at',)
     
     fieldsets = (
         ('Assignment Details', {
-            'fields': ('user', 'role', 'department', 'is_active')
+            'fields': ('user', 'role', 'department', 'is_active', 'start_date', 'end_date')
         }),
         ('Assignment Context', {
-            'fields': ('assignment_reason', 'assigned_by'),
+            'fields': ('notes', 'assigned_by'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
-            'fields': ('assigned_at', 'updated_at'),
+            'fields': ('assigned_at',),
             'classes': ('collapse',)
         })
     )
+    
+    def get_department(self, obj):
+        """Get department from UserRoleAssignment or user's staff profile"""
+        if obj.department:
+            return obj.department.name
+        try:
+            from inventory.models import Staff
+            if hasattr(obj.user, 'staff_profile') and obj.user.staff_profile.department:
+                return obj.user.staff_profile.department.name
+        except (ImportError, AttributeError):
+            pass
+        return "No Department"
+    get_department.short_description = 'Department'
+    
+    def is_currently_active(self, obj):
+        return obj.is_currently_active
+    is_currently_active.short_description = 'Currently Active'
+    is_currently_active.boolean = True
+
+# ================================
+# INLINE ADMIN CLASSES
+# ================================
+
+class UserRoleAssignmentInline(admin.TabularInline):
+    model = UserRoleAssignment
+    extra = 0
+    readonly_fields = ('assigned_at',)
+    fk_name = 'user'
 
 # ================================
 # USER PROFILE MANAGEMENT
@@ -104,37 +143,67 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'department', 'phone_number', 'is_active', 'last_login_date'
+        'user', 'get_department', 'get_phone_number', 'get_is_active', 'get_last_login'
     )
     list_filter = (
-        'department', 'is_active', 'last_login_date'
+        'theme', 'language', 'email_notifications', 'created_at'
     )
     search_fields = (
         'user__username', 'user__first_name', 'user__last_name',
-        'user__email', 'phone_number', 'employee_id'
+        'user__email'
     )
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         ('User Information', {
-            'fields': ('user', 'employee_id', 'department')
+            'fields': ('user',)
         }),
-        ('Contact Information', {
-            'fields': ('phone_number', 'emergency_contact', 'emergency_phone')
+        ('UI Preferences', {
+            'fields': ('theme', 'language', 'timezone', 'default_items_per_page')
         }),
-        ('Settings', {
-            'fields': ('language_preference', 'timezone', 'notification_preferences'),
+        ('Notification Settings', {
+            'fields': (
+                'email_notifications', 'sms_notifications', 'in_app_notifications',
+                'notification_frequency', 'mobile_push_notifications'
+            ),
             'classes': ('collapse',)
         }),
-        ('Status', {
-            'fields': ('is_active', 'last_login_date'),
+        ('Security Settings', {
+            'fields': ('require_2fa', 'session_timeout_minutes'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
+            'fields': ('created_at', 'updated_at', 'last_login_ip', 'last_password_change'),
             'classes': ('collapse',)
         })
     )
+    
+    def get_department(self, obj):
+        """Get department from default_department field or staff profile"""
+        if obj.default_department:
+            return obj.default_department.name
+        elif hasattr(obj.user, 'staff_profile') and obj.user.staff_profile.department:
+            return obj.user.staff_profile.department.name
+        return "No Department"
+    get_department.short_description = 'Department'
+    
+    def get_phone_number(self, obj):
+        """Get phone number from staff profile"""
+        if hasattr(obj.user, 'staff_profile'):
+            return obj.user.staff_profile.phone_number or "Not provided"
+        return "No staff profile"
+    get_phone_number.short_description = 'Phone Number'
+    
+    def get_is_active(self, obj):
+        """Get active status from user"""
+        return obj.user.is_active
+    get_is_active.short_description = 'Is Active'
+    get_is_active.boolean = True
+    
+    def get_last_login(self, obj):
+        """Get last login from user"""
+        return obj.user.last_login
+    get_last_login.short_description = 'Last Login'
 
 # ================================
 # USER SESSION TRACKING
@@ -147,7 +216,7 @@ class UserSessionAdmin(admin.ModelAdmin):
         'login_time', 'last_activity', 'is_active'
     )
     list_filter = (
-        'is_active', 'login_time', 'last_activity'
+        'is_active', 'login_time', 'last_activity', 'session_type'
     )
     search_fields = (
         'user__username', 'ip_address', 'session_key'
@@ -159,13 +228,17 @@ class UserSessionAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Session Information', {
-            'fields': ('user', 'session_key', 'is_active')
+            'fields': ('user', 'session_key', 'session_type', 'is_active')
         }),
         ('Login Details', {
             'fields': ('ip_address', 'user_agent', 'login_time')
         }),
         ('Activity Tracking', {
             'fields': ('last_activity', 'logout_time'),
+            'classes': ('collapse',)
+        }),
+        ('Security', {
+            'fields': ('is_suspicious', 'failed_login_attempts'),
             'classes': ('collapse',)
         })
     )
@@ -190,18 +263,16 @@ class UserProfileInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = 'Profile'
 
-class UserRoleAssignmentInline(admin.TabularInline):
-    model = UserRoleAssignment
-    extra = 0
-    readonly_fields = ('assigned_at', 'updated_at')
-
 class ExtendedUserAdmin(BaseUserAdmin):
     inlines = (UserProfileInline, UserRoleAssignmentInline)
     list_display = BaseUserAdmin.list_display + ('get_department', 'get_roles')
     
     def get_department(self, obj):
-        profile = getattr(obj, 'profile', None)
-        return profile.department if profile else 'No Department'
+        if hasattr(obj, 'user_profile') and obj.user_profile.default_department:
+            return obj.user_profile.default_department.name
+        elif hasattr(obj, 'staff_profile') and obj.staff_profile.department:
+            return obj.staff_profile.department.name
+        return 'No Department'
     get_department.short_description = 'Department'
     
     def get_roles(self, obj):
