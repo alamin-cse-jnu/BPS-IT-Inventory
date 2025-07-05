@@ -1,19 +1,30 @@
-# authentication/views.py
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.contrib.auth.models import User
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm, PasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
-from django.urls import reverse_lazy
+import logging
+
+from django.conf import settings
 from django.utils import timezone
+from django.urls import reverse_lazy
 from django.http import JsonResponse
+from django.db.models import Q
+from django.core.paginator import Paginator
+from django.shortcuts import render, redirect, get_object_or_404
+
+from django.contrib import messages
+from django.contrib.auth import (
+    authenticate, login, logout,
+    update_session_auth_hash,
+)
+from django.contrib.auth.decorators import (
+    login_required, user_passes_test
+)
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import (
+    AuthenticationForm, UserCreationForm, PasswordChangeForm
+)
+
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
-import logging
-from django.conf import settings
+
 
 logger = logging.getLogger(__name__)
 
