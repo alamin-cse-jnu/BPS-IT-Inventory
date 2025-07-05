@@ -1,350 +1,260 @@
-# authentication/admin.py
-"""
-PRODUCTION-READY Authentication Admin Configuration for BPS IT Inventory System
-This file fixes ALL field reference errors based on actual model structure.
-
-COPY THIS ENTIRE CONTENT to: D:\Development\projects\BPS-IT-Inventory\authentication\admin.py
-"""
-
 from django.contrib import admin
-from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
 from django.utils.html import format_html
 from django.urls import reverse
-
-# Import models with error handling
-from .models import (
-    UserRole, UserProfile, LoginAttempt, PasswordHistory,
-    SecurityQuestion, UserPreference, UserActivity
-)
-
-# Import optional models safely
-try:
-    from .models import TwoFactorAuth
-    HAS_TWO_FACTOR = True
-except ImportError:
-    HAS_TWO_FACTOR = False
-
-try:
-    from .models import ApiKey
-    HAS_API_KEY = True
-except ImportError:
-    HAS_API_KEY = False
-
+from django.utils.safestring import mark_safe
+from .models import UserRole, UserRoleAssignment, UserProfile, UserSession
 
 # ================================
-# CUSTOM FILTERS
-# ================================
-
-class ActiveUserFilter(admin.SimpleListFilter):
-    title = 'Account Status'
-    parameter_name = 'is_active'
-
-    def lookups(self, request, model_admin):
-        return (
-            ('active', 'Active Users'),
-            ('inactive', 'Inactive Users'),
-        )
-
-    def queryset(self, request, queryset):
-        if self.value() == 'active':
-            return queryset.filter(is_active=True)
-        elif self.value() == 'inactive':
-            return queryset.filter(is_active=False)
-
-
-# ================================
-# INLINE ADMIN CLASSES  
-# ================================
-
-class LoginAttemptInline(admin.TabularInline):
-    model = LoginAttempt
-    extra = 0
-    readonly_fields = ('timestamp', 'ip_address', 'attempt_type')
-    fields = ('timestamp', 'ip_address', 'attempt_type', 'username')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).order_by('-timestamp')[:5]
-
-
-class PasswordHistoryInline(admin.TabularInline):
-    model = PasswordHistory
-    extra = 0
-    readonly_fields = ('created_at', 'password_hash')
-    fields = ('created_at',)
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).order_by('-created_at')[:3]
-
-
-# ================================
-# MAIN ADMIN CLASSES
+# USER ROLE MANAGEMENT
 # ================================
 
 @admin.register(UserRole)
 class UserRoleAdmin(admin.ModelAdmin):
     list_display = (
-        'display_name', 'name', 'user_count', 'permission_summary',
-        'can_view_all_devices', 'can_manage_assignments', 'is_active'
+        'name', 'display_name', 'permission_summary', 
+        'user_count', 'is_active', 'created_at'
     )
     list_filter = (
-        'can_view_all_devices', 'can_manage_assignments', 'can_approve_requests',
-        'can_generate_reports', 'can_manage_users', 'can_system_admin', 'is_active'
+        'is_active', 'can_system_admin', 'can_manage_users', 
+        'can_view_all_devices', 'created_at'
     )
     search_fields = ('name', 'display_name', 'description')
     readonly_fields = ('created_at', 'updated_at')
-
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'display_name', 'description', 'is_active')
+        }),
+        ('Device & Assignment Permissions', {
+            'fields': (
+                'can_view_all_devices', 'can_manage_assignments', 
+                'can_approve_requests', 'can_manage_maintenance'
+            )
+        }),
+        ('System Permissions', {
+            'fields': (
+                'can_system_admin', 'can_manage_users', 
+                'can_generate_reports', 'can_manage_vendors'
+            )
+        }),
+        ('Access Control', {
+            'fields': (
+                'restricted_to_own_department', 'can_view_financial_data',
+                'can_scan_qr_codes', 'can_generate_qr_codes'
+            )
+        }),
+        ('Advanced Operations', {
+            'fields': ('can_bulk_operations', 'can_export_data'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
     def user_count(self, obj):
-        """Count users with this role"""
-        try:
-            count = obj.user_profiles.count() if hasattr(obj, 'user_profiles') else 0
-            return count
-        except:
-            return 0
+        count = obj.user_assignments.count()
+        if count > 0:
+            url = reverse('admin:authentication_userroleassignment_changelist')
+            return format_html(
+                '<a href="{}?role__id__exact={}">{}</a>',
+                url, obj.pk, count
+            )
+        return 0
     user_count.short_description = 'Users'
+    user_count.admin_order_field = 'user_assignments__count'
 
-    def permission_summary(self, obj):
-        """Show summary of key permissions"""
-        permissions = []
-        if obj.can_view_all_devices:
-            permissions.append("All Devices")
-        if obj.can_manage_assignments:
-            permissions.append("Assignments")
-        if obj.can_generate_reports:
-            permissions.append("Reports")
-        if obj.can_manage_users:
-            permissions.append("Users")
-        if obj.can_system_admin:
-            permissions.append("Admin")
-        
-        return ", ".join(permissions) if permissions else "Basic"
-    permission_summary.short_description = 'Key Permissions'
+@admin.register(UserRoleAssignment)
+class UserRoleAssignmentAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'role', 'department', 'is_active', 
+        'effective_from', 'effective_until', 'assigned_by'
+    )
+    list_filter = (
+        'is_active', 'role', 'department', 
+        'effective_from', 'created_at'
+    )
+    search_fields = (
+        'user__username', 'user__first_name', 'user__last_name',
+        'user__email', 'role__display_name'
+    )
+    date_hierarchy = 'effective_from'
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Assignment Details', {
+            'fields': ('user', 'role', 'department', 'is_active')
+        }),
+        ('Effective Period', {
+            'fields': ('effective_from', 'effective_until')
+        }),
+        ('Assignment Context', {
+            'fields': ('assignment_reason', 'assigned_by'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'user', 'role', 'department', 'assigned_by'
+        )
 
+# ================================
+# USER PROFILE MANAGEMENT
+# ================================
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'role', 'department', 'phone', 'is_active',
-        'last_login_display', 'account_status'
+        'user', 'employee_id', 'phone_number', 'department', 
+        'last_login_display', 'is_active'
     )
     list_filter = (
-        ActiveUserFilter, 'role', 'department', 'created_at',
-        'email_verified', 'phone_verified'
+        'is_active', 'department', 'created_at',
+        'user__last_login', 'user__date_joined'
     )
-    search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name', 'phone')
-    readonly_fields = ('created_at', 'updated_at')
-    inlines = [LoginAttemptInline, PasswordHistoryInline]
-
+    search_fields = (
+        'user__username', 'user__first_name', 'user__last_name',
+        'user__email', 'employee_id', 'phone_number'
+    )
+    readonly_fields = ('created_at', 'updated_at', 'last_login_display')
+    
+    fieldsets = (
+        ('User Information', {
+            'fields': ('user', 'employee_id', 'is_active')
+        }),
+        ('Contact Information', {
+            'fields': ('phone_number', 'department', 'avatar')
+        }),
+        ('Preferences', {
+            'fields': ('theme_preference', 'language_preference'),
+            'classes': ('collapse',)
+        }),
+        ('Activity', {
+            'fields': ('last_login_display',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
     def last_login_display(self, obj):
-        """Display last login time from the related user model"""
-        if obj.user and obj.user.last_login:
-            return obj.user.last_login.strftime('%Y-%m-%d %H:%M')
+        if obj.user.last_login:
+            return obj.user.last_login.strftime('%Y-%m-%d %H:%M:%S')
         return 'Never'
     last_login_display.short_description = 'Last Login'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'user', 'department'
+        )
 
-    def account_status(self, obj):
-        """Display account status with icons"""
-        if not obj.is_active:
-            return format_html('<span style="color: red;">❌ Inactive</span>')
-        else:
-            return format_html('<span style="color: green;">✅ Active</span>')
-    account_status.short_description = 'Status'
+# ================================
+# USER SESSION MANAGEMENT
+# ================================
 
-
-@admin.register(LoginAttempt)
-class LoginAttemptAdmin(admin.ModelAdmin):
+@admin.register(UserSession)
+class UserSessionAdmin(admin.ModelAdmin):
     list_display = (
-        'username', 'user', 'timestamp', 'ip_address', 'attempt_status',
-        'user_agent_display'
+        'user', 'session_key_short', 'ip_address', 'user_agent_short',
+        'is_active', 'created_at', 'last_activity', 'duration'
     )
-    list_filter = ('attempt_type', 'timestamp', 'is_suspicious')
-    search_fields = ('username', 'user__username', 'ip_address')
-    readonly_fields = ('timestamp',)
-
-    def attempt_status(self, obj):
-        """Display attempt status with color coding based on attempt_type field"""
-        if obj.attempt_type == 'SUCCESS':
-            return format_html('<span style="color: green;">✅ Success</span>')
-        else:
-            return format_html('<span style="color: red;">❌ {}</span>', obj.get_attempt_type_display())
-    attempt_status.short_description = 'Status'
-
-    def user_agent_display(self, obj):
-        """Display shortened user agent"""
-        if obj.user_agent:
-            return obj.user_agent[:50] + ('...' if len(obj.user_agent) > 50 else '')
+    list_filter = (
+        'is_active', 'created_at', 'last_activity'
+    )
+    search_fields = (
+        'user__username', 'user__email', 'ip_address', 'session_key'
+    )
+    date_hierarchy = 'created_at'
+    readonly_fields = (
+        'session_key', 'created_at', 'last_activity', 'duration'
+    )
+    
+    fieldsets = (
+        ('Session Information', {
+            'fields': ('user', 'session_key', 'is_active')
+        }),
+        ('Connection Details', {
+            'fields': ('ip_address', 'user_agent')
+        }),
+        ('Activity Tracking', {
+            'fields': ('created_at', 'last_activity', 'duration'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def session_key_short(self, obj):
+        return f"{obj.session_key[:8]}..."
+    session_key_short.short_description = 'Session Key'
+    
+    def user_agent_short(self, obj):
+        if len(obj.user_agent) > 50:
+            return f"{obj.user_agent[:47]}..."
+        return obj.user_agent
+    user_agent_short.short_description = 'User Agent'
+    
+    def duration(self, obj):
+        if obj.last_activity and obj.created_at:
+            delta = obj.last_activity - obj.created_at
+            hours = delta.total_seconds() / 3600
+            return f"{hours:.1f}h"
         return '-'
-    user_agent_display.short_description = 'User Agent'
-
-    def has_add_permission(self, request):
-        return False
-
-
-@admin.register(PasswordHistory)
-class PasswordHistoryAdmin(admin.ModelAdmin):
-    list_display = ('user', 'created_at')
-    list_filter = ('created_at',)
-    search_fields = ('user__username',)
-    readonly_fields = ('created_at', 'password_hash')
-
-    def has_add_permission(self, request):
-        return False
-
-
-@admin.register(SecurityQuestion)
-class SecurityQuestionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'question', 'created_at')
-    list_filter = ('created_at',)
-    search_fields = ('user__username', 'question')
-    readonly_fields = ('created_at', 'updated_at', 'answer_hash')
-
-
-@admin.register(UserPreference)
-class UserPreferenceAdmin(admin.ModelAdmin):
-    list_display = ('user', 'preference_type', 'updated_at')
-    list_filter = ('preference_type', 'updated_at')
-    search_fields = ('user__username', 'preference_type')
-    readonly_fields = ('created_at', 'updated_at')
-
-
-@admin.register(UserActivity)
-class UserActivityAdmin(admin.ModelAdmin):
-    list_display = (
-        'user', 'activity_type', 'timestamp', 'description_short',
-        'ip_address', 'success_status'
-    )
-    list_filter = ('activity_type', 'is_successful', 'timestamp')
-    search_fields = ('user__username', 'description', 'ip_address')
-    readonly_fields = ('timestamp',)
-
-    def description_short(self, obj):
-        """Display shortened description"""
-        return obj.description[:50] + ('...' if len(obj.description) > 50 else '')
-    description_short.short_description = 'Description'
-
-    def success_status(self, obj):
-        """Display success status with icons based on is_successful field"""
-        if obj.is_successful:
-            return format_html('<span style="color: green;">✅</span>')
-        else:
-            return format_html('<span style="color: red;">❌</span>')
-    success_status.short_description = 'Success'
-
-    def has_add_permission(self, request):
-        return False
-
-
-# ================================
-# CONDITIONAL OPTIONAL MODEL REGISTRATION
-# ================================
-
-if HAS_TWO_FACTOR:
-    try:
-        @admin.register(TwoFactorAuth)
-        class TwoFactorAuthAdmin(admin.ModelAdmin):
-            list_display = ('user', 'method', 'is_enabled', 'backup_codes_count', 'last_used')
-            list_filter = ('method', 'is_enabled', 'created_at')
-            search_fields = ('user__username',)
-            readonly_fields = ('secret_key', 'backup_codes', 'created_at', 'last_used')
-
-            def backup_codes_count(self, obj):
-                """Count remaining backup codes"""
-                if obj.backup_codes:
-                    try:
-                        codes = obj.backup_codes if isinstance(obj.backup_codes, list) else []
-                        return len(codes)
-                    except:
-                        return 0
-                return 0
-            backup_codes_count.short_description = 'Backup Codes'
-    except Exception as e:
-        print(f"Warning: Could not register TwoFactorAuth admin: {e}")
-
-if HAS_API_KEY:
-    try:
-        @admin.register(ApiKey)
-        class ApiKeyAdmin(admin.ModelAdmin):
-            list_display = (
-                'name', 'user', 'key_preview', 'is_active',
-                'last_used', 'expires_at', 'usage_count'
-            )
-            list_filter = ('is_active', 'created_at', 'expires_at')
-            search_fields = ('name', 'user__username')
-            readonly_fields = ('token_key', 'created_at', 'last_used', 'usage_count')
-
-            def key_preview(self, obj):
-                """Display preview of API key"""
-                if hasattr(obj, 'token_key') and obj.token_key:
-                    return obj.token_key[:8] + '...' + obj.token_key[-4:]
-                return '-'
-            key_preview.short_description = 'API Key'
-    except Exception as e:
-        print(f"Warning: Could not register ApiKey admin: {e}")
-
-
-# ================================
-# ADMIN ACTIONS
-# ================================
-
-@admin.action(description='Activate selected users')
-def activate_users(modeladmin, request, queryset):
-    updated = queryset.update(is_active=True)
-    modeladmin.message_user(request, f'{updated} users were activated.')
-
-
-@admin.action(description='Deactivate selected users')
-def deactivate_users(modeladmin, request, queryset):
-    updated = queryset.update(is_active=False)
-    modeladmin.message_user(request, f'{updated} users were deactivated.')
-
-
-@admin.action(description='Reset failed login attempts')
-def reset_login_attempts(modeladmin, request, queryset):
-    for profile in queryset:
-        # Reset failed login attempts if the field exists
-        if hasattr(profile, 'failed_login_attempts'):
-            profile.failed_login_attempts = 0
-        if hasattr(profile, 'account_locked_until'):
-            profile.account_locked_until = None
-        profile.save()
-    modeladmin.message_user(request, f'Login attempts reset for {queryset.count()} users.')
-
-
-# Add actions to UserProfile admin
-UserProfileAdmin.actions = [activate_users, deactivate_users, reset_login_attempts]
+    duration.short_description = 'Duration'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user')
 
 # ================================
 # EXTEND DEFAULT USER ADMIN
 # ================================
 
-class UserProfileInline(admin.StackedInline):
-    model = UserProfile
-    can_delete = False
-    verbose_name_plural = 'User Profile'
-    fields = ('role', 'department', 'phone', 'is_active')
+# Unregister the default User admin
+admin.site.unregister(User)
 
-
+@admin.register(User)
 class CustomUserAdmin(BaseUserAdmin):
-    inlines = (UserProfileInline,)
+    list_display = (
+        'username', 'email', 'first_name', 'last_name', 
+        'role_display', 'is_staff', 'is_active', 'last_login'
+    )
+    list_filter = (
+        'is_staff', 'is_superuser', 'is_active', 
+        'date_joined', 'last_login'
+    )
+    search_fields = ('username', 'first_name', 'last_name', 'email')
     
-    def get_inline_instances(self, request, obj=None):
-        if not obj:
-            return list()
-        return super().get_inline_instances(request, obj)
-
-
-# Unregister the default User admin and register our custom one
-try:
-    admin.site.unregister(User)
-    admin.site.register(User, CustomUserAdmin)
-except Exception as e:
-    print(f"Warning: Could not customize User admin: {e}")
+    def role_display(self, obj):
+        try:
+            profile = obj.profile
+            roles = obj.role_assignments.filter(is_active=True)
+            if roles.exists():
+                role_names = [r.role.display_name for r in roles[:2]]
+                if roles.count() > 2:
+                    role_names.append('...')
+                return ', '.join(role_names)
+            return 'No Role'
+        except:
+            return 'No Profile'
+    role_display.short_description = 'Roles'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related(
+            'role_assignments__role'
+        )
 
 # ================================
 # ADMIN SITE CUSTOMIZATION
 # ================================
-admin.site.site_header = "BPS IT Inventory Management - Authentication"
+
+admin.site.site_header = "BPS IT Inventory - Authentication Management"
 admin.site.site_title = "BPS Authentication Admin"
 admin.site.index_title = "User & Role Management"
-
-print("✅ BPS Authentication Admin loaded successfully!")
