@@ -415,26 +415,21 @@ if HAS_MAINTENANCE:
     except:
         pass
 
-if HAS_ASSIGNMENT_HISTORY:
-    try:
-        @admin.register(AssignmentHistory)
-        class AssignmentHistoryAdmin(admin.ModelAdmin):
-            list_display = ('device', 'action', 'timestamp', 'changed_by', 'previous_assignment')
-            list_filter = ('action', 'timestamp')
-            search_fields = ('device__device_id', 'device__device_name')
-            readonly_fields = ('timestamp',)
-            
-            def has_add_permission(self, request):
-                return False
-
-            def previous_assignment(self, obj):
-                """Show previous assignment details"""
-                if hasattr(obj, 'previous_staff') and obj.previous_staff:
-                    return f"From: {obj.previous_staff}"
-                return '-'
-            previous_assignment.short_description = 'Previous'
-    except:
-        pass
+        if HAS_ASSIGNMENT_HISTORY:
+            @admin.register(AssignmentHistory)
+            class AssignmentHistoryAdmin(admin.ModelAdmin):
+                list_display = ('assignment', 'change_type', 'timestamp', 'changed_by', 'change_summary_display')
+                list_filter = ('change_type', 'timestamp')
+                search_fields = ('assignment__device__device_id', 'assignment__device__device_name')
+                readonly_fields = ('timestamp',)
+                
+                def change_summary_display(self, obj):
+                    """Display change summary"""
+                    return obj.change_summary[:100] + ('...' if len(obj.change_summary) > 100 else '')
+                change_summary_display.short_description = 'Summary'
+                
+                def has_add_permission(self, request):
+                    return False
 
 if HAS_SERVICE_REQUEST:
     try:
