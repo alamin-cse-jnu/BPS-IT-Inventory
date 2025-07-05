@@ -413,11 +413,33 @@ QRCodeScanAdmin.actions = [export_scan_data, cleanup_old_scans]
 
 
 # ================================
-# REGISTER DASHBOARD VIEW
+# REGISTER DASHBOARD VIEW (FIXED)
 # ================================
 
-# Register a custom dashboard view
-admin.site.register_view('qr_dashboard/', view=QRDashboardAdmin().changelist_view, name='QR Dashboard')
+# Note: admin.site.register_view() doesn't exist in standard Django
+# Instead, create a custom admin view or use a different approach
+
+class QRManagementDashboard:
+    """Custom QR Management Dashboard"""
+    
+    def get_dashboard_stats(self):
+        """Get dashboard statistics"""
+        today = timezone.now().date()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+        
+        stats = {
+            'total_scans': QRCodeScan.objects.count(),
+            'today_scans': QRCodeScan.objects.filter(timestamp__date=today).count(),
+            'week_scans': QRCodeScan.objects.filter(timestamp__date__gte=week_start).count(),
+            'month_scans': QRCodeScan.objects.filter(timestamp__date__gte=month_start).count(),
+            'active_campaigns': QRCampaign.objects.filter(status='ACTIVE').count() if hasattr(QRCampaign, 'status') else 0,
+        }
+        
+        return stats
+
+# Create dashboard instance
+qr_dashboard = QRManagementDashboard()
 
 
 # ================================
