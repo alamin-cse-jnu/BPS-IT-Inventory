@@ -64,7 +64,6 @@ class UserRoleAdmin(admin.ModelAdmin):
             )
         return 0
     user_count.short_description = 'Users'
-    user_count.admin_order_field = 'user_assignments__count'
 
 @admin.register(UserRoleAssignment)
 class UserRoleAssignmentAdmin(admin.ModelAdmin):
@@ -112,32 +111,25 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'employee_id', 'phone_number', 'department', 
-        'last_login_display', 'is_active'
+        'user', 'theme', 'language', 'is_active', 'created_at'
     )
     list_filter = (
-        'is_active', 'department', 'created_at',
-        'user__last_login', 'user__date_joined'
+        'is_active', 'theme', 'language', 'created_at'
     )
     search_fields = (
-        'user__username', 'user__first_name', 'user__last_name',
-        'user__email', 'employee_id', 'phone_number'
+        'user__username', 'user__first_name', 'user__last_name', 'user__email'
     )
-    readonly_fields = ('created_at', 'updated_at', 'last_login_display')
+    readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         ('User Information', {
-            'fields': ('user', 'employee_id', 'is_active')
-        }),
-        ('Contact Information', {
-            'fields': ('phone_number', 'department', 'avatar')
+            'fields': ('user', 'is_active')
         }),
         ('Preferences', {
-            'fields': ('theme_preference', 'language_preference'),
-            'classes': ('collapse',)
+            'fields': ('theme', 'language')
         }),
-        ('Activity', {
-            'fields': ('last_login_display',),
+        ('Profile Settings', {
+            'fields': ('notification_email', 'notification_in_app', 'notification_sms'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -146,16 +138,8 @@ class UserProfileAdmin(admin.ModelAdmin):
         })
     )
     
-    def last_login_display(self, obj):
-        if obj.user.last_login:
-            return obj.user.last_login.strftime('%Y-%m-%d %H:%M:%S')
-        return 'Never'
-    last_login_display.short_description = 'Last Login'
-    
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            'user', 'department'
-        )
+        return super().get_queryset(request).select_related('user')
 
 # ================================
 # USER SESSION MANAGEMENT
@@ -164,29 +148,33 @@ class UserProfileAdmin(admin.ModelAdmin):
 @admin.register(UserSession)
 class UserSessionAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'session_key_short', 'ip_address', 'user_agent_short',
-        'is_active', 'created_at', 'last_activity', 'duration'
+        'user', 'session_key_short', 'session_type', 'ip_address', 
+        'is_active', 'login_time', 'last_activity'
     )
     list_filter = (
-        'is_active', 'created_at', 'last_activity'
+        'is_active', 'session_type', 'login_time', 'last_activity'
     )
     search_fields = (
         'user__username', 'user__email', 'ip_address', 'session_key'
     )
-    date_hierarchy = 'created_at'
+    date_hierarchy = 'login_time'
     readonly_fields = (
-        'session_key', 'created_at', 'last_activity', 'duration'
+        'session_key', 'login_time', 'last_activity', 'logout_time'
     )
     
     fieldsets = (
         ('Session Information', {
-            'fields': ('user', 'session_key', 'is_active')
+            'fields': ('user', 'session_key', 'session_type', 'is_active')
         }),
         ('Connection Details', {
-            'fields': ('ip_address', 'user_agent')
+            'fields': ('ip_address', 'user_agent', 'device_info')
         }),
         ('Activity Tracking', {
-            'fields': ('created_at', 'last_activity', 'duration'),
+            'fields': ('login_time', 'last_activity', 'logout_time'),
+            'classes': ('collapse',)
+        }),
+        ('Security', {
+            'fields': ('is_suspicious', 'failed_login_attempts', 'location_data'),
             'classes': ('collapse',)
         })
     )
@@ -194,20 +182,6 @@ class UserSessionAdmin(admin.ModelAdmin):
     def session_key_short(self, obj):
         return f"{obj.session_key[:8]}..."
     session_key_short.short_description = 'Session Key'
-    
-    def user_agent_short(self, obj):
-        if len(obj.user_agent) > 50:
-            return f"{obj.user_agent[:47]}..."
-        return obj.user_agent
-    user_agent_short.short_description = 'User Agent'
-    
-    def duration(self, obj):
-        if obj.last_activity and obj.created_at:
-            delta = obj.last_activity - obj.created_at
-            hours = delta.total_seconds() / 3600
-            return f"{hours:.1f}h"
-        return '-'
-    duration.short_description = 'Duration'
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('user')
@@ -223,7 +197,7 @@ admin.site.unregister(User)
 class CustomUserAdmin(BaseUserAdmin):
     list_display = (
         'username', 'email', 'first_name', 'last_name', 
-        'role_display', 'is_staff', 'is_active', 'last_login'
+        'staff_info', 'is_staff', 'is_active', 'last_login'
     )
     list_filter = (
         'is_staff', 'is_superuser', 'is_active', 
@@ -231,29 +205,22 @@ class CustomUserAdmin(BaseUserAdmin):
     )
     search_fields = ('username', 'first_name', 'last_name', 'email')
     
-    def role_display(self, obj):
+    def staff_info(self, obj):
         try:
-            profile = obj.profile
-            roles = obj.role_assignments.filter(is_active=True)
-            if roles.exists():
-                role_names = [r.role.display_name for r in roles[:2]]
-                if roles.count() > 2:
-                    role_names.append('...')
-                return ', '.join(role_names)
-            return 'No Role'
+            if hasattr(obj, 'staff_profile'):
+                staff = obj.staff_profile
+                return f"{staff.employee_id} - {staff.designation}"
+            return 'No Staff Profile'
         except:
-            return 'No Profile'
-    role_display.short_description = 'Roles'
+            return 'No Staff Profile'
+    staff_info.short_description = 'Staff Info'
     
     def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related(
-            'role_assignments__role'
-        )
+        return super().get_queryset(request).select_related('staff_profile')
 
 # ================================
 # ADMIN SITE CUSTOMIZATION
 # ================================
-
 admin.site.site_header = "BPS IT Inventory - Authentication Management"
 admin.site.site_title = "BPS Authentication Admin"
 admin.site.index_title = "User & Role Management"
