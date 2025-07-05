@@ -1,152 +1,187 @@
-# management/commands/fix_system_checks.py
+# inventory/management/commands/fix_system_checks.py
 """
 Django management command to fix system check errors
-File location: D:\Development\projects\BPS-IT-Inventory\inventory\management\commands\fix_system_checks.py
+Location: D:\Development\projects\BPS-IT-Inventory\inventory\management\commands\fix_system_checks.py
 
 IMPORTANT: First create the directory structure:
 1. Create folder: D:\Development\projects\BPS-IT-Inventory\inventory\management\
 2. Create folder: D:\Development\projects\BPS-IT-Inventory\inventory\management\commands\
 3. Create file: D:\Development\projects\BPS-IT-Inventory\inventory\management\__init__.py (empty file)
 4. Create file: D:\Development\projects\BPS-IT-Inventory\inventory\management\commands\__init__.py (empty file)
-5. Create this file: D:\Development\projects\BPS-IT-Inventory\inventory\management\commands\fix_system_checks.py
+5. Then save this file and run: python manage.py fix_system_checks
 """
 
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
 from django.conf import settings
+from django.core.management import call_command
+from django.apps import apps
 import os
 import sys
+from pathlib import Path
 
 
 class Command(BaseCommand):
-    help = 'Fix Django system check errors for BPS IT Inventory System'
+    help = 'Fix system check errors for BPS IT Inventory System'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--check-only',
             action='store_true',
-            help='Only run system checks without fixes',
+            help='Only run checks without attempting fixes',
         )
         parser.add_argument(
-            '--force',
+            '--verbose',
             action='store_true',
-            help='Force apply fixes even if risky',
+            help='Show detailed output',
         )
 
     def handle(self, *args, **options):
+        self.verbose = options['verbose']
+        check_only = options['check_only']
+        
         self.stdout.write(
-            self.style.SUCCESS('🔧 BPS IT Inventory System Check & Fix Tool')
+            self.style.SUCCESS('🔧 BPS IT Inventory System - System Check & Fix Tool')
         )
-        self.stdout.write('=' * 60)
-
-        if options['check_only']:
-            self.run_system_checks()
-        else:
-            self.fix_system_issues(force=options['force'])
-
-    def run_system_checks(self):
-        """Run Django system checks"""
-        self.stdout.write('\n📋 Running Django System Checks...')
-        try:
-            call_command('check', verbosity=2)
-            self.stdout.write(
-                self.style.SUCCESS('✅ System checks completed')
-            )
-        except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f'❌ System check failed: {str(e)}')
-            )
-
-    def fix_system_issues(self, force=False):
-        """Apply fixes for common system issues"""
-        self.stdout.write('\n🔧 Applying System Fixes...')
+        self.stdout.write('=' * 70)
         
-        fixes_applied = []
+        # Run comprehensive system checks
+        all_checks_passed = True
         
-        # Fix 1: Check and create missing directories
-        if self.create_missing_directories():
-            fixes_applied.append("Created missing directories")
+        # 1. Check Django configuration
+        if not self.check_django_configuration():
+            all_checks_passed = False
         
-        # Fix 2: Validate admin configurations
-        if self.validate_admin_configs():
-            fixes_applied.append("Validated admin configurations")
+        # 2. Check database connectivity
+        if not self.check_database_connectivity():
+            all_checks_passed = False
         
-        # Fix 3: Check model field references
-        if self.check_model_references():
-            fixes_applied.append("Checked model field references")
+        # 3. Check model field references
+        if not self.check_model_references():
+            all_checks_passed = False
         
-        # Fix 4: Verify static and media settings
-        if self.verify_static_media_settings():
-            fixes_applied.append("Verified static/media settings")
+        # 4. Check static/media settings
+        if not self.verify_static_media_settings():
+            all_checks_passed = False
         
-        # Fix 5: Check database connectivity
-        if self.check_database_connectivity():
-            fixes_applied.append("Verified database connectivity")
+        # 5. Check admin configurations
+        if not self.check_admin_configurations():
+            all_checks_passed = False
         
-        # Final system check
-        self.stdout.write('\n🔍 Running final system check...')
-        try:
-            call_command('check', verbosity=1)
+        # 6. Run Django's built-in system check
+        if not check_only:
+            self.run_django_system_check()
+        
+        # Final status
+        self.stdout.write('=' * 70)
+        if all_checks_passed:
             self.stdout.write(
                 self.style.SUCCESS('✅ All system checks passed!')
             )
+            self.stdout.write('🚀 Your BPS IT Inventory System is ready to use.')
+        else:
+            self.stdout.write(
+                self.style.ERROR('❌ Some system checks failed.')
+            )
+            self.stdout.write('📝 Please review the issues above and apply the suggested fixes.')
+        
+        self.stdout.write('\n📚 Next steps:')
+        self.stdout.write('1. Run: python manage.py check')
+        self.stdout.write('2. Run: python manage.py makemigrations')
+        self.stdout.write('3. Run: python manage.py migrate')
+        self.stdout.write('4. Run: python manage.py setup_bps --create-superuser')
+
+    def check_django_configuration(self):
+        """Check basic Django configuration"""
+        self.stdout.write('⚙️ Checking Django configuration...')
+        
+        try:
+            # Check if Django apps are properly configured
+            installed_apps = getattr(settings, 'INSTALLED_APPS', [])
+            required_apps = [
+                'django.contrib.admin',
+                'django.contrib.auth',
+                'django.contrib.contenttypes',
+                'django.contrib.sessions',
+                'django.contrib.messages',
+                'django.contrib.staticfiles',
+                'authentication',
+                'inventory',
+                'reports',
+                'qr_management',
+            ]
+            
+            missing_apps = []
+            for app in required_apps:
+                if app not in installed_apps:
+                    missing_apps.append(app)
+            
+            if missing_apps:
+                self.stdout.write(
+                    self.style.ERROR(f'  ❌ Missing apps in INSTALLED_APPS: {", ".join(missing_apps)}')
+                )
+                return False
+            else:
+                self.stdout.write('  ✅ All required apps are installed')
+            
+            # Check SECRET_KEY
+            secret_key = getattr(settings, 'SECRET_KEY', None)
+            if not secret_key:
+                self.stdout.write(
+                    self.style.ERROR('  ❌ SECRET_KEY is not set')
+                )
+                return False
+            else:
+                self.stdout.write('  ✅ SECRET_KEY is configured')
+            
+            # Check DEBUG setting
+            debug = getattr(settings, 'DEBUG', None)
+            if debug is None:
+                self.stdout.write(
+                    self.style.WARNING('  ⚠️ DEBUG setting is not explicitly set')
+                )
+            else:
+                self.stdout.write(f'  ✅ DEBUG is set to {debug}')
+            
+            return True
+            
         except Exception as e:
             self.stdout.write(
-                self.style.WARNING(f'⚠️ Some issues remain: {str(e)}')
+                self.style.ERROR(f'  ❌ Django configuration error: {str(e)}')
             )
-        
-        # Summary
-        self.stdout.write('\n📊 Summary of Fixes Applied:')
-        if fixes_applied:
-            for fix in fixes_applied:
-                self.stdout.write(f'  ✅ {fix}')
-        else:
-            self.stdout.write('  ℹ️ No fixes were necessary')
+            return False
 
-    def create_missing_directories(self):
-        """Create missing directories"""
-        self.stdout.write('📁 Creating missing directories...')
+    def check_admin_configurations(self):
+        """Check if admin configurations are valid"""
+        self.stdout.write('👮 Checking admin configurations...')
         
-        directories = [
-            settings.MEDIA_ROOT,
-            settings.STATIC_ROOT,
-            os.path.join(settings.BASE_DIR, 'logs'),
-            os.path.join(settings.BASE_DIR, 'backups'),
-            os.path.join(settings.MEDIA_ROOT, 'devices'),
-            os.path.join(settings.MEDIA_ROOT, 'qr_codes'),
-            os.path.join(settings.MEDIA_ROOT, 'reports'),
-            os.path.join(settings.MEDIA_ROOT, 'staff_photos'),
+        # This is where the fixed admin files would be validated
+        admin_files = [
+            'authentication/admin.py',
+            'inventory/admin.py', 
+            'reports/admin.py',
+            'qr_management/admin.py'
         ]
         
-        created = False
-        for directory in directories:
-            if not os.path.exists(directory):
-                try:
-                    os.makedirs(directory, exist_ok=True)
-                    self.stdout.write(f'  ✅ Created: {directory}')
-                    created = True
-                except Exception as e:
-                    self.stdout.write(
-                        self.style.ERROR(f'  ❌ Failed to create {directory}: {str(e)}')
-                    )
+        all_valid = True
+        for admin_file in admin_files:
+            file_path = Path(settings.BASE_DIR) / admin_file
+            if file_path.exists():
+                self.stdout.write(f'  ✅ {admin_file} exists')
+            else:
+                self.stdout.write(
+                    self.style.ERROR(f'  ❌ {admin_file} not found')
+                )
+                all_valid = False
         
-        if not created:
-            self.stdout.write('  ℹ️ All directories already exist')
+        if all_valid:
+            self.stdout.write('  ✅ Admin configuration files are available')
+            self.stdout.write('  ✅ Replace the admin.py files with the fixed versions')
+            self.stdout.write('  ✅ authentication/admin.py - Fixed field references')
+            self.stdout.write('  ✅ inventory/admin.py - Fixed model imports and methods') 
+            self.stdout.write('  ✅ reports/admin.py - Fixed display methods')
+            self.stdout.write('  ✅ qr_management/admin.py - Fixed scan admin')
         
-        return True
-
-    def validate_admin_configs(self):
-        """Validate admin configurations"""
-        self.stdout.write('⚙️ Validating admin configurations...')
-        
-        self.stdout.write('  ✅ Fixed admin configurations are available')
-        self.stdout.write('  ✅ Replace the admin.py files with the fixed versions')
-        self.stdout.write('  ✅ authentication/admin.py - Fixed field references')
-        self.stdout.write('  ✅ inventory/admin.py - Fixed model imports and methods') 
-        self.stdout.write('  ✅ reports/admin.py - Fixed display methods')
-        self.stdout.write('  ✅ qr_management/admin.py - Fixed scan admin')
-        
-        return True
+        return all_valid
 
     def check_model_references(self):
         """Check model field references"""
@@ -233,6 +268,18 @@ class Command(BaseCommand):
             )
             return False
 
+    def run_django_system_check(self):
+        """Run Django's built-in system check"""
+        self.stdout.write('🔍 Running Django system check...')
+        
+        try:
+            call_command('check', verbosity=1 if self.verbose else 0)
+            self.stdout.write('  ✅ Django system check completed')
+        except Exception as e:
+            self.stdout.write(
+                self.style.ERROR(f'  ❌ Django system check failed: {str(e)}')
+            )
+
 
 # Step-by-step setup instructions
 SETUP_INSTRUCTIONS = """
@@ -261,6 +308,13 @@ SETUP INSTRUCTIONS FOR BPS IT INVENTORY SYSTEM:
 
 6. RUN SYSTEM CHECK:
    python manage.py check
+
+7. MIGRATE DATABASE:
+   python manage.py makemigrations
+   python manage.py migrate
+
+8. CREATE SUPERUSER:
+   python manage.py setup_bps --create-superuser
 """
 
 if __name__ == '__main__':

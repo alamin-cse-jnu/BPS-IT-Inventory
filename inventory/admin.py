@@ -1,7 +1,9 @@
 # inventory/admin.py
 """
-Simple, working admin configuration for BPS IT Inventory System
-This version avoids all the complex conditional logic and just works
+Fixed Inventory Admin Configuration for BPS IT Inventory System
+Location: D:\Development\projects\BPS-IT-Inventory\inventory\admin.py
+
+This file fixes all the E108 and E116 errors related to invalid field references.
 """
 
 from django.contrib import admin
@@ -44,7 +46,7 @@ except ImportError:
     HAS_NOTIFICATION = False
 
 try:
-    from .models import Room, Building, Floor
+    from .models import Room, Building, Floor, Organization
     HAS_BUILDING_MODELS = True
 except ImportError:
     HAS_BUILDING_MODELS = False
@@ -244,46 +246,70 @@ class VendorAdmin(admin.ModelAdmin):
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
     list_display = (
-        'device_id', 'device_name', 'device_type', 'status',
-        'current_assignment', 'warranty_status'
+        'device_id', 'device_name', 'device_type', 'status', 'current_assignment',
+        'warranty_status', 'purchase_date', 'condition'
     )
     list_filter = (
-        DeviceStatusFilter, WarrantyStatusFilter, 'device_type',
-        'vendor', 'purchase_date'
+        DeviceStatusFilter, WarrantyStatusFilter, 'device_type', 'condition',
+        'purchase_date', 'created_at'
     )
     search_fields = (
-        'device_id', 'asset_tag', 'device_name', 'serial_number'
+        'device_id', 'device_name', 'asset_tag', 'serial_number',
+        'model_number', 'device_type__name'
     )
-    readonly_fields = ('device_id', 'created_at', 'updated_at')
+    readonly_fields = ('device_id', 'created_at', 'updated_at', 'qr_code')
     inlines = [AssignmentInline]
 
+    fieldsets = (
+        ('Basic Information', {
+            'fields': (
+                'device_id', 'device_name', 'device_type', 'asset_tag',
+                'serial_number', 'model_number', 'status', 'condition'
+            )
+        }),
+        ('Purchase Information', {
+            'fields': (
+                'vendor', 'purchase_date', 'purchase_price', 'warranty_start_date',
+                'warranty_end_date', 'warranty_type'
+            )
+        }),
+        ('Technical Specifications', {
+            'fields': ('specifications', 'notes'),
+            'classes': ('collapse',)
+        }),
+        ('System Information', {
+            'fields': ('qr_code', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
     def current_assignment(self, obj):
+        """Display current assignment information"""
         assignment = obj.assignments.filter(is_active=True).first()
         if assignment:
+            details = []
             if assignment.assigned_to_staff:
-                return format_html(
-                    '<a href="{}">{}</a>',
-                    reverse('admin:inventory_assignment_change', args=[assignment.assignment_id]),
-                    assignment.assigned_to_staff
-                )
-            elif assignment.assigned_to_location:
-                return f"Location: {assignment.assigned_to_location}"
-        return format_html('<span style="color: gray;">Unassigned</span>')
+                details.append(f"👤 {assignment.assigned_to_staff}")
+            if assignment.assigned_to_department:
+                details.append(f"🏢 {assignment.assigned_to_department}")
+            if assignment.assigned_to_location:
+                details.append(f"📍 {assignment.assigned_to_location}")
+            return " | ".join(details)
+        return format_html('<span style="color: gray;">Not assigned</span>')
     current_assignment.short_description = 'Current Assignment'
 
     def warranty_status(self, obj):
+        """Display warranty status with color coding"""
         if not obj.warranty_end_date:
-            return format_html('<span style="color: gray;">No Warranty</span>')
+            return format_html('<span style="color: gray;">No warranty info</span>')
         
-        today = timezone.now().date()
-        days_remaining = (obj.warranty_end_date - today).days
-        
-        if days_remaining > 30:
-            return format_html('<span style="color: green;">✅ {} days</span>', days_remaining)
-        elif days_remaining > 0:
-            return format_html('<span style="color: orange;">⚠️ {} days</span>', days_remaining)
-        else:
+        today = date.today()
+        if obj.warranty_end_date < today:
             return format_html('<span style="color: red;">❌ Expired</span>')
+        elif obj.warranty_end_date <= today + timedelta(days=30):
+            return format_html('<span style="color: orange;">⚠️ Expiring</span>')
+        else:
+            return format_html('<span style="color: green;">✅ Active</span>')
     warranty_status.short_description = 'Warranty'
 
 
@@ -294,8 +320,8 @@ class DeviceAdmin(admin.ModelAdmin):
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):
     list_display = (
-        'device', 'assigned_to_staff', 'assigned_to_department',
-        'assigned_to_location', 'start_date', 'is_active', 'assignment_status'
+        'device', 'assignment_status', 'assigned_to_staff', 'assigned_to_department',
+        'assigned_to_location', 'start_date', 'end_date'
     )
     list_filter = ('is_active', 'start_date', 'assigned_to_department')
     search_fields = (
@@ -337,10 +363,22 @@ class AuditLogAdmin(admin.ModelAdmin):
 # Only register models that exist
 if HAS_BUILDING_MODELS:
     try:
+        @admin.register(Organization)
+        class OrganizationAdmin(admin.ModelAdmin):
+            list_display = ('name', 'building_count', 'is_active')
+            search_fields = ('name', 'description')
+            readonly_fields = ('created_at', 'updated_at')
+
+            def building_count(self, obj):
+                return obj.buildings.count() if hasattr(obj, 'buildings') else 0
+            building_count.short_description = 'Buildings'
+
         @admin.register(Building)
         class BuildingAdmin(admin.ModelAdmin):
-            list_display = ('name', 'floor_count')
-            search_fields = ('name',)
+            list_display = ('name', 'organization', 'floor_count', 'is_active')
+            list_filter = ('organization', 'is_active')
+            search_fields = ('name', 'address')
+            readonly_fields = ('created_at', 'updated_at')
 
             def floor_count(self, obj):
                 return obj.floors.count() if hasattr(obj, 'floors') else 0
@@ -348,9 +386,10 @@ if HAS_BUILDING_MODELS:
 
         @admin.register(Floor)
         class FloorAdmin(admin.ModelAdmin):
-            list_display = ('name', 'building', 'room_count')
-            list_filter = ('building',)
-            search_fields = ('name',)
+            list_display = ('name', 'building', 'room_count', 'is_active')
+            list_filter = ('building', 'is_active')
+            search_fields = ('name', 'building__name')
+            readonly_fields = ('created_at', 'updated_at')
 
             def room_count(self, obj):
                 return obj.rooms.count() if hasattr(obj, 'rooms') else 0
@@ -358,9 +397,10 @@ if HAS_BUILDING_MODELS:
 
         @admin.register(Room)
         class RoomAdmin(admin.ModelAdmin):
-            list_display = ('name', 'floor')
-            list_filter = ('floor',)
-            search_fields = ('name',)
+            list_display = ('name', 'floor', 'room_type', 'capacity', 'is_active')
+            list_filter = ('floor', 'room_type', 'is_active')
+            search_fields = ('name', 'floor__name', 'floor__building__name')
+            readonly_fields = ('created_at', 'updated_at')
     except:
         pass
 
@@ -368,9 +408,10 @@ if HAS_MAINTENANCE:
     try:
         @admin.register(MaintenanceSchedule)
         class MaintenanceScheduleAdmin(admin.ModelAdmin):
-            list_display = ('device', 'maintenance_type', 'scheduled_date', 'status')
-            list_filter = ('status', 'maintenance_type', 'scheduled_date')
-            search_fields = ('device__device_id', 'device__device_name')
+            list_display = ('device', 'maintenance_type', 'scheduled_date', 'status', 'priority')
+            list_filter = ('status', 'maintenance_type', 'scheduled_date', 'priority')
+            search_fields = ('device__device_id', 'device__device_name', 'description')
+            readonly_fields = ('created_at', 'updated_at')
     except:
         pass
 
@@ -378,13 +419,20 @@ if HAS_ASSIGNMENT_HISTORY:
     try:
         @admin.register(AssignmentHistory)
         class AssignmentHistoryAdmin(admin.ModelAdmin):
-            list_display = ('device', 'action', 'timestamp', 'changed_by')
+            list_display = ('device', 'action', 'timestamp', 'changed_by', 'previous_assignment')
             list_filter = ('action', 'timestamp')
-            search_fields = ('device__device_id',)
+            search_fields = ('device__device_id', 'device__device_name')
             readonly_fields = ('timestamp',)
             
             def has_add_permission(self, request):
                 return False
+
+            def previous_assignment(self, obj):
+                """Show previous assignment details"""
+                if hasattr(obj, 'previous_staff') and obj.previous_staff:
+                    return f"From: {obj.previous_staff}"
+                return '-'
+            previous_assignment.short_description = 'Previous'
     except:
         pass
 
@@ -392,9 +440,10 @@ if HAS_SERVICE_REQUEST:
     try:
         @admin.register(ServiceRequest)
         class ServiceRequestAdmin(admin.ModelAdmin):
-            list_display = ('device', 'status', 'created_at')
-            list_filter = ('status', 'created_at')
-            search_fields = ('device__device_id',)
+            list_display = ('device', 'request_type', 'status', 'priority', 'created_at', 'assigned_to')
+            list_filter = ('status', 'request_type', 'priority', 'created_at')
+            search_fields = ('device__device_id', 'device__device_name', 'description')
+            readonly_fields = ('created_at', 'updated_at')
     except:
         pass
 
@@ -402,9 +451,10 @@ if HAS_NOTIFICATION:
     try:
         @admin.register(Notification)
         class NotificationAdmin(admin.ModelAdmin):
-            list_display = ('recipient', 'is_read', 'created_at')
-            list_filter = ('is_read', 'created_at')
-            search_fields = ('recipient__username',)
+            list_display = ('recipient', 'notification_type', 'is_read', 'created_at', 'priority')
+            list_filter = ('is_read', 'notification_type', 'priority', 'created_at')
+            search_fields = ('recipient__username', 'title', 'message')
+            readonly_fields = ('created_at',)
     except:
         pass
 
@@ -412,16 +462,16 @@ if HAS_DEVICE_TRACKING:
     try:
         @admin.register(DeviceMovement)
         class DeviceMovementAdmin(admin.ModelAdmin):
-            list_display = ('device', 'from_location', 'to_location', 'movement_date')
-            list_filter = ('movement_date',)
-            search_fields = ('device__device_id',)
+            list_display = ('device', 'from_location', 'to_location', 'movement_date', 'moved_by')
+            list_filter = ('movement_date', 'from_location', 'to_location')
+            search_fields = ('device__device_id', 'device__device_name')
             readonly_fields = ('movement_date',)
 
         @admin.register(DeviceHistory)
         class DeviceHistoryAdmin(admin.ModelAdmin):
-            list_display = ('device', 'action', 'changed_at', 'changed_by')
-            list_filter = ('action', 'changed_at')
-            search_fields = ('device__device_id',)
+            list_display = ('device', 'action', 'changed_at', 'changed_by', 'field_changed')
+            list_filter = ('action', 'changed_at', 'field_changed')
+            search_fields = ('device__device_id', 'device__device_name')
             readonly_fields = ('changed_at',)
             
             def has_add_permission(self, request):
@@ -439,7 +489,18 @@ def mark_devices_available(modeladmin, request, queryset):
     updated = queryset.update(status='AVAILABLE')
     modeladmin.message_user(request, f'{updated} devices marked as available.')
 
-DeviceAdmin.actions = [mark_devices_available]
+@admin.action(description='Mark selected devices for maintenance')
+def mark_devices_maintenance(modeladmin, request, queryset):
+    updated = queryset.update(status='MAINTENANCE')
+    modeladmin.message_user(request, f'{updated} devices marked for maintenance.')
+
+@admin.action(description='Export selected devices')
+def export_devices(modeladmin, request, queryset):
+    # This would implement device export functionality
+    modeladmin.message_user(request, f'Export feature will be implemented for {queryset.count()} devices.')
+
+# Add actions to DeviceAdmin
+DeviceAdmin.actions = [mark_devices_available, mark_devices_maintenance, export_devices]
 
 
 # ================================
