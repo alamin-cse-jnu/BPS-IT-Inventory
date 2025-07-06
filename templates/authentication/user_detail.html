@@ -1,0 +1,751 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ user_profile.get_full_name|default:user_profile.username }} - User Details - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .user-detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 1rem 1rem 0 0;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .user-detail-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.05' fill-rule='evenodd'%3E%3Cpath d='m0 40l40-40h-40v40z'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    
+    .user-avatar-large {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 5px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        font-weight: bold;
+        margin: 0 auto 1rem;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .user-detail-info {
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .user-detail-name {
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .user-detail-username {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-bottom: 0.5rem;
+    }
+    
+    .user-status-badges {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .status-badge {
+        padding: 0.375rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .badge-active {
+        background-color: rgba(40, 167, 69, 0.2);
+        color: #28a745;
+    }
+    
+    .badge-inactive {
+        background-color: rgba(220, 53, 69, 0.2);
+        color: #dc3545;
+    }
+    
+    .badge-staff {
+        background-color: rgba(0, 102, 204, 0.2);
+        color: #0066cc;
+    }
+    
+    .badge-superuser {
+        background-color: rgba(255, 193, 7, 0.2);
+        color: #ffc107;
+    }
+    
+    .info-card {
+        background: white;
+        border-radius: 0.75rem;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+    }
+    
+    .info-card .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 0.75rem 0.75rem 0 0;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 500;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+    }
+    
+    .info-label i {
+        margin-right: 0.5rem;
+        width: 16px;
+    }
+    
+    .info-value {
+        font-weight: 500;
+        color: #495057;
+        text-align: right;
+    }
+    
+    .activity-timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+    
+    .activity-timeline::before {
+        content: '';
+        position: absolute;
+        left: 0.75rem;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(to bottom, #0066cc, #e9ecef);
+    }
+    
+    .activity-item {
+        position: relative;
+        padding: 1rem 0;
+        margin-left: 1rem;
+    }
+    
+    .activity-item::before {
+        content: '';
+        position: absolute;
+        left: -1.75rem;
+        top: 1.25rem;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #0066cc;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #0066cc;
+    }
+    
+    .activity-content {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        border-left: 3px solid #0066cc;
+    }
+    
+    .activity-title {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    
+    .activity-description {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .activity-meta {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        font-size: 0.75rem;
+        color: #868e96;
+    }
+    
+    .assignment-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .assignment-card:hover {
+        border-color: #0066cc;
+        box-shadow: 0 2px 8px rgba(0, 102, 204, 0.1);
+    }
+    
+    .assignment-device {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    
+    .assignment-dates {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+    
+    .assignment-status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .status-assignment-active {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    
+    .status-assignment-returned {
+        background-color: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+    }
+    
+    .status-assignment-overdue {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .btn-action {
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-action:hover {
+        transform: translateY(-1px);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    @media (max-width: 768px) {
+        .user-detail-header {
+            border-radius: 0.5rem 0.5rem 0 0;
+        }
+        
+        .user-avatar-large {
+            width: 100px;
+            height: 100px;
+            font-size: 2.5rem;
+        }
+        
+        .user-detail-name {
+            font-size: 1.5rem;
+        }
+        
+        .info-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+        
+        .info-value {
+            text-align: left;
+        }
+        
+        .assignment-dates {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .activity-timeline {
+            padding-left: 1.5rem;
+        }
+        
+        .activity-item {
+            margin-left: 0.5rem;
+        }
+        
+        .activity-item::before {
+            left: -1.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'authentication:user_list' %}">User Management</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ user_profile.get_full_name|default:user_profile.username }}</li>
+        </ol>
+    </nav>
+    
+    <div class="row">
+        <div class="col-lg-4 col-md-5 mb-4">
+            <!-- User Profile Card -->
+            <div class="card info-card">
+                <div class="user-detail-header p-4">
+                    <div class="user-avatar-large">
+                        {% if user_profile.first_name %}
+                            {{ user_profile.first_name.0 }}{% if user_profile.last_name %}{{ user_profile.last_name.0 }}{% endif %}
+                        {% else %}
+                            {{ user_profile.username.0|upper }}
+                        {% endif %}
+                    </div>
+                    <div class="user-detail-info">
+                        <div class="user-detail-name">
+                            {% if user_profile.get_full_name %}
+                                {{ user_profile.get_full_name }}
+                            {% else %}
+                                {{ user_profile.username }}
+                            {% endif %}
+                        </div>
+                        <div class="user-detail-username">@{{ user_profile.username }}</div>
+                        <div class="user-status-badges">
+                            {% if user_profile.is_active %}
+                                <span class="status-badge badge-active">Active</span>
+                            {% else %}
+                                <span class="status-badge badge-inactive">Inactive</span>
+                            {% endif %}
+                            
+                            {% if user_profile.is_superuser %}
+                                <span class="status-badge badge-superuser">Superuser</span>
+                            {% elif user_profile.is_staff %}
+                                <span class="status-badge badge-staff">Staff</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-person-badge"></i>
+                            Employee ID
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile %}
+                                {{ staff_profile.employee_id|default:"Not Set" }}
+                            {% else %}
+                                Not Available
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-envelope"></i>
+                            Email
+                        </span>
+                        <span class="info-value">{{ user_profile.email|default:"Not Set" }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-building"></i>
+                            Department
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile and staff_profile.department %}
+                                {{ staff_profile.department.name }}
+                            {% else %}
+                                Not Assigned
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-briefcase"></i>
+                            Designation
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile %}
+                                {{ staff_profile.designation|default:"Not Set" }}
+                            {% else %}
+                                Not Available
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-calendar-plus"></i>
+                            Join Date
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile and staff_profile.joining_date %}
+                                {{ staff_profile.joining_date|date:"M d, Y" }}
+                            {% else %}
+                                {{ user_profile.date_joined|date:"M d, Y" }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-clock-history"></i>
+                            Last Login
+                        </span>
+                        <span class="info-value">
+                            {% if user_profile.last_login %}
+                                {{ user_profile.last_login|date:"M d, Y g:i A" }}
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="card-footer bg-transparent">
+                    <div class="action-buttons">
+                        {% if user_profile.is_active %}
+                            <button class="btn btn-warning btn-action flex-fill" onclick="toggleUserStatus(false)">
+                                <i class="bi bi-pause-circle me-2"></i>
+                                Deactivate
+                            </button>
+                        {% else %}
+                            <button class="btn btn-success btn-action flex-fill" onclick="toggleUserStatus(true)">
+                                <i class="bi bi-play-circle me-2"></i>
+                                Activate
+                            </button>
+                        {% endif %}
+                        
+                        <button class="btn btn-outline-primary btn-action" onclick="resetPassword()" title="Reset Password">
+                            <i class="bi bi-key"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-8 col-md-7">
+            <!-- User Assignments -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-laptop me-2"></i>
+                        Device Assignments
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if user_assignments %}
+                        {% for assignment in user_assignments %}
+                            <div class="assignment-card">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="assignment-device">
+                                            <i class="bi bi-laptop me-2"></i>
+                                            {{ assignment.device.device_name }}
+                                            <small class="text-muted">({{ assignment.device.device_id }})</small>
+                                        </div>
+                                        
+                                        <div class="assignment-dates">
+                                            <span>
+                                                <i class="bi bi-calendar-check me-1"></i>
+                                                Assigned: {{ assignment.assigned_at|date:"M d, Y" }}
+                                            </span>
+                                            {% if assignment.expected_return_date %}
+                                                <span>
+                                                    <i class="bi bi-calendar-x me-1"></i>
+                                                    Expected Return: {{ assignment.expected_return_date|date:"M d, Y" }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        {% if assignment.notes %}
+                                            <div class="text-muted small">
+                                                <i class="bi bi-chat-text me-1"></i>
+                                                {{ assignment.notes|truncatechars:100 }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="text-end">
+                                        {% if assignment.is_active %}
+                                            {% if assignment.expected_return_date and assignment.expected_return_date < today %}
+                                                <span class="assignment-status status-assignment-overdue">Overdue</span>
+                                            {% else %}
+                                                <span class="assignment-status status-assignment-active">Active</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="assignment-status status-assignment-returned">Returned</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-laptop"></i>
+                            <h6>No Device Assignments</h6>
+                            <p>This user has no device assignments on record.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- User Activity Log -->
+            <div class="info-card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-activity me-2"></i>
+                        Recent Activity
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if user_activities %}
+                        <div class="activity-timeline">
+                            {% for activity in user_activities %}
+                                <div class="activity-item">
+                                    <div class="activity-content">
+                                        <div class="activity-title">{{ activity.action }} {{ activity.model_name }}</div>
+                                        <div class="activity-description">
+                                            {% if activity.object_repr %}
+                                                {{ activity.object_repr }}
+                                            {% else %}
+                                                Object ID: {{ activity.object_id }}
+                                            {% endif %}
+                                        </div>
+                                        <div class="activity-meta">
+                                            <span>
+                                                <i class="bi bi-clock me-1"></i>
+                                                {{ activity.timestamp|date:"M d, Y g:i A" }}
+                                            </span>
+                                            {% if activity.ip_address %}
+                                                <span class="ms-auto">
+                                                    <i class="bi bi-geo-alt me-1"></i>
+                                                    {{ activity.ip_address }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="bi bi-activity"></i>
+                            <h6>No Activity Log</h6>
+                            <p>No system activities recorded for this user.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Change Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Status Change</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="statusMessage"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmStatusChange">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Password Reset Modal -->
+<div class="modal fade" id="passwordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reset Password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to reset this user's password?</p>
+                <p class="text-muted small">A new temporary password will be generated and the user will be required to change it on their next login.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmPasswordReset">Reset Password</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentStatus = null;
+    
+    function toggleUserStatus(newStatus) {
+        currentStatus = newStatus;
+        const action = newStatus ? 'activate' : 'deactivate';
+        const message = `Are you sure you want to ${action} this user? This will ${newStatus ? 'enable' : 'disable'} their access to the system.`;
+        
+        document.getElementById('statusMessage').textContent = message;
+        
+        const modal = new bootstrap.Modal(document.getElementById('statusModal'));
+        modal.show();
+    }
+    
+    function resetPassword() {
+        const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
+        modal.show();
+    }
+    
+    document.getElementById('confirmStatusChange').addEventListener('click', function() {
+        if (currentStatus !== null) {
+            // Here you would make an AJAX call to update the user status
+            fetch(`/admin/auth/user/{{ user_profile.id }}/change/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    'is_active': currentStatus
+                })
+            }).then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Error updating user status. Please try again.');
+                }
+            }).catch(error => {
+                console.error('Error:', error);
+                alert('Error updating user status. Please try again.');
+            });
+            
+            const modal = bootstrap.Modal.getInstance(document.getElementById('statusModal'));
+            modal.hide();
+        }
+    });
+    
+    document.getElementById('confirmPasswordReset').addEventListener('click', function() {
+        // Here you would make an AJAX call to reset the password
+        fetch(`/auth/admin/reset-password/{{ user_profile.id }}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            }
+        }).then(response => {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Failed to reset password');
+            }
+        }).then(data => {
+            alert(`Password reset successful. New temporary password: ${data.temporary_password}`);
+            location.reload();
+        }).catch(error => {
+            console.error('Error:', error);
+            alert('Error resetting password. Please try again.');
+        });
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
+        modal.hide();
+    });
+    
+    // Animate timeline items on scroll
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateX(0)';
+            }
+        });
+    }, observerOptions);
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animate activity items
+        const activityItems = document.querySelectorAll('.activity-item');
+        activityItems.forEach((item, index) => {
+            item.style.opacity = '0';
+            item.style.transform = 'translateX(-20px)';
+            item.style.transition = 'all 0.5s ease';
+            
+            setTimeout(() => {
+                observer.observe(item);
+            }, index * 100);
+        });
+        
+        // Animate assignment cards
+        const assignmentCards = document.querySelectorAll('.assignment-card');
+        assignmentCards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            card.style.transition = 'all 0.3s ease';
+            
+            setTimeout(() => {
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 150);
+        });
+    });
+</script>
+{% endblock %}

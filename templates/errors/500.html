@@ -1,0 +1,418 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ error_code|default:"500" }} - Internal Server Error | {{ system_name|default:"BPS Inventory" }}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .error-container {
+            max-width: 700px;
+            margin: 2rem;
+        }
+        
+        .error-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .error-icon {
+            font-size: 6rem;
+            color: #dc3545;
+            margin-bottom: 1.5rem;
+            animation: pulse 2s infinite;
+        }
+        
+        .error-code {
+            font-size: 4rem;
+            font-weight: 700;
+            color: #dc3545;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .error-title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 1rem;
+        }
+        
+        .error-message {
+            font-size: 1.1rem;
+            color: #6c757d;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        .incident-id {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            font-family: monospace;
+            border-left: 4px solid #dc3545;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        
+        .btn-error {
+            padding: 0.75rem 2rem;
+            border-radius: 25px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+        
+        .btn-error:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            text-decoration: none;
+        }
+        
+        .technical-details {
+            background: #2c3e50;
+            color: #ecf0f1;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.9rem;
+            display: none;
+        }
+        
+        .toggle-details {
+            background: none;
+            border: none;
+            color: #0066cc;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #ffeaa7;
+            color: #e17055;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 1rem 0;
+        }
+        
+        .retry-section {
+            background: #e3f2fd;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .error-card {
+            animation: fadeIn 0.8s ease-out;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0066cc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .error-card {
+                padding: 2rem 1rem;
+                margin: 1rem;
+            }
+            
+            .error-icon {
+                font-size: 4rem;
+            }
+            
+            .error-code {
+                font-size: 3rem;
+            }
+            
+            .error-title {
+                font-size: 1.5rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn-error {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="error-container">
+        <div class="card error-card">
+            <!-- Error Icon -->
+            <div class="error-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            
+            <!-- Error Code -->
+            <div class="error-code">
+                {{ error_code|default:"500" }}
+            </div>
+            
+            <!-- Error Title -->
+            <h1 class="error-title">
+                {{ error_title|default:"Internal Server Error" }}
+            </h1>
+            
+            <!-- Error Message -->
+            <p class="error-message">
+                {{ error_message|default:"We're experiencing some technical difficulties. Our team has been notified and is working to resolve the issue." }}
+            </p>
+            
+            <!-- Status Indicator -->
+            <div class="status-indicator">
+                <i class="fas fa-tools"></i>
+                <span>System Maintenance in Progress</span>
+            </div>
+            
+            <!-- Incident ID -->
+            <div class="incident-id">
+                <strong>Incident ID:</strong> <span id="incidentId">{{ incident_id|default:"BPS-"|add:"now"|date:"YmdHis" }}</span><br>
+                <strong>Timestamp:</strong> {{ "now"|date:"Y-m-d H:i:s T" }}<br>
+                <strong>Error Reference:</strong> #{{ "now"|date:"U" }}
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="javascript:location.reload()" class="btn btn-primary btn-error" id="retryBtn">
+                    <i class="fas fa-redo me-2"></i>Try Again
+                </a>
+                
+                <a href="/" class="btn btn-outline-primary btn-error">
+                    <i class="fas fa-home me-2"></i>Go Home
+                </a>
+                
+                <button class="btn btn-outline-secondary btn-error" onclick="window.history.back()">
+                    <i class="fas fa-arrow-left me-2"></i>Go Back
+                </button>
+            </div>
+            
+            <!-- Retry Section -->
+            <div class="retry-section">
+                <h6 class="mb-3">
+                    <i class="fas fa-info-circle text-primary me-2"></i>
+                    What can you do?
+                </h6>
+                <ul class="list-unstyled text-start">
+                    <li class="mb-2">
+                        <i class="fas fa-refresh text-success me-2"></i>
+                        <strong>Refresh the page</strong> - The issue might be temporary
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-clock text-warning me-2"></i>
+                        <strong>Wait a few minutes</strong> - We might be performing maintenance
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-envelope text-info me-2"></i>
+                        <strong>Contact support</strong> - If the problem persists
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-bookmark text-secondary me-2"></i>
+                        <strong>Bookmark this page</strong> - To check back later
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Contact Information -->
+            <div class="mt-4 pt-3 border-top">
+                <h6 class="mb-2">Need immediate assistance?</h6>
+                <p class="mb-2">
+                    <i class="fas fa-envelope me-2"></i>
+                    <a href="mailto:it@parliament.gov.bd" class="text-decoration-none">it@parliament.gov.bd</a>
+                </p>
+                <p class="mb-0">
+                    <i class="fas fa-phone me-2"></i>
+                    <span>+880-2-9123456 (IT Support)</span>
+                </p>
+            </div>
+            
+            <!-- Toggle Technical Details -->
+            <div class="mt-3">
+                <button class="toggle-details" onclick="toggleTechnicalDetails()">
+                    <i class="fas fa-code me-1"></i>Show Technical Details
+                </button>
+            </div>
+            
+            <!-- Technical Details (Hidden by default) -->
+            <div class="technical-details" id="technicalDetails">
+                <strong>Technical Information:</strong><br>
+                Server: {{ request.get_host|default:"localhost" }}<br>
+                Path: {{ request.get_full_path|default:"/" }}<br>
+                Method: {{ request.method|default:"GET" }}<br>
+                User Agent: <span id="userAgent"></span><br>
+                Timestamp: {{ "now"|date:"c" }}<br>
+                Session ID: {{ request.session.session_key|default:"N/A" }}<br>
+                <br>
+                <strong>Error Details:</strong><br>
+                This error has been automatically logged and reported to our development team.
+                Please reference the Incident ID above when contacting support.
+            </div>
+            
+            <!-- System Info -->
+            <div class="mt-4 pt-3 border-top">
+                <small class="text-muted">
+                    <i class="fas fa-server me-1"></i>
+                    {{ system_name|default:"BPS IT Inventory Management System" }} | 
+                    <i class="fas fa-shield-alt me-1"></i>
+                    Secure System
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Set user agent
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        
+        // Auto-retry functionality
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryBtn = document.getElementById('retryBtn');
+        
+        function autoRetry() {
+            if (retryCount < maxRetries) {
+                retryCount++;
+                retryBtn.innerHTML = '<span class="spinner me-2"></span>Retrying...';
+                retryBtn.disabled = true;
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                retryBtn.innerHTML = '<i class="fas fa-times me-2"></i>Max Retries Reached';
+                retryBtn.classList.replace('btn-primary', 'btn-danger');
+            }
+        }
+        
+        // Toggle technical details
+        function toggleTechnicalDetails() {
+            const details = document.getElementById('technicalDetails');
+            const button = document.querySelector('.toggle-details');
+            
+            if (details.style.display === 'none' || details.style.display === '') {
+                details.style.display = 'block';
+                button.innerHTML = '<i class="fas fa-code me-1"></i>Hide Technical Details';
+            } else {
+                details.style.display = 'none';
+                button.innerHTML = '<i class="fas fa-code me-1"></i>Show Technical Details';
+            }
+        }
+        
+        // Log error for analytics
+        if (typeof fetch !== 'undefined') {
+            fetch('/api/errors/500/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: window.location.href,
+                    timestamp: new Date().toISOString(),
+                    user_agent: navigator.userAgent,
+                    referrer: document.referrer,
+                    incident_id: document.getElementById('incidentId').textContent
+                })
+            }).catch(() => {}); // Silent fail
+        }
+        
+        // Auto-refresh every 30 seconds (max 5 times)
+        let autoRefreshCount = 0;
+        const autoRefreshInterval = setInterval(() => {
+            if (autoRefreshCount < 5) {
+                autoRefreshCount++;
+                console.log(`Auto-refresh attempt ${autoRefreshCount}/5`);
+                location.reload();
+            } else {
+                clearInterval(autoRefreshInterval);
+                console.log('Auto-refresh stopped after 5 attempts');
+            }
+        }, 30000);
+        
+        // Clear auto-refresh on user interaction
+        document.addEventListener('click', () => {
+            clearInterval(autoRefreshInterval);
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'r' && !e.ctrlKey && !e.metaKey) {
+                location.reload();
+            } else if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
+                window.location.href = '/';
+            }
+        });
+        
+        // Show loading state when navigating away
+        window.addEventListener('beforeunload', function() {
+            document.body.style.opacity = '0.7';
+        });
+    </script>
+</body>
+</html>

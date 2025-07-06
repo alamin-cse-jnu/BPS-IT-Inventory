@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - BPS IT Inventory</title>
+    <link rel="icon" type="image/x-icon" href="../static/img/favicons/bps-favicon.ico">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bps-primary: #1a4b84;
+            --bps-secondary: #2c5aa0;
+            --bps-success: #198754;
+            --bps-warning: #fd7e14;
+            --bps-danger: #dc3545;
+            --bps-info: #0dcaf0;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--bps-primary) 0%, var(--bps-secondary) 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .api-header {
+            background: linear-gradient(135deg, var(--bps-primary) 0%, var(--bps-secondary) 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin-bottom: 30px;
+        }
+
+        .api-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: none;
+            overflow: hidden;
+            margin-bottom: 25px;
+        }
+
+        .api-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            padding: 0;
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .sidebar-nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-nav li {
+            border-bottom: 1px solid #f8f9fa;
+        }
+
+        .sidebar-nav li:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-nav a {
+            display: block;
+            padding: 15px 20px;
+            text-decoration: none;
+            color: var(--bps-primary);
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-nav a:hover, .sidebar-nav a.active {
+            background: linear-gradient(135deg, var(--bps-primary) 0%, var(--bps-secondary) 100%);
+            color: white;
+        }
+
+        .method-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .method-get {
+            background: #d4edda;
+            color: var(--bps-success);
+        }
+
+        .method-post {
+            background: #cce5ff;
+            color: #0066cc;
+        }
+
+        .method-put {
+            background: #fff3cd;
+            color: #b45309;
+        }
+
+        .method-delete {
+            background: #f8d7da;
+            color: var(--bps-danger);
+        }
+
+        .endpoint-url {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border-left: 4px solid var(--bps-primary);
+            margin: 15px 0;
+        }
+
+        .code-block {
+            background: #2d3748;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .code-header {
+            background: #1a202c;
+            padding: 10px 15px;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .parameter-table {
+            font-size: 0.875rem;
+        }
+
+        .parameter-table th {
+            background: #f8f9fa;
+            border: none;
+            color: var(--bps-primary);
+            font-weight: 600;
+        }
+
+        .parameter-table td {
+            border: none;
+            border-bottom: 1px solid #f8f9fa;
+        }
+
+        .response-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .status-200 {
+            background: #d4edda;
+            color: var(--bps-success);
+        }
+
+        .status-201 {
+            background: #cce5ff;
+            color: #0066cc;
+        }
+
+        .status-400 {
+            background: #fff3cd;
+            color: #b45309;
+        }
+
+        .status-401 {
+            background: #f8d7da;
+            color: var(--bps-danger);
+        }
+
+        .status-404 {
+            background: #f8d7da;
+            color: var(--bps-danger);
+        }
+
+        .version-badge {
+            background: linear-gradient(135deg, var(--bps-info) 0%, #17a2b8 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .auth-required {
+            background: linear-gradient(135deg, #ffe8cc 0%, #ffd6a6 100%);
+            border: 1px solid #ffcc99;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 15px 0;
+        }
+
+        .auth-required i {
+            color: var(--bps-warning);
+        }
+
+        pre {
+            margin: 0;
+            background: transparent !important;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="../static/img/logos/bps-logo.png" alt="BPS Logo" height="40" class="me-2">
+                <span class="fw-bold">BPS IT Inventory</span>
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Home</a>
+                <a class="nav-link" href="/system/health.html"><i class="fas fa-heartbeat me-1"></i>Health</a>
+                <a class="nav-link" href="/system/status.html"><i class="fas fa-chart-line me-1"></i>Status</a>
+                <a class="nav-link" href="/admin/"><i class="fas fa-cog me-1"></i>Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container my-5">
+        <!-- API Header -->
+        <div class="api-header">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="mb-3">
+                        <i class="fas fa-code me-3"></i>API Documentation
+                    </h1>
+                    <p class="mb-0 opacity-75">BPS IT Inventory Management System REST API Reference</p>
+                    <div class="mt-3">
+                        <span class="version-badge me-3">
+                            <i class="fas fa-tag me-1"></i>Version 2.1.0
+                        </span>
+                        <span class="text-white-50">
+                            <i class="fas fa-link me-1"></i>Base URL: <code>https://inventory.bps.gov.bd/api/v1</code>
+                        </span>
+                    </div>
+                </div>
+                <div class="col-lg-4 text-end">
+                    <button class="btn btn-light" onclick="downloadOpenAPI()">
+                        <i class="fas fa-download me-2"></i>Download OpenAPI Spec
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Sidebar Navigation -->
+            <div class="col-lg-3">
+                <div class="sidebar">
+                    <div class="p-3 border-bottom">
+                        <h6 class="mb-0"><i class="fas fa-list me-2"></i>API Endpoints</h6>
+                    </div>
+                    <ul class="sidebar-nav">
+                        <li><a href="#authentication" class="active">Authentication</a></li>
+                        <li><a href="#devices">Devices</a></li>
+                        <li><a href="#assignments">Assignments</a></li>
+                        <li><a href="#staff">Staff</a></li>
+                        <li><a href="#locations">Locations</a></li>
+                        <li><a href="#qr-codes">QR Codes</a></li>
+                        <li><a href="#reports">Reports</a></li>
+                        <li><a href="#maintenance">Maintenance</a></li>
+                        <li><a href="#audit">Audit Logs</a></li>
+                        <li><a href="#errors">Error Codes</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-lg-9">
+                <!-- Authentication Section -->
+                <section id="authentication" class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Authentication</h4>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">All API requests require authentication using Bearer tokens. Include the token in the Authorization header.</p>
+                        
+                        <h6 class="mt-4">Login</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-post me-2">POST</span>
+                            <span>/auth/login</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            POST /api/v1/auth/login
+                        </div>
+
+                        <h6>Request Body</h6>
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "username": "admin@bps.gov.bd",
+  "password": "your_password"
+}</code></pre>
+                        </div>
+
+                        <h6 class="mt-4">Response</h6>
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Response</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "user": {
+    "id": 1,
+    "username": "admin@bps.gov.bd",
+    "first_name": "Admin",
+    "last_name": "User",
+    "role": "administrator"
+  }
+}</code></pre>
+                        </div>
+
+                        <div class="auth-required mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Authentication Required:</strong> Include the access token in all subsequent requests:
+                            <code>Authorization: Bearer {access_token}</code>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Devices Section -->
+                <section id="devices" class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-laptop me-2"></i>Devices</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Get All Devices -->
+                        <h6>Get All Devices</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-get me-2">GET</span>
+                            <span>/devices</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            GET /api/v1/devices?page=1&limit=50&status=active
+                        </div>
+
+                        <h6>Query Parameters</h6>
+                        <table class="table parameter-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Type</th>
+                                    <th>Required</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>page</code></td>
+                                    <td>integer</td>
+                                    <td>No</td>
+                                    <td>Page number (default: 1)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>limit</code></td>
+                                    <td>integer</td>
+                                    <td>No</td>
+                                    <td>Items per page (default: 50, max: 100)</td>
+                                </tr>
+                                <tr>
+                                    <td><code>status</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>Filter by status: active, inactive, maintenance</td>
+                                </tr>
+                                <tr>
+                                    <td><code>category</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>Filter by device category</td>
+                                </tr>
+                                <tr>
+                                    <td><code>search</code></td>
+                                    <td>string</td>
+                                    <td>No</td>
+                                    <td>Search in device name, asset tag, serial number</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h6>Response</h6>
+                        <div class="mb-2">
+                            <span class="response-status status-200">200</span>Success
+                        </div>
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Response</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "count": 1247,
+  "next": "/api/v1/devices?page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "device_id": "BPS-LT-001",
+      "asset_tag": "LT-2024-001",
+      "device_name": "Dell Latitude 5520",
+      "serial_number": "DL5520240001",
+      "status": "active",
+      "device_type": {
+        "id": 1,
+        "name": "Laptop",
+        "category": "Computing Devices"
+      },
+      "current_assignment": {
+        "id": 145,
+        "assigned_to": "John Smith",
+        "department": "IT Department",
+        "assigned_date": "2024-01-15"
+      },
+      "warranty_expires": "2026-01-15",
+      "created_at": "2024-01-10T09:00:00Z",
+      "updated_at": "2024-01-15T14:30:00Z"
+    }
+  ]
+}</code></pre>
+                        </div>
+
+                        <!-- Create Device -->
+                        <h6 class="mt-5">Create Device</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-post me-2">POST</span>
+                            <span>/devices</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            POST /api/v1/devices
+                        </div>
+
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Request</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "asset_tag": "LT-2024-002",
+  "device_name": "Dell Latitude 5530",
+  "serial_number": "DL5530240002",
+  "device_type_id": 1,
+  "vendor_id": 2,
+  "purchase_date": "2024-06-01",
+  "purchase_price": 85000.00,
+  "warranty_expires": "2027-06-01",
+  "status": "active",
+  "specifications": {
+    "processor": "Intel Core i7-12700H",
+    "ram": "16GB DDR4",
+    "storage": "512GB NVMe SSD",
+    "display": "15.6\" FHD"
+  }
+}</code></pre>
+                        </div>
+
+                        <div class="mt-3">
+                            <span class="response-status status-201">201</span>Device created successfully
+                            <br>
+                            <span class="response-status status-400">400</span>Invalid request data
+                            <br>
+                            <span class="response-status status-401">401</span>Authentication required
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Assignments Section -->
+                <section id="assignments" class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-user-check me-2"></i>Assignments</h4>
+                    </div>
+                    <div class="card-body">
+                        <h6>Assign Device</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-post me-2">POST</span>
+                            <span>/assignments</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            POST /api/v1/assignments
+                        </div>
+
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Request</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "device_id": 1,
+  "assigned_to_staff_id": 25,
+  "assigned_to_department_id": 5,
+  "assigned_to_location_id": 12,
+  "assignment_type": "permanent",
+  "notes": "Assignment for new employee",
+  "expected_return_date": null
+}</code></pre>
+                        </div>
+
+                        <h6 class="mt-4">Get Assignment History</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-get me-2">GET</span>
+                            <span>/devices/{id}/assignments</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            GET /api/v1/devices/1/assignments
+                        </div>
+                    </div>
+                </section>
+
+                <!-- QR Codes Section -->
+                <section id="qr-codes" class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-qrcode me-2"></i>QR Codes</h4>
+                    </div>
+                    <div class="card-body">
+                        <h6>Generate QR Code</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-post me-2">POST</span>
+                            <span>/qr/generate</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            POST /api/v1/qr/generate
+                        </div>
+
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Request</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "device_ids": [1, 2, 3],
+  "format": "png",
+  "size": "medium",
+  "include_logo": true,
+  "batch_name": "Monthly QR Generation"
+}</code></pre>
+                        </div>
+
+                        <h6 class="mt-4">Verify QR Code</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-get me-2">GET</span>
+                            <span>/qr/verify/{device_id}</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            GET /api/v1/qr/verify/BPS-LT-001
+                        </div>
+
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Response</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "valid": true,
+  "device": {
+    "device_id": "BPS-LT-001",
+    "device_name": "Dell Latitude 5520",
+    "status": "active",
+    "current_assignment": {
+      "assigned_to": "John Smith",
+      "department": "IT Department",
+      "location": "Building A, Floor 2, Room 201"
+    }
+  },
+  "last_scanned": "2024-07-06T10:30:00Z",
+  "scan_count": 15
+}</code></pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Reports Section -->
+                <section id="reports" class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Reports</h4>
+                    </div>
+                    <div class="card-body">
+                        <h6>Generate Report</h6>
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="method-badge method-post me-2">POST</span>
+                            <span>/reports/generate</span>
+                        </div>
+                        
+                        <div class="endpoint-url">
+                            POST /api/v1/reports/generate
+                        </div>
+
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Request</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "report_type": "inventory_summary",
+  "format": "pdf",
+  "filters": {
+    "date_range": {
+      "start": "2024-01-01",
+      "end": "2024-06-30"
+    },
+    "departments": [1, 2, 5],
+    "device_categories": ["Computing Devices", "Network Equipment"]
+  },
+  "include_charts": true,
+  "email_recipients": ["admin@bps.gov.bd"]
+}</code></pre>
+                        </div>
+
+                        <h6 class="mt-4">Available Report Types</h6>
+                        <ul class="list-unstyled">
+                            <li><code>inventory_summary</code> - Complete inventory overview</li>
+                            <li><code>assignment_report</code> - Device assignment details</li>
+                            <li><code>maintenance_report</code> - Maintenance schedule and history</li>
+                            <li><code>warranty_report</code> - Warranty expiration tracking</li>
+                            <li><code>audit_report</code> - System audit and changes</li>
+                            <li><code>utilization_report</code> - Department utilization analysis</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Error Codes Section -->
+                <section id="errors" class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Error Codes</h4>
+                    </div>
+                    <div class="card-body">
+                        <h6>HTTP Status Codes</h6>
+                        <table class="table parameter-table">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Status</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="response-status status-200">200</span></td>
+                                    <td>OK</td>
+                                    <td>Request successful</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="response-status status-201">201</span></td>
+                                    <td>Created</td>
+                                    <td>Resource created successfully</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="response-status status-400">400</span></td>
+                                    <td>Bad Request</td>
+                                    <td>Invalid request data or parameters</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="response-status status-401">401</span></td>
+                                    <td>Unauthorized</td>
+                                    <td>Authentication required or invalid token</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="response-status status-404">404</span></td>
+                                    <td>Not Found</td>
+                                    <td>Resource not found</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge bg-secondary">429</span></td>
+                                    <td>Too Many Requests</td>
+                                    <td>Rate limit exceeded</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge bg-danger">500</span></td>
+                                    <td>Internal Server Error</td>
+                                    <td>Server error occurred</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h6 class="mt-4">Error Response Format</h6>
+                        <div class="code-block position-relative">
+                            <div class="code-header">JSON Error Response</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-json">{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request data",
+    "details": {
+      "field_errors": {
+        "asset_tag": ["This field is required"],
+        "device_name": ["This field cannot be blank"]
+      }
+    },
+    "timestamp": "2024-07-06T10:30:00Z",
+    "request_id": "req_abc123xyz"
+  }
+}</code></pre>
+                        </div>
+
+                        <h6 class="mt-4">Rate Limiting</h6>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            API requests are limited to <strong>1000 requests per hour</strong> per user. 
+                            Rate limit headers are included in all responses:
+                            <ul class="mt-2 mb-0">
+                                <li><code>X-RateLimit-Limit</code>: Request limit per hour</li>
+                                <li><code>X-RateLimit-Remaining</code>: Remaining requests</li>
+                                <li><code>X-RateLimit-Reset</code>: Reset time (Unix timestamp)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- SDK & Examples -->
+                <section class="api-card">
+                    <div class="card-header bg-light">
+                        <h4 class="mb-0"><i class="fas fa-code me-2"></i>SDK & Examples</h4>
+                    </div>
+                    <div class="card-body">
+                        <h6>Python Example</h6>
+                        <div class="code-block position-relative">
+                            <div class="code-header">Python</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-python">import requests
+
+# Authentication
+login_url = "https://inventory.bps.gov.bd/api/v1/auth/login"
+login_data = {
+    "username": "admin@bps.gov.bd",
+    "password": "your_password"
+}
+
+response = requests.post(login_url, json=login_data)
+token = response.json()["access_token"]
+
+# Make authenticated request
+headers = {"Authorization": f"Bearer {token}"}
+devices_url = "https://inventory.bps.gov.bd/api/v1/devices"
+devices = requests.get(devices_url, headers=headers)
+
+print(f"Total devices: {devices.json()['count']}")
+</code></pre>
+                        </div>
+
+                        <h6 class="mt-4">JavaScript Example</h6>
+                        <div class="code-block position-relative">
+                            <div class="code-header">JavaScript</div>
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-javascript">// Authentication
+const loginResponse = await fetch('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        username: 'admin@bps.gov.bd',
+        password: 'your_password'
+    })
+});
+
+const { access_token } = await loginResponse.json();
+
+// Make authenticated request
+const devicesResponse = await fetch('/api/v1/devices', {
+    headers: { 'Authorization': `Bearer ${access_token}` }
+});
+
+const devices = await devicesResponse.json();
+console.log(`Total devices: ${devices.count}`);
+</code></pre>
+                        </div>
+
+                        <div class="alert alert-success mt-4">
+                            <i class="fas fa-download me-2"></i>
+                            <strong>Official SDKs Coming Soon:</strong> We're working on official SDKs for Python, JavaScript, and PHP. 
+                            <a href="#" class="alert-link">Subscribe to updates</a> to be notified when they're available.
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script>
+        // Smooth scrolling for navigation
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Update active state
+                document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Smooth scroll to section
+                const targetId = this.getAttribute('href');
+                const targetSection = document.querySelector(targetId);
+                if (targetSection) {
+                    targetSection.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Copy code functionality
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling.querySelector('code');
+            const text = codeBlock.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'rgba(40, 167, 69, 0.2)';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(255,255,255,0.1)';
+                }, 2000);
+            });
+        }
+
+        // Download OpenAPI spec
+        function downloadOpenAPI() {
+            const openAPISpec = {
+                openapi: "3.0.0",
+                info: {
+                    title: "BPS IT Inventory Management API",
+                    version: "2.1.0",
+                    description: "REST API for Bangladesh Parliament Secretariat IT Inventory Management System"
+                },
+                servers: [
+                    { url: "https://inventory.bps.gov.bd/api/v1" }
+                ]
+            };
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(openAPISpec, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "bps-inventory-api-spec.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        // Highlight current section on scroll
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section[id]');
+            const navLinks = document.querySelectorAll('.sidebar-nav a');
+            
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (window.pageYOffset >= sectionTop - 200) {
+                    current = section.getAttribute('id');
+                }
+            });
+            
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

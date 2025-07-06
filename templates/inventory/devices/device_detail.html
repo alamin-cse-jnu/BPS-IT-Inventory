@@ -1,0 +1,563 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ device.device_name }} - Device Details{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/device-detail.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Devices</a></li>
+                    <li class="breadcrumb-item active">{{ device.device_name }}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0 text-gray-800">{{ device.device_name }}</h1>
+            <p class="text-muted mb-0">{{ device.device_type.name }}</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'inventory:device_edit' device.device_id %}" class="btn btn-primary">
+                <i class="fas fa-edit me-1"></i>Edit
+            </a>
+            <button type="button" class="btn btn-outline-secondary" onclick="printDevice()">
+                <i class="fas fa-print me-1"></i>Print
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-ellipsis-v me-1"></i>Actions
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'inventory:device_qr_code' device.device_id %}">
+                        <i class="fas fa-qrcode me-2"></i>Generate QR Code
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'inventory:device_history' device.device_id %}">
+                        <i class="fas fa-history me-2"></i>View History
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="{% url 'inventory:device_delete' device.device_id %}">
+                        <i class="fas fa-trash me-2"></i>Delete Device
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Device Information Card -->
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <h5 class="mb-0">
+                            <i class="fas fa-laptop me-2 text-primary"></i>Device Information
+                        </h5>
+                        <span class="badge bg-{{ device.status|lower }} fs-6">{{ device.get_status_display }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Basic Information -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">Basic Information</h6>
+                            <table class="table table-borderless table-sm">
+                                <tr>
+                                    <td class="fw-bold text-muted" style="width: 40%;">Device ID:</td>
+                                    <td>{{ device.device_id }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Asset Tag:</td>
+                                    <td>
+                                        {% if device.asset_tag %}
+                                            <span class="badge bg-secondary">{{ device.asset_tag }}</span>
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Serial Number:</td>
+                                    <td>{{ device.serial_number|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Brand:</td>
+                                    <td>{{ device.brand|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Model:</td>
+                                    <td>{{ device.model|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Category:</td>
+                                    <td>
+                                        <span class="badge bg-info">{{ device.device_type.subcategory.category.name }}</span>
+                                        <small class="text-muted ms-1">{{ device.device_type.subcategory.name }}</small>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Condition:</td>
+                                    <td>
+                                        <span class="badge bg-{{ device.device_condition|lower }}">
+                                            {{ device.get_device_condition_display }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Technical Specifications -->
+                        <div class="col-md-6">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">Technical Specifications</h6>
+                            <table class="table table-borderless table-sm">
+                                <tr>
+                                    <td class="fw-bold text-muted" style="width: 40%;">Processor:</td>
+                                    <td>{{ device.processor|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Memory (RAM):</td>
+                                    <td>{{ device.memory_ram|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Storage:</td>
+                                    <td>{{ device.storage_capacity|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Operating System:</td>
+                                    <td>{{ device.operating_system|default:"Not specified" }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Location:</td>
+                                    <td>
+                                        {% if device.location %}
+                                            <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                                            {{ device.location.name }}
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Critical Device:</td>
+                                    <td>
+                                        {% if device.is_critical %}
+                                            <span class="badge bg-danger">Yes</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">No</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Financial Information -->
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">Financial Information</h6>
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted mb-1">Purchase Price</h6>
+                                            <h5 class="mb-0">
+                                                {% if device.purchase_price %}
+                                                    ${{ device.purchase_price|floatformat:2 }}
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </h5>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted mb-1">Purchase Date</h6>
+                                            <h6 class="mb-0">
+                                                {% if device.purchase_date %}
+                                                    {{ device.purchase_date|date:"M d, Y" }}
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </h6>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted mb-1">Vendor</h6>
+                                            <h6 class="mb-0">
+                                                {% if device.vendor %}
+                                                    {{ device.vendor.name }}
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </h6>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted mb-1">Expected Life</h6>
+                                            <h6 class="mb-0">
+                                                {% if device.expected_life_years %}
+                                                    {{ device.expected_life_years }} years
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </h6>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Warranty Information -->
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">Warranty Information</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted fw-bold">Start Date</label>
+                                    <div class="p-2 bg-light rounded">
+                                        {% if device.warranty_start_date %}
+                                            {{ device.warranty_start_date|date:"M d, Y" }}
+                                        {% else %}
+                                            <span class="text-muted">Not specified</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted fw-bold">End Date</label>
+                                    <div class="p-2 bg-light rounded">
+                                        {% if device.warranty_end_date %}
+                                            {{ device.warranty_end_date|date:"M d, Y" }}
+                                            {% if device.warranty_end_date < today %}
+                                                <span class="badge bg-danger ms-2">Expired</span>
+                                            {% elif device.warranty_end_date < warranty_alert_date %}
+                                                <span class="badge bg-warning ms-2">Expiring Soon</span>
+                                            {% else %}
+                                                <span class="badge bg-success ms-2">Active</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">Not specified</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted fw-bold">Provider</label>
+                                    <div class="p-2 bg-light rounded">
+                                        {{ device.warranty_provider|default:"Not specified" }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        {% if device.notes %}
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">Notes</h6>
+                            <div class="p-3 bg-light rounded">
+                                {{ device.notes|linebreaks }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-xl-4">
+            <!-- Current Assignment -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-check me-2 text-success"></i>Current Assignment
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if current_assignment %}
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="avatar-circle me-3">
+                                {% if current_assignment.assigned_to_staff %}
+                                    <img src="{% static 'img/avatars/default-avatar.jpg' %}" alt="Avatar" class="rounded-circle" width="50" height="50">
+                                {% else %}
+                                    <div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                                        <i class="fas fa-building text-white"></i>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if current_assignment.assigned_to_staff %}
+                                    <div class="fw-bold">{{ current_assignment.assigned_to_staff.full_name }}</div>
+                                    <div class="text-muted small">{{ current_assignment.assigned_to_staff.email }}</div>
+                                    <div class="text-muted small">{{ current_assignment.assigned_to_staff.phone|default:"No phone" }}</div>
+                                {% else %}
+                                    <div class="fw-bold">Department Assignment</div>
+                                    <div class="text-muted small">No individual assignee</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <table class="table table-borderless table-sm">
+                            <tr>
+                                <td class="fw-bold text-muted">Department:</td>
+                                <td>
+                                    {% if current_assignment.assigned_to_department %}
+                                        <span class="badge bg-primary">{{ current_assignment.assigned_to_department.name }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Not assigned</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Location:</td>
+                                <td>
+                                    {% if current_assignment.assigned_to_location %}
+                                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                                        {{ current_assignment.assigned_to_location.name }}
+                                    {% else %}
+                                        <span class="text-muted">Not specified</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold text-muted">Assigned Date:</td>
+                                <td>{{ current_assignment.created_at|date:"M d, Y" }}</td>
+                            </tr>
+                            {% if current_assignment.expected_return_date %}
+                            <tr>
+                                <td class="fw-bold text-muted">Expected Return:</td>
+                                <td>
+                                    {{ current_assignment.expected_return_date|date:"M d, Y" }}
+                                    {% if current_assignment.expected_return_date < today %}
+                                        <span class="badge bg-danger ms-1">Overdue</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </table>
+
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="{% url 'inventory:assignment_detail' current_assignment.assignment_id %}" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-eye me-1"></i>View Assignment
+                            </a>
+                            <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#returnModal">
+                                <i class="fas fa-undo me-1"></i>Return Device
+                            </button>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-user-slash fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">Not Currently Assigned</h6>
+                            <p class="text-muted small">This device is available for assignment</p>
+                            <a href="{% url 'inventory:assignment_add' %}?device={{ device.device_id }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-user-plus me-1"></i>Assign Device
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2 text-warning"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'inventory:maintenance_add' %}?device={{ device.device_id }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-wrench me-1"></i>Schedule Maintenance
+                        </a>
+                        <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#statusModal">
+                            <i class="fas fa-exchange-alt me-1"></i>Change Status
+                        </button>
+                        <a href="{% url 'inventory:device_duplicate' device.device_id %}" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-copy me-1"></i>Duplicate Device
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2 text-info"></i>Recent Activity
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for activity in recent_activities|slice:":5" %}
+                        <div class="list-group-item">
+                            <div class="d-flex align-items-center">
+                                <div class="activity-icon me-2">
+                                    {% if activity.action == 'ASSIGNED' %}
+                                        <i class="fas fa-user-plus text-success"></i>
+                                    {% elif activity.action == 'RETURNED' %}
+                                        <i class="fas fa-undo text-warning"></i>
+                                    {% elif activity.action == 'MAINTENANCE' %}
+                                        <i class="fas fa-wrench text-info"></i>
+                                    {% else %}
+                                        <i class="fas fa-circle text-secondary"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-bold small">{{ activity.description }}</div>
+                                    <div class="text-muted small">{{ activity.created_at|date:"M d, Y g:i A" }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-center text-muted py-4">
+                            <i class="fas fa-history fa-2x mb-2"></i>
+                            <div>No recent activity</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if recent_activities|length > 5 %}
+                    <div class="card-footer text-center">
+                        <a href="{% url 'inventory:device_history' device.device_id %}" class="text-decoration-none">
+                            View All History
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Return Device Modal -->
+<div class="modal fade" id="returnModal" tabindex="-1" aria-labelledby="returnModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="returnModalLabel">Return Device</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'inventory:assignment_return' current_assignment.assignment_id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="returnDate" class="form-label">Return Date</label>
+                        <input type="date" class="form-control" id="returnDate" name="return_date" value="{{ today|date:'Y-m-d' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="returnCondition" class="form-label">Device Condition</label>
+                        <select class="form-select" id="returnCondition" name="return_condition">
+                            <option value="EXCELLENT">Excellent</option>
+                            <option value="GOOD" selected>Good</option>
+                            <option value="FAIR">Fair</option>
+                            <option value="POOR">Poor</option>
+                            <option value="DAMAGED">Damaged</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="returnNotes" class="form-label">Return Notes</label>
+                        <textarea class="form-control" id="returnNotes" name="return_notes" rows="3" placeholder="Any additional notes about the return..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Return Device</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Change Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="statusModalLabel">Change Device Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'inventory:device_status_change' device.device_id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="newStatus" class="form-label">New Status</label>
+                        <select class="form-select" id="newStatus" name="status" required>
+                            {% for status_choice in device.STATUS_CHOICES %}
+                            <option value="{{ status_choice.0 }}" {% if status_choice.0 == device.status %}selected{% endif %}>
+                                {{ status_choice.1 }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="statusReason" class="form-label">Reason for Change</label>
+                        <textarea class="form-control" id="statusReason" name="reason" rows="3" placeholder="Reason for status change..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function printDevice() {
+    window.print();
+}
+
+// Auto-hide alerts after 5 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    const alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
+    alerts.forEach(function(alert) {
+        setTimeout(function() {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }, 5000);
+    });
+});
+</script>
+
+<style>
+@media print {
+    .btn, .dropdown, .modal, .breadcrumb {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #000 !important;
+        box-shadow: none !important;
+    }
+    
+    .card-header {
+        background-color: #f8f9fa !important;
+        color: #000 !important;
+    }
+}
+
+.activity-icon {
+    width: 20px;
+    text-align: center;
+}
+
+.avatar-circle img {
+    object-fit: cover;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ error_code|default:"404" }} - Page Not Found | {{ system_name|default:"BPS Inventory" }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .error-container {
+        min-height: calc(100vh - 200px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .error-card {
+        max-width: 600px;
+        text-align: center;
+        padding: 3rem;
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .error-icon {
+        font-size: 6rem;
+        color: #6c757d;
+        margin-bottom: 1.5rem;
+        animation: bounce 2s infinite;
+    }
+    
+    .error-code {
+        font-size: 4rem;
+        font-weight: 700;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    
+    .error-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+    }
+    
+    .error-message {
+        font-size: 1.1rem;
+        color: #6c757d;
+        margin-bottom: 2rem;
+        line-height: 1.6;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .btn-error {
+        padding: 0.75rem 2rem;
+        border-radius: 25px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-error:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+        }
+        40% {
+            transform: translateY(-20px);
+        }
+        60% {
+            transform: translateY(-10px);
+        }
+    }
+    
+    .search-suggestion {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .breadcrumb-nav {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-nav a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-nav a:hover {
+        text-decoration: underline;
+    }
+    
+    @media (max-width: 768px) {
+        .error-card {
+            padding: 2rem 1rem;
+            margin: 1rem;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+        }
+        
+        .error-code {
+            font-size: 3rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .btn-error {
+            width: 100%;
+            max-width: 300px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="card error-card">
+        <!-- Error Icon -->
+        <div class="error-icon">
+            <i class="fas fa-search"></i>
+        </div>
+        
+        <!-- Error Code -->
+        <div class="error-code">
+            {{ error_code|default:"404" }}
+        </div>
+        
+        <!-- Error Title -->
+        <h1 class="error-title">
+            {{ error_title|default:"Page Not Found" }}
+        </h1>
+        
+        <!-- Error Message -->
+        <p class="error-message">
+            {{ error_message|default:"The page you are looking for might have been removed, had its name changed, or is temporarily unavailable." }}
+        </p>
+        
+        <!-- Breadcrumb Suggestion -->
+        <div class="breadcrumb-nav">
+            <i class="fas fa-route me-1"></i>
+            You were trying to reach: <code>{{ request.get_full_path }}</code>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="{% url 'home' %}" class="btn btn-primary btn-error">
+                <i class="fas fa-home me-2"></i>Go Home
+            </a>
+            
+            {% if user.is_authenticated %}
+            <a href="{% url 'inventory:dashboard' %}" class="btn btn-outline-primary btn-error">
+                <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+            </a>
+            {% else %}
+            <a href="{% url 'authentication:login' %}" class="btn btn-outline-primary btn-error">
+                <i class="fas fa-sign-in-alt me-2"></i>Login
+            </a>
+            {% endif %}
+            
+            <button class="btn btn-outline-secondary btn-error" onclick="window.history.back()">
+                <i class="fas fa-arrow-left me-2"></i>Go Back
+            </button>
+        </div>
+        
+        <!-- Search Suggestion -->
+        {% if user.is_authenticated %}
+        <div class="search-suggestion">
+            <h6 class="mb-3">
+                <i class="fas fa-lightbulb text-warning me-2"></i>
+                Can't find what you're looking for?
+            </h6>
+            <form action="{% url 'inventory:device_search' %}" method="get" class="d-flex">
+                <input type="text" class="form-control" name="q" placeholder="Search devices, staff, or assignments..." required>
+                <button type="submit" class="btn btn-outline-primary ms-2">
+                    <i class="fas fa-search"></i>
+                </button>
+            </form>
+            
+            <div class="row mt-3 text-start">
+                <div class="col-md-6">
+                    <h6 class="small fw-bold">Quick Links:</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="{% url 'inventory:device_list' %}" class="text-decoration-none">
+                            <i class="fas fa-laptop me-1"></i>All Devices
+                        </a></li>
+                        <li><a href="{% url 'inventory:assignment_list' %}" class="text-decoration-none">
+                            <i class="fas fa-user-check me-1"></i>Assignments
+                        </a></li>
+                        <li><a href="{% url 'qr_management:index' %}" class="text-decoration-none">
+                            <i class="fas fa-qrcode me-1"></i>QR Management
+                        </a></li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="small fw-bold">Reports:</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="{% url 'reports:dashboard' %}" class="text-decoration-none">
+                            <i class="fas fa-chart-line me-1"></i>Reports Dashboard
+                        </a></li>
+                        <li><a href="{% url 'reports:inventory_report' %}" class="text-decoration-none">
+                            <i class="fas fa-laptop me-1"></i>Inventory Report
+                        </a></li>
+                        <li><a href="{% url 'reports:assignment_report' %}" class="text-decoration-none">
+                            <i class="fas fa-users me-1"></i>Assignment Report
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- System Info -->
+        <div class="mt-4 pt-3 border-top">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                {{ system_name|default:"BPS IT Inventory Management System" }} | 
+                Error logged: {{ "now"|date:"M d, Y H:i" }}
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Enhanced UX -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Track 404 errors for analytics (if needed)
+    console.log('404 Error:', {
+        url: window.location.href,
+        referrer: document.referrer,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Auto-focus search input if visible
+    const searchInput = document.querySelector('.search-suggestion input');
+    if (searchInput) {
+        setTimeout(() => searchInput.focus(), 1000);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
+            window.location.href = '{% url "home" %}';
+        } else if (e.key === 'b' && !e.ctrlKey && !e.metaKey) {
+            window.history.back();
+        }
+    });
+    
+    // Report this 404 error (optional - for system monitoring)
+    if (typeof fetch !== 'undefined') {
+        fetch('/api/errors/404/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                url: window.location.href,
+                referrer: document.referrer,
+                user_agent: navigator.userAgent,
+                timestamp: new Date().toISOString()
+            })
+        }).catch(() => {}); // Silent fail
+    }
+});
+
+// Add some interactive elements
+function showHelpTips() {
+    const tips = [
+        'Press "h" to go home quickly',
+        'Press "b" to go back',
+        'Use the search box to find what you need',
+        'Check the URL for typos'
+    ];
+    
+    const randomTip = tips[Math.floor(Math.random() * tips.length)];
+    alert('💡 Tip: ' + randomTip);
+}
+
+// Add click counter for analytics
+let clickCount = 0;
+document.addEventListener('click', function(e) {
+    clickCount++;
+    if (clickCount === 10) {
+        console.log('User seems frustrated - they\'ve clicked 10 times on 404 page');
+    }
+});
+</script>
+{% endblock %}

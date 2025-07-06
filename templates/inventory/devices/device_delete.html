@@ -1,0 +1,527 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Device - {{ device.device_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/delete-confirmation.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row justify-content-center">
+        <div class="col-xl-8 col-lg-10">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Devices</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:device_detail' device.device_id %}">{{ device.device_name }}</a></li>
+                    <li class="breadcrumb-item active">Delete</li>
+                </ol>
+            </nav>
+
+            <!-- Warning Header -->
+            <div class="alert alert-danger border-0" role="alert">
+                <div class="d-flex align-items-center">
+                    <div class="alert-icon me-3">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                    <div>
+                        <h4 class="alert-heading mb-1">Confirm Device Deletion</h4>
+                        <p class="mb-0">This action will permanently remove the device from your inventory system.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device Information Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-laptop me-2 text-primary"></i>Device to be Deleted
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3 text-center">
+                            <div class="device-icon mb-3">
+                                {% if device.device_type.subcategory.category.name == 'Laptop' %}
+                                    <i class="fas fa-laptop fa-4x text-primary"></i>
+                                {% elif device.device_type.subcategory.category.name == 'Desktop' %}
+                                    <i class="fas fa-desktop fa-4x text-info"></i>
+                                {% elif device.device_type.subcategory.category.name == 'Mobile' %}
+                                    <i class="fas fa-mobile-alt fa-4x text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-computer fa-4x text-secondary"></i>
+                                {% endif %}
+                            </div>
+                            <span class="badge status-{{ device.status|lower }} fs-6">
+                                {{ device.get_status_display }}
+                            </span>
+                        </div>
+                        <div class="col-md-9">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td class="fw-bold text-muted" style="width: 30%;">Device Name:</td>
+                                    <td class="fw-bold">{{ device.device_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Device ID:</td>
+                                    <td><code>{{ device.device_id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Asset Tag:</td>
+                                    <td>
+                                        {% if device.asset_tag %}
+                                            <span class="badge bg-secondary">{{ device.asset_tag }}</span>
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Type:</td>
+                                    <td>{{ device.device_type.name }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Brand & Model:</td>
+                                    <td>
+                                        {% if device.brand %}{{ device.brand }}{% endif %}
+                                        {% if device.model %} - {{ device.model }}{% endif %}
+                                        {% if not device.brand and not device.model %}
+                                            <span class="text-muted">Not specified</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Serial Number:</td>
+                                    <td>{{ device.serial_number|default:"Not specified" }}</td>
+                                </tr>
+                                {% if device.purchase_price %}
+                                <tr>
+                                    <td class="fw-bold text-muted">Purchase Value:</td>
+                                    <td class="text-success fw-bold">${{ device.purchase_price|floatformat:2 }}</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Safety Checks -->
+            <div class="row g-4 mb-4">
+                <!-- Active Assignments Check -->
+                <div class="col-md-6">
+                    <div class="card border-{% if active_assignments %}danger{% else %}success{% endif %} h-100">
+                        <div class="card-header bg-{% if active_assignments %}danger{% else %}success{% endif %} text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-user-check me-2"></i>Assignment Status
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% if active_assignments %}
+                                <div class="text-danger">
+                                    <i class="fas fa-exclamation-circle me-2"></i>
+                                    <strong>{{ active_assignments.count }} Active Assignment{{ active_assignments.count|pluralize }}</strong>
+                                </div>
+                                <div class="mt-2">
+                                    {% for assignment in active_assignments %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                                        <div>
+                                            {% if assignment.assigned_to_staff %}
+                                                <div class="fw-bold">{{ assignment.assigned_to_staff.full_name }}</div>
+                                                <small class="text-muted">{{ assignment.assigned_to_department.name }}</small>
+                                            {% else %}
+                                                <div class="fw-bold">{{ assignment.assigned_to_department.name }}</div>
+                                                <small class="text-muted">Department Assignment</small>
+                                            {% endif %}
+                                        </div>
+                                        <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            View
+                                        </a>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <small>
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        You must return all active assignments before deleting this device.
+                                    </small>
+                                </div>
+                            {% else %}
+                                <div class="text-success">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    <strong>No Active Assignments</strong>
+                                </div>
+                                <p class="mb-0 mt-2">This device is not currently assigned to anyone.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Maintenance & Financial Check -->
+                <div class="col-md-6">
+                    <div class="card border-info h-100">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-wrench me-2"></i>Dependencies & History
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2 text-center">
+                                <div class="col-4">
+                                    <div class="p-2 bg-light rounded">
+                                        <div class="fw-bold text-primary">{{ maintenance_count }}</div>
+                                        <small class="text-muted">Maintenance</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-2 bg-light rounded">
+                                        <div class="fw-bold text-success">{{ assignment_count }}</div>
+                                        <small class="text-muted">Assignments</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="p-2 bg-light rounded">
+                                        <div class="fw-bold text-warning">{{ audit_count }}</div>
+                                        <small class="text-muted">Audit Logs</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <div class="alert alert-info mb-0">
+                                    <small>
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        All related records will be preserved for audit purposes.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deletion Options -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog me-2"></i>Deletion Options
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="deleteForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Deletion Method:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="deletion_type" 
+                                       id="soft_delete" value="soft" checked>
+                                <label class="form-check-label" for="soft_delete">
+                                    <strong>Soft Delete (Recommended)</strong>
+                                    <div class="text-muted small">
+                                        Mark device as disposed but keep all records for audit purposes
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="deletion_type" 
+                                       id="hard_delete" value="hard">
+                                <label class="form-check-label" for="hard_delete">
+                                    <strong>Permanent Delete</strong>
+                                    <div class="text-muted small">
+                                        Completely remove device and all related records (cannot be undone)
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="deletion_reason" class="form-label fw-bold">
+                                Reason for Deletion <span class="text-danger">*</span>
+                            </label>
+                            <select name="deletion_reason" id="deletion_reason" class="form-select" required>
+                                <option value="">Select a reason...</option>
+                                <option value="end_of_life">End of Life / Obsolete</option>
+                                <option value="damaged_beyond_repair">Damaged Beyond Repair</option>
+                                <option value="lost_or_stolen">Lost or Stolen</option>
+                                <option value="sold_or_disposed">Sold or Disposed</option>
+                                <option value="duplicate_entry">Duplicate Entry</option>
+                                <option value="data_cleanup">Data Cleanup</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="deletion_notes" class="form-label fw-bold">Additional Notes</label>
+                            <textarea name="deletion_notes" id="deletion_notes" class="form-control" 
+                                     rows="3" placeholder="Provide additional details about the deletion..."></textarea>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="confirm_deletion" required>
+                                <label class="form-check-label fw-bold text-danger" for="confirm_deletion">
+                                    I understand that this action cannot be easily undone and confirm that I want to delete this device.
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="{% url 'inventory:device_detail' device.device_id %}" 
+                                   class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-1"></i>Cancel
+                                </a>
+                            </div>
+                            <div>
+                                {% if not active_assignments %}
+                                <button type="submit" class="btn btn-danger" id="deleteButton" disabled>
+                                    <i class="fas fa-trash me-1"></i>Delete Device
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-secondary" disabled>
+                                    <i class="fas fa-lock me-1"></i>Cannot Delete (Active Assignments)
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Warning Footer -->
+            <div class="alert alert-warning border-0">
+                <div class="d-flex">
+                    <div class="me-3">
+                        <i class="fas fa-info-circle fa-lg"></i>
+                    </div>
+                    <div>
+                        <h6 class="alert-heading">Important Information</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>Soft Delete:</strong> Device will be marked as "Disposed" and hidden from active lists, but all data is preserved.</li>
+                            <li><strong>Permanent Delete:</strong> Device and all related records will be completely removed from the system.</li>
+                            <li><strong>Audit Trail:</strong> This deletion action will be logged for compliance and auditing purposes.</li>
+                            <li><strong>Recovery:</strong> Soft deleted devices can be restored by administrators if needed.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmationModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Final Confirmation
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="fas fa-trash fa-3x text-danger mb-3"></i>
+                    <h5>Are you absolutely sure?</h5>
+                </div>
+                <div class="alert alert-danger">
+                    <p class="mb-2"><strong>You are about to delete:</strong></p>
+                    <ul class="mb-0">
+                        <li>Device: <strong>{{ device.device_name }}</strong></li>
+                        <li>Device ID: <strong>{{ device.device_id }}</strong></li>
+                        <li>Deletion Type: <strong id="modalDeletionType"></strong></li>
+                    </ul>
+                </div>
+                <p class="mb-0">Type <strong>DELETE</strong> to confirm:</p>
+                <input type="text" id="confirmationInput" class="form-control mt-2" 
+                       placeholder="Type DELETE to confirm" autocomplete="off">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="finalDeleteButton" disabled>
+                    <i class="fas fa-trash me-1"></i>Delete Device
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmCheckbox = document.getElementById('confirm_deletion');
+    const deleteButton = document.getElementById('deleteButton');
+    const deleteForm = document.getElementById('deleteForm');
+    const confirmationModal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+    const confirmationInput = document.getElementById('confirmationInput');
+    const finalDeleteButton = document.getElementById('finalDeleteButton');
+    const modalDeletionType = document.getElementById('modalDeletionType');
+    
+    // Enable/disable delete button based on confirmation checkbox
+    if (confirmCheckbox && deleteButton) {
+        confirmCheckbox.addEventListener('change', function() {
+            deleteButton.disabled = !this.checked;
+        });
+    }
+    
+    // Handle form submission
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Update modal with deletion type
+            const deletionType = document.querySelector('input[name="deletion_type"]:checked').value;
+            modalDeletionType.textContent = deletionType === 'soft' ? 'Soft Delete' : 'Permanent Delete';
+            
+            // Reset confirmation input
+            confirmationInput.value = '';
+            finalDeleteButton.disabled = true;
+            
+            // Show confirmation modal
+            confirmationModal.show();
+        });
+    }
+    
+    // Handle confirmation input
+    if (confirmationInput) {
+        confirmationInput.addEventListener('input', function() {
+            const isValid = this.value.toUpperCase() === 'DELETE';
+            finalDeleteButton.disabled = !isValid;
+            
+            if (isValid) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else {
+                this.classList.remove('is-valid');
+                if (this.value.length > 0) {
+                    this.classList.add('is-invalid');
+                }
+            }
+        });
+        
+        confirmationInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !finalDeleteButton.disabled) {
+                finalDeleteButton.click();
+            }
+        });
+    }
+    
+    // Handle final deletion
+    if (finalDeleteButton) {
+        finalDeleteButton.addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Deleting...';
+            
+            // Submit the form
+            deleteForm.submit();
+        });
+    }
+    
+    // Warning for hard delete
+    const hardDeleteRadio = document.getElementById('hard_delete');
+    if (hardDeleteRadio) {
+        hardDeleteRadio.addEventListener('change', function() {
+            if (this.checked) {
+                if (!confirm('WARNING: Permanent deletion cannot be undone and will remove all related records. Are you sure you want to continue?')) {
+                    document.getElementById('soft_delete').checked = true;
+                }
+            }
+        });
+    }
+    
+    // Auto-focus on reason dropdown when page loads
+    const reasonSelect = document.getElementById('deletion_reason');
+    if (reasonSelect) {
+        setTimeout(() => reasonSelect.focus(), 100);
+    }
+});
+
+// Prevent accidental navigation away
+let formChanged = false;
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('deleteForm');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            formChanged = true;
+        });
+    });
+    
+    window.addEventListener('beforeunload', function(e) {
+        if (formChanged) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        }
+    });
+    
+    form.addEventListener('submit', function() {
+        formChanged = false;
+    });
+});
+</script>
+
+<style>
+.alert-icon {
+    flex-shrink: 0;
+}
+
+.device-icon {
+    opacity: 0.8;
+}
+
+.status-available { background-color: #28a745; }
+.status-assigned { background-color: #17a2b8; }
+.status-maintenance { background-color: #ffc107; color: #000; }
+.status-retired { background-color: #6c757d; }
+.status-lost { background-color: #dc3545; }
+.status-damaged { background-color: #fd7e14; }
+.status-disposed { background-color: #343a40; }
+
+.form-check-input:checked + .form-check-label {
+    color: #495057;
+}
+
+.border-danger { border-color: #dc3545 !important; }
+.border-success { border-color: #28a745 !important; }
+.border-info { border-color: #17a2b8 !important; }
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+#confirmationInput.is-valid {
+    border-color: #28a745;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='m2.3 6.73.4.27 4.78-4.83-.39-.39-4.39 4.42-1.17-1.17-.4.4 1.17 1.3z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+}
+
+#confirmationInput.is-invalid {
+    border-color: #dc3545;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='m5.8 4.6 1.4 1.4-1.4 1.4'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+}
+
+@media (max-width: 768px) {
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .d-flex.justify-content-between > div {
+        text-align: center;
+    }
+}
+</style>
+{% endblock %}

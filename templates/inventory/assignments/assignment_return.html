@@ -1,0 +1,445 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Return Assignment {{ assignment.assignment_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .return-status {
+        border: 2px solid #28a745;
+        border-radius: 8px;
+        background: rgba(40, 167, 69, 0.1);
+    }
+    .overdue-alert {
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        background: rgba(220, 53, 69, 0.1);
+    }
+    .device-card {
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: #f8f9fc;
+    }
+    .assignment-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+    }
+    .form-section {
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-undo-alt text-success"></i>
+            Return Assignment
+        </h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_list' %}">Assignments</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}">{{ assignment.assignment_id }}</a></li>
+                <li class="breadcrumb-item active">Return</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Status Alert -->
+    {% if is_overdue %}
+    <div class="alert alert-danger overdue-alert mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h5 class="alert-heading mb-2">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Overdue Assignment
+                </h5>
+                <p class="mb-0">
+                    This assignment is <strong>{{ days_overdue }} day{{ days_overdue|pluralize }}</strong> overdue.
+                    Expected return date was {{ assignment.expected_return_date }}.
+                </p>
+            </div>
+            <div class="col-md-4 text-right">
+                <span class="badge badge-danger badge-lg">
+                    {{ days_overdue }} day{{ days_overdue|pluralize }} overdue
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <!-- Assignment Details -->
+        <div class="col-lg-4">
+            <!-- Assignment Information Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header assignment-info py-3">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-clipboard-list"></i>
+                        Assignment Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment ID:</label>
+                            <p class="mb-1">{{ assignment.assignment_id }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Type:</label>
+                            <p class="mb-1">
+                                <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% else %}info{% endif %}">
+                                    {{ assignment.get_assignment_type_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assigned To:</label>
+                            <p class="mb-1">
+                                {% if assignment.assigned_to_staff %}
+                                    <i class="fas fa-user text-primary"></i>
+                                    {{ assignment.assigned_to_staff.user.get_full_name }}
+                                    <br><small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                                {% elif assignment.assigned_to_department %}
+                                    <i class="fas fa-building text-info"></i>
+                                    {{ assignment.assigned_to_department.name }}
+                                {% elif assignment.assigned_to_location %}
+                                    <i class="fas fa-map-marker-alt text-success"></i>
+                                    {{ assignment.assigned_to_location.name }}
+                                {% else %}
+                                    <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Date:</label>
+                            <p class="mb-1">{{ assignment.assignment_date|default:"-" }}</p>
+                        </div>
+                    </div>
+
+                    {% if assignment.expected_return_date %}
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Expected Return:</label>
+                            <p class="mb-1 {% if is_overdue %}text-danger font-weight-bold{% endif %}">
+                                {{ assignment.expected_return_date }}
+                                {% if is_overdue %}
+                                    <i class="fas fa-exclamation-triangle text-danger ml-1"></i>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment_duration %}
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Duration:</label>
+                            <p class="mb-1">{{ assignment_duration }} day{{ assignment_duration|pluralize }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment.assignment_purpose %}
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Purpose:</label>
+                            <p class="mb-1">{{ assignment.assignment_purpose }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment.assignment_notes %}
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Notes:</label>
+                            <p class="mb-0 text-muted">{{ assignment.assignment_notes }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Device Information Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-laptop"></i>
+                        Device Information
+                    </h6>
+                </div>
+                <div class="card-body device-card">
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device ID:</label>
+                            <p class="mb-1">
+                                <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" class="text-primary">
+                                    {{ assignment.device.device_id }}
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device Name:</label>
+                            <p class="mb-1">{{ assignment.device.device_name }}</p>
+                        </div>
+                    </div>
+
+                    {% if assignment.device.asset_tag %}
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Asset Tag:</label>
+                            <p class="mb-1">{{ assignment.device.asset_tag }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment.device.device_type %}
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device Type:</label>
+                            <p class="mb-1">{{ assignment.device.device_type.name }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Current Status:</label>
+                            <p class="mb-1">
+                                <span class="badge badge-warning">{{ assignment.device.get_status_display }}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Current Condition:</label>
+                            <p class="mb-0">
+                                <span class="badge badge-{% if assignment.device.condition == 'EXCELLENT' %}success{% elif assignment.device.condition == 'GOOD' %}info{% elif assignment.device.condition == 'FAIR' %}warning{% else %}danger{% endif %}">
+                                    {{ assignment.device.get_condition_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Return Form -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-undo-alt"></i>
+                        Device Return Form
+                    </h6>
+                </div>
+                <div class="card-body form-section">
+                    <form method="post" id="return-form">
+                        {% csrf_token %}
+                        
+                        <!-- Return Date -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ form.return_date.id_for_label }}" class="font-weight-bold">
+                                        Return Date <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.return_date }}
+                                    {% if form.return_date.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.return_date.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <small class="form-text text-muted">Date when the device is being returned</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ form.device_condition.id_for_label }}" class="font-weight-bold">
+                                        Device Condition
+                                    </label>
+                                    {{ form.device_condition }}
+                                    {% if form.device_condition.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.device_condition.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <small class="form-text text-muted">Current physical condition of the device</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Return Condition -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.return_condition.id_for_label }}" class="font-weight-bold">
+                                Return Condition
+                            </label>
+                            {{ form.return_condition }}
+                            {% if form.return_condition.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.return_condition.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Brief description of the device condition at return (e.g., "Good working condition", "Minor scratches", etc.)
+                            </small>
+                        </div>
+
+                        <!-- Return Notes -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.return_notes.id_for_label }}" class="font-weight-bold">
+                                Return Notes
+                            </label>
+                            {{ form.return_notes }}
+                            {% if form.return_notes.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.return_notes.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Additional notes about the return process, any issues found, or special circumstances
+                            </small>
+                        </div>
+
+                        <!-- Return Summary -->
+                        <div class="alert alert-info return-status mb-4">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-info-circle"></i>
+                                Return Summary
+                            </h5>
+                            <p class="mb-2">
+                                <strong>Device:</strong> {{ assignment.device.device_name }} ({{ assignment.device.device_id }})
+                            </p>
+                            <p class="mb-2">
+                                <strong>Returning from:</strong>
+                                {% if assignment.assigned_to_staff %}
+                                    {{ assignment.assigned_to_staff.user.get_full_name }}
+                                {% elif assignment.assigned_to_department %}
+                                    {{ assignment.assigned_to_department.name }}
+                                {% elif assignment.assigned_to_location %}
+                                    {{ assignment.assigned_to_location.name }}
+                                {% endif %}
+                            </p>
+                            {% if assignment_duration %}
+                            <p class="mb-2">
+                                <strong>Assignment Duration:</strong> {{ assignment_duration }} day{{ assignment_duration|pluralize }}
+                            </p>
+                            {% endif %}
+                            <p class="mb-0">
+                                <strong>After return:</strong> Device will be marked as <span class="badge badge-success">Available</span> and ready for reassignment.
+                            </p>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button type="submit" class="btn btn-success btn-lg btn-block">
+                                    <i class="fas fa-check"></i>
+                                    Confirm Return
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                                   class="btn btn-secondary btn-lg btn-block">
+                                    <i class="fas fa-times"></i>
+                                    Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                               class="btn btn-outline-primary btn-sm btn-block mb-2">
+                                <i class="fas fa-eye"></i>
+                                View Assignment
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" 
+                               class="btn btn-outline-info btn-sm btn-block mb-2">
+                                <i class="fas fa-laptop"></i>
+                                View Device
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'inventory:assignment_list' %}" 
+                               class="btn btn-outline-secondary btn-sm btn-block mb-2">
+                                <i class="fas fa-list"></i>
+                                All Assignments
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Form validation
+    $('#return-form').on('submit', function(e) {
+        const returnDate = $('#id_return_date').val();
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Check if return date is not in the future
+        if (returnDate > today) {
+            if (!confirm('The return date is in the future. Are you sure you want to proceed?')) {
+                e.preventDefault();
+                return false;
+            }
+        }
+        
+        // Final confirmation
+        if (!confirm('Are you sure you want to return this device? This action cannot be undone.')) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    // Auto-resize textarea
+    $('textarea').on('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Set max date for return date to today
+    const today = new Date().toISOString().split('T')[0];
+    $('#id_return_date').attr('max', today);
+
+    // Add form control classes if not present
+    $('input, select, textarea').addClass('form-control');
+});
+</script>
+{% endblock %}

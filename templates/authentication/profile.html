@@ -1,0 +1,469 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Profile - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 1rem 1rem 0 0;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .profile-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.05' fill-rule='evenodd'%3E%3Cpath d='m0 40l40-40h-40v40z'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    
+    .profile-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 5px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        font-weight: bold;
+        margin: 0 auto 1rem;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .profile-info {
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .profile-name {
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .profile-role {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-bottom: 0;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        border: none;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #0066cc;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .info-card {
+        background: white;
+        border-radius: 0.75rem;
+        border: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .info-card .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 0.75rem 0.75rem 0 0;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 500;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+    }
+    
+    .info-label i {
+        margin-right: 0.5rem;
+        width: 16px;
+    }
+    
+    .info-value {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .activity-item {
+        padding: 1rem;
+        border-bottom: 1px solid #f8f9fa;
+        transition: background-color 0.3s ease;
+    }
+    
+    .activity-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+    
+    .activity-device {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    
+    .activity-date {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .activity-status {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        font-weight: 500;
+    }
+    
+    .status-active {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    
+    .status-returned {
+        background-color: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+    }
+    
+    .btn-profile {
+        border-radius: 0.75rem;
+        font-weight: 500;
+        padding: 0.625rem 1.25rem;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-profile:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    @media (max-width: 768px) {
+        .profile-header {
+            border-radius: 0.5rem 0.5rem 0 0;
+        }
+        
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            font-size: 2.5rem;
+        }
+        
+        .profile-name {
+            font-size: 1.5rem;
+        }
+        
+        .stat-number {
+            font-size: 1.75rem;
+        }
+        
+        .info-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">My Profile</li>
+        </ol>
+    </nav>
+    
+    <div class="row">
+        <div class="col-lg-4 col-md-5 mb-4">
+            <!-- Profile Card -->
+            <div class="card info-card">
+                <div class="profile-header p-4">
+                    <div class="profile-avatar">
+                        {% if user.first_name %}
+                            {{ user.first_name.0 }}{% if user.last_name %}{{ user.last_name.0 }}{% endif %}
+                        {% else %}
+                            {{ user.username.0|upper }}
+                        {% endif %}
+                    </div>
+                    <div class="profile-info">
+                        <div class="profile-name">
+                            {% if user.get_full_name %}
+                                {{ user.get_full_name }}
+                            {% else %}
+                                {{ user.username }}
+                            {% endif %}
+                        </div>
+                        <div class="profile-role">
+                            {% if staff_profile %}
+                                {{ staff_profile.designation|default:"Staff Member" }}
+                            {% else %}
+                                System User
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-person-badge"></i>
+                            Employee ID
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile %}
+                                {{ staff_profile.employee_id|default:"Not Set" }}
+                            {% else %}
+                                Not Available
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-envelope"></i>
+                            Email
+                        </span>
+                        <span class="info-value">{{ user.email|default:"Not Set" }}</span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-building"></i>
+                            Department
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile and staff_profile.department %}
+                                {{ staff_profile.department.name }}
+                            {% else %}
+                                Not Assigned
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-calendar-check"></i>
+                            Join Date
+                        </span>
+                        <span class="info-value">
+                            {% if staff_profile and staff_profile.joining_date %}
+                                {{ staff_profile.joining_date|date:"M d, Y" }}
+                            {% else %}
+                                {{ user.date_joined|date:"M d, Y" }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">
+                            <i class="bi bi-clock-history"></i>
+                            Last Login
+                        </span>
+                        <span class="info-value">
+                            {% if user.last_login %}
+                                {{ user.last_login|date:"M d, Y g:i A" }}
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="card-footer bg-transparent">
+                    <a href="{% url 'authentication:change_password' %}" class="btn btn-primary btn-profile w-100">
+                        <i class="bi bi-key me-2"></i>
+                        Change Password
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-8 col-md-7">
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-4 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-number">{{ user_stats.total_assignments }}</div>
+                        <div class="stat-label">Total Assignments</div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-number">{{ user_stats.active_assignments }}</div>
+                        <div class="stat-label">Active Assignments</div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="stat-card">
+                        <div class="stat-number">{{ user_stats.total_activities }}</div>
+                        <div class="stat-label">System Activities</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Assignments -->
+            <div class="card info-card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>
+                        Recent Assignments
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_assignments %}
+                        {% for assignment in recent_assignments %}
+                            <div class="activity-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="activity-device">
+                                            <i class="bi bi-laptop me-2"></i>
+                                            {{ assignment.device.device_name }}
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="activity-date">
+                                                Assigned: {{ assignment.assigned_at|date:"M d, Y" }}
+                                            </span>
+                                            {% if assignment.expected_return_date %}
+                                                <span class="text-muted">•</span>
+                                                <span class="activity-date">
+                                                    Expected Return: {{ assignment.expected_return_date|date:"M d, Y" }}
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                        {% if assignment.notes %}
+                                            <div class="text-muted small mt-1">
+                                                {{ assignment.notes|truncatechars:100 }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <span class="activity-status {% if assignment.is_active %}status-active{% else %}status-returned{% endif %}">
+                                        {% if assignment.is_active %}
+                                            Active
+                                        {% else %}
+                                            Returned
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-inbox display-4 text-muted"></i>
+                            <p class="text-muted mt-3">No assignments found</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if recent_assignments %}
+                    <div class="card-footer bg-transparent text-center">
+                        <a href="{% url 'inventory:assignment_list' %}?assigned_to_staff__user={{ user.id }}" class="btn btn-outline-primary btn-sm">
+                            View All Assignments
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-update last activity
+        function updateActivity() {
+            fetch('{% url "authentication:update_last_activity" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json',
+                },
+            }).catch(error => {
+                console.log('Activity update failed:', error);
+            });
+        }
+        
+        // Update activity every 5 minutes
+        setInterval(updateActivity, 300000);
+        
+        // Update activity on page load
+        updateActivity();
+        
+        // Add hover effects to stat cards
+        const statCards = document.querySelectorAll('.stat-card');
+        statCards.forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+            });
+        });
+        
+        // Animate numbers on load
+        const numbers = document.querySelectorAll('.stat-number');
+        numbers.forEach(number => {
+            const targetValue = parseInt(number.textContent);
+            let currentValue = 0;
+            const increment = targetValue / 30;
+            
+            const timer = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= targetValue) {
+                    currentValue = targetValue;
+                    clearInterval(timer);
+                }
+                number.textContent = Math.floor(currentValue);
+            }, 50);
+        });
+    });
+</script>
+{% endblock %}

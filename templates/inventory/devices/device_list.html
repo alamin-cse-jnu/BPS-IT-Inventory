@@ -1,0 +1,678 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Device List{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/device-list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Device Management</h1>
+            <p class="text-muted mb-0">Manage and track all IT devices in your inventory</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'inventory:device_add' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>Add Device
+            </a>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-download me-1"></i>Export
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'inventory:bulk_export' %}?type=devices">
+                        <i class="fas fa-file-csv me-2"></i>Export as CSV
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'inventory:bulk_export' %}?type=devices&format=excel">
+                        <i class="fas fa-file-excel me-2"></i>Export as Excel
+                    </a></li>
+                </ul>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-cog me-1"></i>Actions
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'inventory:bulk_import' %}">
+                        <i class="fas fa-upload me-2"></i>Import Devices
+                    </a></li>
+                    <li><a class="dropdown-item" href="{% url 'inventory:bulk_qr_generate' %}">
+                        <i class="fas fa-qrcode me-2"></i>Generate QR Codes
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{% url 'inventory:bulk_actions' %}">
+                        <i class="fas fa-tasks me-2"></i>Bulk Actions
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <div class="search-box">
+                        <input type="text" 
+                               name="search" 
+                               class="form-control" 
+                               placeholder="Search devices..." 
+                               value="{{ request.GET.search }}"
+                               id="searchInput">
+                        <i class="fas fa-search search-icon"></i>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        {% for choice in status_choices %}
+                        <option value="{{ choice.0 }}" {% if choice.0 == request.GET.status %}selected{% endif %}>
+                            {{ choice.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" {% if category.id|stringformat:"s" == request.GET.category %}selected{% endif %}>
+                            {{ category.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="condition" class="form-select">
+                        <option value="">All Conditions</option>
+                        {% for choice in condition_choices %}
+                        <option value="{{ choice.0 }}" {% if choice.0 == request.GET.condition %}selected{% endif %}>
+                            {{ choice.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="d-flex gap-1">
+                        <button type="submit" class="btn btn-primary flex-fill">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-left-primary h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Devices</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_devices }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-laptop fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-left-success h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Available</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ available_devices }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-left-info h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Assigned</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ assigned_devices }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-left-warning h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Maintenance</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ maintenance_devices }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-wrench fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device List -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Device List
+                {% if page_obj.paginator.count %}
+                <span class="badge bg-info ms-2">{{ page_obj.paginator.count }} total</span>
+                {% endif %}
+            </h6>
+            <div class="d-flex gap-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="selectAll">
+                    <label class="form-check-label" for="selectAll">
+                        Select All
+                    </label>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="bulkActionBtn" style="display: none;">
+                    <i class="fas fa-tasks me-1"></i>Bulk Actions
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if page_obj.object_list %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="deviceTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th width="30">
+                                <input type="checkbox" class="form-check-input" id="selectAllHeader">
+                            </th>
+                            <th>Device ID</th>
+                            <th>Device Name</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Condition</th>
+                            <th>Assignment</th>
+                            <th>Location</th>
+                            <th width="120">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in page_obj %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input device-checkbox" 
+                                       name="device_ids" value="{{ device.device_id }}">
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="device-icon me-2">
+                                        {% if device.device_type.subcategory.category.name == 'Laptop' %}
+                                            <i class="fas fa-laptop text-primary"></i>
+                                        {% elif device.device_type.subcategory.category.name == 'Desktop' %}
+                                            <i class="fas fa-desktop text-info"></i>
+                                        {% elif device.device_type.subcategory.category.name == 'Mobile' %}
+                                            <i class="fas fa-mobile-alt text-success"></i>
+                                        {% else %}
+                                            <i class="fas fa-computer text-secondary"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">
+                                            <a href="{% url 'inventory:device_detail' device.device_id %}" 
+                                               class="text-decoration-none">
+                                                {{ device.device_id }}
+                                            </a>
+                                        </div>
+                                        {% if device.asset_tag %}
+                                            <small class="text-muted">{{ device.asset_tag }}</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div>
+                                    <div class="fw-bold">{{ device.device_name }}</div>
+                                    <small class="text-muted">
+                                        {% if device.brand %}{{ device.brand }}{% endif %}
+                                        {% if device.model %} - {{ device.model }}{% endif %}
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">
+                                    {{ device.device_type.subcategory.category.name }}
+                                </span>
+                                <div class="small text-muted">{{ device.device_type.name }}</div>
+                            </td>
+                            <td>
+                                <span class="badge status-{{ device.status|lower }}">
+                                    {{ device.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge condition-{{ device.device_condition|lower }}">
+                                    {{ device.get_device_condition_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% with current_assignment=device.assignments.all|first %}
+                                {% if current_assignment and current_assignment.is_active %}
+                                    <div class="assignment-info">
+                                        {% if current_assignment.assigned_to_staff %}
+                                            <div class="fw-bold small">{{ current_assignment.assigned_to_staff.full_name }}</div>
+                                            <div class="text-muted small">{{ current_assignment.assigned_to_department.name }}</div>
+                                        {% else %}
+                                            <div class="fw-bold small">{{ current_assignment.assigned_to_department.name }}</div>
+                                            <div class="text-muted small">Department Assignment</div>
+                                        {% endif %}
+                                        {% if current_assignment.expected_return_date %}
+                                            {% if current_assignment.expected_return_date < today %}
+                                                <div class="text-danger small">
+                                                    <i class="fas fa-exclamation-triangle"></i> Overdue
+                                                </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">Not assigned</span>
+                                {% endif %}
+                                {% endwith %}
+                            </td>
+                            <td>
+                                {% if device.location %}
+                                    <div class="location-info">
+                                        <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                                        <span class="small">{{ device.location.name }}</span>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small">No location</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'inventory:device_detail' device.device_id %}" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'inventory:device_edit' device.device_id %}" 
+                                       class="btn btn-sm btn-outline-secondary" 
+                                       title="Edit Device">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                data-bs-toggle="dropdown" 
+                                                title="More Actions">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            {% if device.status == 'AVAILABLE' %}
+                                            <li>
+                                                <a class="dropdown-item" 
+                                                   href="{% url 'inventory:assignment_add' %}?device={{ device.device_id }}">
+                                                    <i class="fas fa-user-plus me-2"></i>Assign Device
+                                                </a>
+                                            </li>
+                                            {% endif %}
+                                            <li>
+                                                <a class="dropdown-item" 
+                                                   href="{% url 'inventory:device_qr_code' device.device_id %}">
+                                                    <i class="fas fa-qrcode me-2"></i>Generate QR
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" 
+                                                   href="{% url 'inventory:maintenance_add' %}?device={{ device.device_id }}">
+                                                    <i class="fas fa-wrench me-2"></i>Schedule Maintenance
+                                                </a>
+                                            </li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <a class="dropdown-item" 
+                                                   href="{% url 'inventory:device_history' device.device_id %}">
+                                                    <i class="fas fa-history me-2"></i>View History
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">
+                            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} 
+                            of {{ page_obj.paginator.count }} devices
+                        </small>
+                    </div>
+                    <nav aria-label="Device pagination">
+                        <ul class="pagination pagination-sm mb-0">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        <i class="fas fa-angle-double-left"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        <i class="fas fa-angle-left"></i>
+                                    </a>
+                                </li>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                            {{ num }}
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        <i class="fas fa-angle-right"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                        <i class="fas fa-angle-double-right"></i>
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-laptop fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No devices found</h5>
+                {% if request.GET.search or request.GET.status or request.GET.category %}
+                    <p class="text-muted">Try adjusting your search criteria or filters.</p>
+                    <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-times me-1"></i>Clear Filters
+                    </a>
+                {% else %}
+                    <p class="text-muted">Start by adding your first device to the inventory.</p>
+                    <a href="{% url 'inventory:device_add' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Add First Device
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Actions Modal -->
+<div class="modal fade" id="bulkActionsModal" tabindex="-1" aria-labelledby="bulkActionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkActionsModalLabel">Bulk Actions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Select an action to perform on <span id="selectedCount">0</span> selected devices:</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary" onclick="bulkAction('status_change')">
+                        <i class="fas fa-exchange-alt me-2"></i>Change Status
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="bulkAction('location_change')">
+                        <i class="fas fa-map-marker-alt me-2"></i>Update Location
+                    </button>
+                    <button type="button" class="btn btn-outline-success" onclick="bulkAction('export')">
+                        <i class="fas fa-download me-2"></i>Export Selected
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" onclick="bulkAction('qr_generate')">
+                        <i class="fas fa-qrcode me-2"></i>Generate QR Codes
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize variables
+    const selectAll = document.getElementById('selectAll');
+    const selectAllHeader = document.getElementById('selectAllHeader');
+    const deviceCheckboxes = document.querySelectorAll('.device-checkbox');
+    const bulkActionBtn = document.getElementById('bulkActionBtn');
+    const bulkActionsModal = new bootstrap.Modal(document.getElementById('bulkActionsModal'));
+
+    // Select all functionality
+    function updateSelectAll() {
+        const checkedBoxes = document.querySelectorAll('.device-checkbox:checked');
+        const allBoxes = document.querySelectorAll('.device-checkbox');
+        
+        selectAll.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < allBoxes.length;
+        selectAll.checked = checkedBoxes.length === allBoxes.length && allBoxes.length > 0;
+        selectAllHeader.indeterminate = selectAll.indeterminate;
+        selectAllHeader.checked = selectAll.checked;
+        
+        // Show/hide bulk action button
+        if (checkedBoxes.length > 0) {
+            bulkActionBtn.style.display = 'inline-block';
+            document.getElementById('selectedCount').textContent = checkedBoxes.length;
+        } else {
+            bulkActionBtn.style.display = 'none';
+        }
+    }
+
+    // Select all toggle
+    selectAll.addEventListener('change', function() {
+        deviceCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateSelectAll();
+    });
+
+    selectAllHeader.addEventListener('change', function() {
+        selectAll.checked = this.checked;
+        selectAll.dispatchEvent(new Event('change'));
+    });
+
+    // Individual checkbox change
+    deviceCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectAll);
+    });
+
+    // Bulk actions button
+    bulkActionBtn.addEventListener('click', function() {
+        bulkActionsModal.show();
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                this.closest('form').submit();
+            }
+        });
+    }
+
+    // Initialize select all state
+    updateSelectAll();
+});
+
+// Bulk action functions
+function bulkAction(action) {
+    const selectedDevices = Array.from(document.querySelectorAll('.device-checkbox:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedDevices.length === 0) {
+        alert('No devices selected');
+        return;
+    }
+
+    // Create form and submit
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.style.display = 'none';
+    
+    // Add CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfToken) {
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken.value;
+        form.appendChild(csrfInput);
+    }
+    
+    // Add action
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = action;
+    form.appendChild(actionInput);
+    
+    // Add selected devices
+    selectedDevices.forEach(deviceId => {
+        const deviceInput = document.createElement('input');
+        deviceInput.type = 'hidden';
+        deviceInput.name = 'device_ids';
+        deviceInput.value = deviceId;
+        form.appendChild(deviceInput);
+    });
+    
+    // Set action URL based on bulk action type
+    switch (action) {
+        case 'status_change':
+        case 'location_change':
+        case 'export':
+            form.action = '{% url "inventory:bulk_actions" %}';
+            break;
+        case 'qr_generate':
+            form.action = '{% url "inventory:bulk_qr_generate" %}';
+            break;
+    }
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Auto-refresh page every 5 minutes for real-time updates
+setInterval(function() {
+    // Only refresh if no checkboxes are selected to avoid losing user selections
+    const checkedBoxes = document.querySelectorAll('.device-checkbox:checked');
+    if (checkedBoxes.length === 0) {
+        location.reload();
+    }
+}, 300000); // 5 minutes
+</script>
+
+<style>
+.search-box {
+    position: relative;
+}
+
+.search-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    pointer-events: none;
+}
+
+.device-icon {
+    width: 20px;
+    text-align: center;
+}
+
+.assignment-info {
+    max-width: 150px;
+}
+
+.location-info {
+    max-width: 120px;
+}
+
+.status-available { background-color: #28a745; }
+.status-assigned { background-color: #17a2b8; }
+.status-maintenance { background-color: #ffc107; color: #000; }
+.status-retired { background-color: #6c757d; }
+.status-lost { background-color: #dc3545; }
+.status-damaged { background-color: #fd7e14; }
+.status-disposed { background-color: #343a40; }
+
+.condition-excellent { background-color: #28a745; }
+.condition-good { background-color: #20c997; }
+.condition-fair { background-color: #ffc107; color: #000; }
+.condition-poor { background-color: #fd7e14; }
+.condition-damaged { background-color: #dc3545; }
+.condition-defective { background-color: #6f42c1; }
+
+.border-left-primary { border-left: 4px solid #007bff !important; }
+.border-left-success { border-left: 4px solid #28a745 !important; }
+.border-left-info { border-left: 4px solid #17a2b8 !important; }
+.border-left-warning { border-left: 4px solid #ffc107 !important; }
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+@media (max-width: 768px) {
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .assignment-info,
+    .location-info {
+        max-width: none;
+    }
+}
+</style>
+{% endblock %}

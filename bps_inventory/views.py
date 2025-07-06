@@ -150,7 +150,7 @@ def system_health_check(request):
     if request.GET.get('format') == 'json':
         return JsonResponse(health_data)
     
-    return render(request, 'system/health_check.html', {'health_data': health_data})
+    return render(request, 'system/health.html', {'health_data': health_data})
 
 
 @login_required
