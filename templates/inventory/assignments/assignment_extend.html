@@ -1,0 +1,616 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Extend Assignment {{ assignment.assignment_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .extend-status {
+        border: 2px solid #ffc107;
+        border-radius: 8px;
+        background: rgba(255, 193, 7, 0.1);
+    }
+    .current-dates {
+        border: 2px solid #6c757d;
+        border-radius: 8px;
+        background: rgba(108, 117, 125, 0.1);
+    }
+    .new-dates {
+        border: 2px solid #28a745;
+        border-radius: 8px;
+        background: rgba(40, 167, 69, 0.1);
+    }
+    .assignment-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+    }
+    .form-section {
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: white;
+    }
+    .date-comparison {
+        font-size: 1.1rem;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .overdue-warning {
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        background: rgba(220, 53, 69, 0.1);
+    }
+    .extension-calculator {
+        background: #f8f9fc;
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        padding: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-calendar-plus text-warning"></i>
+            Extend Assignment
+        </h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_list' %}">Assignments</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}">{{ assignment.assignment_id }}</a></li>
+                <li class="breadcrumb-item active">Extend</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Assignment Status Check -->
+    {% if not assignment.is_temporary %}
+    <div class="alert alert-warning mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h5 class="alert-heading mb-2">
+                    <i class="fas fa-info-circle"></i>
+                    Permanent Assignment
+                </h5>
+                <p class="mb-0">
+                    This is a permanent assignment and doesn't have an expected return date.
+                    Consider converting to temporary assignment if you need to set a return date.
+                </p>
+            </div>
+            <div class="col-md-4 text-right">
+                <a href="{% url 'inventory:assignment_edit' assignment.assignment_id %}" class="btn btn-primary">
+                    <i class="fas fa-edit"></i>
+                    Edit Assignment
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Overdue Warning -->
+    {% if assignment.is_temporary and assignment.expected_return_date %}
+        {% now "Y-m-d" as today %}
+        {% if assignment.expected_return_date|date:"Y-m-d" < today %}
+        <div class="alert alert-danger overdue-warning mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h5 class="alert-heading mb-2">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Overdue Assignment
+                    </h5>
+                    <p class="mb-0">
+                        This assignment is overdue. Expected return date was {{ assignment.expected_return_date }}.
+                        Extending the assignment will help bring it back into compliance.
+                    </p>
+                </div>
+                <div class="col-md-4 text-right">
+                    <span class="badge badge-danger badge-lg">
+                        Overdue
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Assignment Details -->
+        <div class="col-lg-4">
+            <!-- Device Information -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-laptop"></i>
+                        Device Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device ID:</label>
+                            <p class="mb-1">
+                                <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" class="text-primary">
+                                    {{ assignment.device.device_id }}
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device Name:</label>
+                            <p class="mb-1">{{ assignment.device.device_name }}</p>
+                        </div>
+                    </div>
+
+                    {% if assignment.device.asset_tag %}
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Asset Tag:</label>
+                            <p class="mb-1">{{ assignment.device.asset_tag }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment.device.device_type %}
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device Type:</label>
+                            <p class="mb-1">{{ assignment.device.device_type.name }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Condition:</label>
+                            <p class="mb-0">
+                                <span class="badge badge-{% if assignment.device.condition == 'EXCELLENT' %}success{% elif assignment.device.condition == 'GOOD' %}info{% elif assignment.device.condition == 'FAIR' %}warning{% else %}danger{% endif %}">
+                                    {{ assignment.device.get_condition_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Assignment Details -->
+            <div class="card shadow mb-4">
+                <div class="card-header assignment-info py-3">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-clipboard-list"></i>
+                        Assignment Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment ID:</label>
+                            <p class="mb-1">{{ assignment.assignment_id }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assigned To:</label>
+                            <p class="mb-1">
+                                {% if assignment.assigned_to_staff %}
+                                    <i class="fas fa-user text-primary"></i>
+                                    {{ assignment.assigned_to_staff.user.get_full_name }}
+                                    <br><small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                                {% elif assignment.assigned_to_department %}
+                                    <i class="fas fa-building text-info"></i>
+                                    {{ assignment.assigned_to_department.name }}
+                                {% elif assignment.assigned_to_location %}
+                                    <i class="fas fa-map-marker-alt text-success"></i>
+                                    {{ assignment.assigned_to_location.name }}
+                                {% else %}
+                                    <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Type:</label>
+                            <p class="mb-1">
+                                <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% else %}info{% endif %}">
+                                    {{ assignment.get_assignment_type_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Date:</label>
+                            <p class="mb-1">{{ assignment.assignment_date|default:"-" }}</p>
+                        </div>
+                    </div>
+
+                    {% if assignment.expected_return_date %}
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Current Expected Return:</label>
+                            <p class="mb-0">
+                                {{ assignment.expected_return_date }}
+                                {% now "Y-m-d" as today %}
+                                {% if assignment.expected_return_date|date:"Y-m-d" < today %}
+                                    <span class="badge badge-danger ml-2">Overdue</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Extension Guidelines -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-info-circle"></i>
+                        Extension Guidelines
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="small mb-0">
+                        <li>Only temporary assignments can be extended</li>
+                        <li>New return date must be after current expected date</li>
+                        <li>Extension reason is required for audit purposes</li>
+                        <li>Assignment history will be updated with extension details</li>
+                        <li>Use common extension periods (7, 14, 30 days) when possible</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extension Form -->
+        <div class="col-lg-8">
+            {% if assignment.is_temporary %}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-calendar-plus"></i>
+                        Extend Assignment Return Date
+                    </h6>
+                </div>
+                <div class="card-body form-section">
+                    <form method="post" id="extend-form">
+                        {% csrf_token %}
+                        
+                        <!-- Current vs New Date Comparison -->
+                        <div class="row mb-4">
+                            <div class="col-md-5">
+                                <div class="current-dates p-3 text-center">
+                                    <h6 class="font-weight-bold text-gray-800 mb-2">Current Expected Return</h6>
+                                    <p class="h4 mb-1 text-gray-700">{{ assignment.expected_return_date|date:"M d, Y" }}</p>
+                                    {% now "Y-m-d" as today %}
+                                    {% if assignment.expected_return_date|date:"Y-m-d" < today %}
+                                        <small class="text-danger">Overdue</small>
+                                    {% else %}
+                                        <small class="text-muted">In {{ assignment.expected_return_date|timeuntil }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-2">
+                                <div class="date-comparison">
+                                    <i class="fas fa-arrow-right text-warning"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-5">
+                                <div class="new-dates p-3 text-center">
+                                    <h6 class="font-weight-bold text-gray-800 mb-2">New Expected Return</h6>
+                                    <p class="h4 mb-1 text-success" id="new-date-display">Select new date</p>
+                                    <small class="text-muted" id="extension-days">-</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Extension Options -->
+                        <div class="extension-calculator mb-4">
+                            <h6 class="font-weight-bold text-gray-800 mb-3">
+                                <i class="fas fa-calculator"></i>
+                                Quick Extension Options
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-outline-info btn-sm btn-block quick-extend" data-days="7">
+                                        <i class="fas fa-plus"></i>
+                                        +7 Days
+                                    </button>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-outline-info btn-sm btn-block quick-extend" data-days="14">
+                                        <i class="fas fa-plus"></i>
+                                        +14 Days
+                                    </button>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-outline-info btn-sm btn-block quick-extend" data-days="30">
+                                        <i class="fas fa-plus"></i>
+                                        +30 Days
+                                    </button>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm btn-block" id="clear-extension">
+                                        <i class="fas fa-times"></i>
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- New Return Date -->
+                        <div class="form-group mb-4">
+                            <label for="new_return_date" class="font-weight-bold">
+                                <i class="fas fa-calendar"></i>
+                                New Return Date <span class="text-danger">*</span>
+                            </label>
+                            <input type="date" class="form-control" name="new_return_date" id="new_return_date" required
+                                   min="{{ assignment.expected_return_date|date:'Y-m-d' }}">
+                            <small class="form-text text-muted">Select the new expected return date (must be after current date)</small>
+                        </div>
+
+                        <!-- Extension Reason -->
+                        <div class="form-group mb-4">
+                            <label for="extension_reason" class="font-weight-bold">
+                                <i class="fas fa-comment-alt"></i>
+                                Extension Reason <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" name="extension_reason" id="extension_reason" rows="3" required
+                                      placeholder="Explain why this assignment needs to be extended..."></textarea>
+                            <small class="form-text text-muted">Provide a clear reason for the extension (required for audit purposes)</small>
+                        </div>
+
+                        <!-- Common Extension Reasons -->
+                        <div class="form-group mb-4">
+                            <label class="font-weight-bold text-gray-700">
+                                <i class="fas fa-list"></i>
+                                Quick Reason Templates
+                            </label>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm btn-block mb-2 reason-template"
+                                            data-reason="Project extended due to additional requirements">
+                                        Project Extension
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm btn-block mb-2 reason-template"
+                                            data-reason="Staff member on extended leave">
+                                        Staff Leave
+                                    </button>
+                                </div>
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm btn-block mb-2 reason-template"
+                                            data-reason="Delayed replacement device procurement">
+                                        Procurement Delay
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm btn-block mb-2 reason-template"
+                                            data-reason="Critical business need continuation">
+                                        Business Need
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Extension Summary -->
+                        <div class="alert alert-info extend-status mb-4">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-info-circle"></i>
+                                Extension Summary
+                            </h5>
+                            <p class="mb-2">
+                                <strong>Assignment:</strong> {{ assignment.assignment_id }}
+                            </p>
+                            <p class="mb-2">
+                                <strong>Device:</strong> {{ assignment.device.device_name }} ({{ assignment.device.device_id }})
+                            </p>
+                            <p class="mb-2">
+                                <strong>Assigned To:</strong>
+                                {% if assignment.assigned_to_staff %}
+                                    {{ assignment.assigned_to_staff.user.get_full_name }}
+                                {% elif assignment.assigned_to_department %}
+                                    {{ assignment.assigned_to_department.name }}
+                                {% elif assignment.assigned_to_location %}
+                                    {{ assignment.assigned_to_location.name }}
+                                {% endif %}
+                            </p>
+                            <p class="mb-0">
+                                <strong>Current Status:</strong> 
+                                {% now "Y-m-d" as today %}
+                                {% if assignment.expected_return_date|date:"Y-m-d" < today %}
+                                    <span class="text-danger">Overdue</span>
+                                {% else %}
+                                    <span class="text-success">Active</span>
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button type="submit" class="btn btn-warning btn-lg btn-block">
+                                    <i class="fas fa-calendar-plus"></i>
+                                    Extend Assignment
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                                   class="btn btn-secondary btn-lg btn-block">
+                                    <i class="fas fa-times"></i>
+                                    Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Actions -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                               class="btn btn-outline-primary btn-sm btn-block mb-2">
+                                <i class="fas fa-eye"></i>
+                                View Assignment
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" 
+                               class="btn btn-outline-info btn-sm btn-block mb-2">
+                                <i class="fas fa-laptop"></i>
+                                View Device
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:assignment_transfer' assignment.assignment_id %}" 
+                               class="btn btn-outline-warning btn-sm btn-block mb-2">
+                                <i class="fas fa-exchange-alt"></i>
+                                Transfer Assignment
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:assignment_list' %}" 
+                               class="btn btn-outline-secondary btn-sm btn-block mb-2">
+                                <i class="fas fa-list"></i>
+                                All Assignments
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    const currentReturnDate = new Date('{{ assignment.expected_return_date|date:"Y-m-d" }}');
+    
+    // Quick extend buttons
+    $('.quick-extend').click(function() {
+        const days = parseInt($(this).data('days'));
+        const newDate = new Date(currentReturnDate);
+        newDate.setDate(newDate.getDate() + days);
+        
+        const formattedDate = newDate.toISOString().split('T')[0];
+        $('#new_return_date').val(formattedDate);
+        updateDateDisplay();
+    });
+    
+    // Clear extension button
+    $('#clear-extension').click(function() {
+        $('#new_return_date').val('');
+        updateDateDisplay();
+    });
+    
+    // Date input change
+    $('#new_return_date').change(function() {
+        updateDateDisplay();
+    });
+    
+    // Reason template buttons
+    $('.reason-template').click(function() {
+        const reason = $(this).data('reason');
+        $('#extension_reason').val(reason);
+    });
+    
+    // Update date display
+    function updateDateDisplay() {
+        const newDateValue = $('#new_return_date').val();
+        
+        if (newDateValue) {
+            const newDate = new Date(newDateValue);
+            const timeDiff = newDate.getTime() - currentReturnDate.getTime();
+            const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            // Format date for display
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            const formattedDate = newDate.toLocaleDateString('en-US', options);
+            
+            $('#new-date-display').text(formattedDate);
+            $('#extension-days').text(`+${daysDiff} days extension`);
+            
+            // Update styling
+            $('.new-dates').addClass('selected');
+        } else {
+            $('#new-date-display').text('Select new date');
+            $('#extension-days').text('-');
+            $('.new-dates').removeClass('selected');
+        }
+    }
+    
+    // Form validation
+    $('#extend-form').on('submit', function(e) {
+        const newDate = $('#new_return_date').val();
+        const reason = $('#extension_reason').val().trim();
+        
+        // Check if new date is selected
+        if (!newDate) {
+            e.preventDefault();
+            alert('Please select a new return date.');
+            $('#new_return_date').focus();
+            return false;
+        }
+        
+        // Check if reason is provided
+        if (!reason) {
+            e.preventDefault();
+            alert('Please provide a reason for the extension.');
+            $('#extension_reason').focus();
+            return false;
+        }
+        
+        // Validate that new date is after current date
+        const currentDate = new Date('{{ assignment.expected_return_date|date:"Y-m-d" }}');
+        const selectedDate = new Date(newDate);
+        
+        if (selectedDate <= currentDate) {
+            e.preventDefault();
+            alert('New return date must be after the current expected return date.');
+            $('#new_return_date').focus();
+            return false;
+        }
+        
+        // Final confirmation
+        const daysDiff = Math.ceil((selectedDate.getTime() - currentDate.getTime()) / (1000 * 3600 * 24));
+        const confirmMsg = `Are you sure you want to extend this assignment by ${daysDiff} days?\n\nNew return date: ${selectedDate.toLocaleDateString()}`;
+        
+        if (!confirm(confirmMsg)) {
+            e.preventDefault();
+            return false;
+        }
+    });
+    
+    // Auto-resize textarea
+    $('#extension_reason').on('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+    
+    // Set minimum date for date input
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const minDate = tomorrow.toISOString().split('T')[0];
+    $('#new_return_date').attr('min', minDate);
+    
+    // Initialize date display
+    updateDateDisplay();
+});
+</script>
+{% endblock %}

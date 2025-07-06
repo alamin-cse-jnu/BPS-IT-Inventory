@@ -1,0 +1,548 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Transfer Assignment {{ assignment.assignment_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .transfer-status {
+        border: 2px solid #17a2b8;
+        border-radius: 8px;
+        background: rgba(23, 162, 184, 0.1);
+    }
+    .current-assignment {
+        border: 2px solid #6c757d;
+        border-radius: 8px;
+        background: rgba(108, 117, 125, 0.1);
+    }
+    .new-assignment {
+        border: 2px solid #28a745;
+        border-radius: 8px;
+        background: rgba(40, 167, 69, 0.1);
+    }
+    .assignment-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px;
+    }
+    .form-section {
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        background: white;
+    }
+    .transfer-arrow {
+        font-size: 2rem;
+        color: #17a2b8;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .assignment-target {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fc;
+        min-height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .assignment-target.selected {
+        border-color: #28a745;
+        background: rgba(40, 167, 69, 0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-exchange-alt text-info"></i>
+            Transfer Assignment
+        </h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_list' %}">Assignments</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}">{{ assignment.assignment_id }}</a></li>
+                <li class="breadcrumb-item active">Transfer</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Transfer Process Overview -->
+    <div class="card shadow mb-4">
+        <div class="card-header transfer-status py-3">
+            <h6 class="m-0 font-weight-bold text-white">
+                <i class="fas fa-info-circle"></i>
+                Assignment Transfer Process
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-clipboard-list fa-2x text-secondary"></i>
+                        <h6 class="mt-2">Current Assignment</h6>
+                    </div>
+                    <div class="current-assignment p-3">
+                        <strong>{{ assignment.assignment_id }}</strong>
+                        <br>
+                        {% if assignment.assigned_to_staff %}
+                            <i class="fas fa-user text-primary"></i>
+                            {{ assignment.assigned_to_staff.user.get_full_name }}
+                        {% elif assignment.assigned_to_department %}
+                            <i class="fas fa-building text-info"></i>
+                            {{ assignment.assigned_to_department.name }}
+                        {% elif assignment.assigned_to_location %}
+                            <i class="fas fa-map-marker-alt text-success"></i>
+                            {{ assignment.assigned_to_location.name }}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="transfer-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <p class="text-center text-muted">
+                        Will be transferred to new assignee
+                    </p>
+                </div>
+                
+                <div class="col-md-4 text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-user-plus fa-2x text-success"></i>
+                        <h6 class="mt-2">New Assignment</h6>
+                    </div>
+                    <div class="new-assignment p-3">
+                        <span id="transfer-preview" class="text-muted">
+                            Select new assignee below
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Device & Current Assignment Details -->
+        <div class="col-lg-4">
+            <!-- Device Information -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-laptop"></i>
+                        Device Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device ID:</label>
+                            <p class="mb-1">
+                                <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" class="text-primary">
+                                    {{ assignment.device.device_id }}
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device Name:</label>
+                            <p class="mb-1">{{ assignment.device.device_name }}</p>
+                        </div>
+                    </div>
+
+                    {% if assignment.device.asset_tag %}
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Asset Tag:</label>
+                            <p class="mb-1">{{ assignment.device.asset_tag }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment.device.device_type %}
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Device Type:</label>
+                            <p class="mb-1">{{ assignment.device.device_type.name }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Condition:</label>
+                            <p class="mb-0">
+                                <span class="badge badge-{% if assignment.device.condition == 'EXCELLENT' %}success{% elif assignment.device.condition == 'GOOD' %}info{% elif assignment.device.condition == 'FAIR' %}warning{% else %}danger{% endif %}">
+                                    {{ assignment.device.get_condition_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Assignment Details -->
+            <div class="card shadow mb-4">
+                <div class="card-header assignment-info py-3">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-clipboard-list"></i>
+                        Current Assignment
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment ID:</label>
+                            <p class="mb-1">{{ assignment.assignment_id }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Currently Assigned To:</label>
+                            <p class="mb-1">
+                                {% if assignment.assigned_to_staff %}
+                                    <i class="fas fa-user text-primary"></i>
+                                    {{ assignment.assigned_to_staff.user.get_full_name }}
+                                    <br><small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                                {% elif assignment.assigned_to_department %}
+                                    <i class="fas fa-building text-info"></i>
+                                    {{ assignment.assigned_to_department.name }}
+                                {% elif assignment.assigned_to_location %}
+                                    <i class="fas fa-map-marker-alt text-success"></i>
+                                    {{ assignment.assigned_to_location.name }}
+                                {% else %}
+                                    <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Type:</label>
+                            <p class="mb-1">
+                                <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% else %}info{% endif %}">
+                                    {{ assignment.get_assignment_type_display }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Assignment Date:</label>
+                            <p class="mb-1">{{ assignment.assignment_date|default:"-" }}</p>
+                        </div>
+                    </div>
+
+                    {% if assignment.expected_return_date %}
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="font-weight-bold text-gray-700">Expected Return:</label>
+                            <p class="mb-0">{{ assignment.expected_return_date }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Transfer Form -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-exchange-alt"></i>
+                        Transfer Assignment Form
+                    </h6>
+                </div>
+                <div class="card-body form-section">
+                    <form method="post" id="transfer-form">
+                        {% csrf_token %}
+                        
+                        <!-- Transfer Options -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h5 class="font-weight-bold text-gray-800 mb-3">
+                                    <i class="fas fa-users"></i>
+                                    Select New Assignee
+                                </h5>
+                                <p class="text-muted mb-4">Choose where to transfer this assignment. You can assign to a staff member, department, or location.</p>
+                            </div>
+                        </div>
+
+                        <!-- Staff Assignment -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.new_assigned_to_staff.id_for_label }}" class="font-weight-bold">
+                                <i class="fas fa-user text-primary"></i>
+                                Assign to Staff Member
+                            </label>
+                            {{ form.new_assigned_to_staff }}
+                            {% if form.new_assigned_to_staff.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.new_assigned_to_staff.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Select a staff member to assign this device to</small>
+                        </div>
+
+                        <!-- Department Assignment -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.new_assigned_to_department.id_for_label }}" class="font-weight-bold">
+                                <i class="fas fa-building text-info"></i>
+                                Assign to Department
+                            </label>
+                            {{ form.new_assigned_to_department }}
+                            {% if form.new_assigned_to_department.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.new_assigned_to_department.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Select a department to assign this device to</small>
+                        </div>
+
+                        <!-- Location Assignment -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.new_assigned_to_location.id_for_label }}" class="font-weight-bold">
+                                <i class="fas fa-map-marker-alt text-success"></i>
+                                Assign to Location
+                            </label>
+                            {{ form.new_assigned_to_location }}
+                            {% if form.new_assigned_to_location.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.new_assigned_to_location.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Select a location to assign this device to</small>
+                        </div>
+
+                        <!-- Transfer Reason -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.transfer_reason.id_for_label }}" class="font-weight-bold">
+                                <i class="fas fa-comment-alt"></i>
+                                Transfer Reason <span class="text-danger">*</span>
+                            </label>
+                            {{ form.transfer_reason }}
+                            {% if form.transfer_reason.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.transfer_reason.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Explain why this assignment is being transferred</small>
+                        </div>
+
+                        <!-- Transfer Conditions -->
+                        <div class="form-group mb-4">
+                            <label for="{{ form.conditions.id_for_label }}" class="font-weight-bold">
+                                <i class="fas fa-list-ul"></i>
+                                Transfer Conditions & Notes
+                            </label>
+                            {{ form.conditions }}
+                            {% if form.conditions.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.conditions.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">Any special conditions, requirements, or notes for the transfer</small>
+                        </div>
+
+                        <!-- Transfer Summary -->
+                        <div class="alert alert-info transfer-status mb-4">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-info-circle"></i>
+                                Transfer Summary
+                            </h5>
+                            <p class="mb-2">
+                                <strong>Device:</strong> {{ assignment.device.device_name }} ({{ assignment.device.device_id }})
+                            </p>
+                            <p class="mb-2">
+                                <strong>Current Assignment:</strong> {{ assignment.assignment_id }}
+                            </p>
+                            <p class="mb-2">
+                                <strong>Transferring from:</strong>
+                                {% if assignment.assigned_to_staff %}
+                                    {{ assignment.assigned_to_staff.user.get_full_name }}
+                                {% elif assignment.assigned_to_department %}
+                                    {{ assignment.assigned_to_department.name }}
+                                {% elif assignment.assigned_to_location %}
+                                    {{ assignment.assigned_to_location.name }}
+                                {% endif %}
+                            </p>
+                            <p class="mb-0">
+                                <strong>After transfer:</strong> Current assignment will be closed and a new assignment will be created with the selected assignee.
+                            </p>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button type="submit" class="btn btn-info btn-lg btn-block">
+                                    <i class="fas fa-exchange-alt"></i>
+                                    Confirm Transfer
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                                   class="btn btn-secondary btn-lg btn-block">
+                                    <i class="fas fa-times"></i>
+                                    Cancel
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Transfer Guidelines -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Transfer Guidelines
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-gray-800">Important Notes:</h6>
+                            <ul class="small mb-3">
+                                <li>Select only ONE assignment target (staff, department, OR location)</li>
+                                <li>Current assignment will be automatically closed</li>
+                                <li>New assignment ID will be generated</li>
+                                <li>Assignment type and return date will be preserved</li>
+                                <li>Transfer reason is required for audit purposes</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="font-weight-bold text-gray-800">Quick Actions:</h6>
+                            <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
+                               class="btn btn-outline-primary btn-sm btn-block mb-2">
+                                <i class="fas fa-eye"></i>
+                                View Current Assignment
+                            </a>
+                            <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" 
+                               class="btn btn-outline-info btn-sm btn-block mb-2">
+                                <i class="fas fa-laptop"></i>
+                                View Device Details
+                            </a>
+                            <a href="{% url 'inventory:assignment_list' %}" 
+                               class="btn btn-outline-secondary btn-sm btn-block">
+                                <i class="fas fa-list"></i>
+                                All Assignments
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Update transfer preview when selections change
+    function updateTransferPreview() {
+        const staff = $('#id_new_assigned_to_staff option:selected').text();
+        const department = $('#id_new_assigned_to_department option:selected').text();
+        const location = $('#id_new_assigned_to_location option:selected').text();
+        
+        let preview = 'Select new assignee below';
+        let icon = '';
+        
+        if (staff && staff !== 'Select Staff') {
+            preview = staff;
+            icon = '<i class="fas fa-user text-primary"></i> ';
+        } else if (department && department !== 'Select Department') {
+            preview = department;
+            icon = '<i class="fas fa-building text-info"></i> ';
+        } else if (location && location !== 'Select Location') {
+            preview = location;
+            icon = '<i class="fas fa-map-marker-alt text-success"></i> ';
+        }
+        
+        $('#transfer-preview').html(icon + preview);
+        
+        // Update new assignment box styling
+        if (preview !== 'Select new assignee below') {
+            $('.new-assignment').addClass('selected');
+        } else {
+            $('.new-assignment').removeClass('selected');
+        }
+    }
+
+    // Bind change events
+    $('#id_new_assigned_to_staff, #id_new_assigned_to_department, #id_new_assigned_to_location').change(function() {
+        // Clear other selections when one is selected
+        if (this.id === 'id_new_assigned_to_staff' && this.value) {
+            $('#id_new_assigned_to_department, #id_new_assigned_to_location').val('');
+        } else if (this.id === 'id_new_assigned_to_department' && this.value) {
+            $('#id_new_assigned_to_staff, #id_new_assigned_to_location').val('');
+        } else if (this.id === 'id_new_assigned_to_location' && this.value) {
+            $('#id_new_assigned_to_staff, #id_new_assigned_to_department').val('');
+        }
+        
+        updateTransferPreview();
+    });
+
+    // Form validation
+    $('#transfer-form').on('submit', function(e) {
+        const staff = $('#id_new_assigned_to_staff').val();
+        const department = $('#id_new_assigned_to_department').val();
+        const location = $('#id_new_assigned_to_location').val();
+        const reason = $('#id_transfer_reason').val().trim();
+        
+        // Check if at least one assignee is selected
+        if (!staff && !department && !location) {
+            e.preventDefault();
+            alert('Please select a new assignee (staff, department, or location).');
+            return false;
+        }
+        
+        // Check if transfer reason is provided
+        if (!reason) {
+            e.preventDefault();
+            alert('Please provide a reason for the transfer.');
+            $('#id_transfer_reason').focus();
+            return false;
+        }
+        
+        // Final confirmation
+        let assigneeName = '';
+        if (staff) {
+            assigneeName = $('#id_new_assigned_to_staff option:selected').text();
+        } else if (department) {
+            assigneeName = $('#id_new_assigned_to_department option:selected').text();
+        } else if (location) {
+            assigneeName = $('#id_new_assigned_to_location option:selected').text();
+        }
+        
+        const confirmMsg = `Are you sure you want to transfer this assignment to "${assigneeName}"?\n\nThis will close the current assignment and create a new one.`;
+        
+        if (!confirm(confirmMsg)) {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    // Auto-resize textareas
+    $('textarea').on('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Add form control classes if not present
+    $('input, select, textarea').addClass('form-control');
+    
+    // Initialize transfer preview
+    updateTransferPreview();
+});
+</script>
+{% endblock %}
