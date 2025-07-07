@@ -2620,11 +2620,11 @@ def maintenance_list(request):
             }
         }
         
-        return render(request, 'inventory/maintenance/list.html', context)
+        return render(request, 'inventory/maintenance/maintenance_list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance list: {str(e)}")
-        return render(request, 'inventory/maintenance/list.html', {})
+        return render(request, 'inventory/maintenance/maintenance_list.html', {})
 
 @login_required
 def maintenance_create(request):
@@ -2665,7 +2665,7 @@ def maintenance_create(request):
             'vendors': Vendor.objects.filter(is_active=True),
         }
         
-        return render(request, 'inventory/maintenance/create.html', context)
+        return render(request, 'inventory/maintenance/maintenance_create.html', context)
         
     except Exception as e:
         messages.error(request, f"Error creating maintenance schedule: {str(e)}")
@@ -2693,7 +2693,7 @@ def maintenance_detail(request, maintenance_id):
             'can_edit': request.user.has_perm('inventory.change_maintenanceschedule'),
         }
         
-        return render(request, 'inventory/maintenance/detail.html', context)
+        return render(request, 'inventory/maintenance/maintenance_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance details: {str(e)}")
@@ -2752,7 +2752,7 @@ def maintenance_edit(request, maintenance_id):
             'title': 'Edit Maintenance Schedule',
         }
         
-        return render(request, 'inventory/maintenance/edit.html', context)
+        return render(request, 'inventory/maintenance/maintenance_edit.html', context)
         
     except Exception as e:
         messages.error(request, f"Error editing maintenance schedule: {str(e)}")
@@ -2868,11 +2868,11 @@ def maintenance_schedule(request):
             'status_choices': MaintenanceSchedule.STATUS_CHOICES,
         }
         
-        return render(request, 'inventory/maintenance/schedule.html', context)
+        return render(request, 'inventory/maintenance/maintenance_schedule.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance schedule: {str(e)}")
-        return render(request, 'inventory/maintenance/schedule.html', {})
+        return render(request, 'inventory/maintenance/maintenance_schedule.html', {})
 
 # ================================
 # DEVICE TYPE MANAGEMENT VIEWS
@@ -4752,6 +4752,157 @@ def device_qr_code(request, device_id):
 
 @login_required
 @require_http_methods(["GET"])
+def ajax_staff_search(request):
+    """AJAX: Search staff members for assignments and forms"""
+    try:
+        query = request.GET.get('q', '').strip()
+        department_id = request.GET.get('department_id')
+        limit = int(request.GET.get('limit', 20))
+        
+        if not query and not department_id:
+            return JsonResponse({'staff': []})
+        
+        # Start with active staff
+        staff_members = Staff.objects.filter(is_active=True).select_related(
+            'user', 'department'
+        )
+        
+        # Apply text search if query provided
+        if query:
+            staff_members = staff_members.filter(
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__username__icontains=query) |
+                Q(employee_id__icontains=query) |
+                Q(department__name__icontains=query) |
+                Q(user__email__icontains=query)
+            )
+        
+        # Filter by department if specified
+        if department_id:
+            staff_members = staff_members.filter(department_id=department_id)
+        
+        # Limit results
+        staff_members = staff_members[:limit]
+        
+        # Prepare response data
+        staff_data = []
+        for staff in staff_members:
+            staff_data.append({
+                'id': staff.id,
+                'employee_id': staff.employee_id,
+                'full_name': staff.get_full_name(),
+                'first_name': staff.user.first_name,
+                'last_name': staff.user.last_name,
+                'username': staff.user.username,
+                'email': staff.user.email,
+                'department': {
+                    'id': staff.department.id if staff.department else None,
+                    'name': staff.department.name if staff.department else None
+                },
+                'display_text': f"{staff.get_full_name()} ({staff.employee_id}) - {staff.department.name if staff.department else 'No Department'}"
+            })
+        
+        return JsonResponse({
+            'staff': staff_data,
+            'count': len(staff_data),
+            'query': query
+        })
+        
+    except ValueError as e:
+        return JsonResponse({'error': 'Invalid limit parameter'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_http_methods(["GET"])
+def ajax_location_search(request):
+    """AJAX: Search locations for assignments and forms"""
+    try:
+        query = request.GET.get('q', '').strip()
+        room_id = request.GET.get('room_id')
+        building_id = request.GET.get('building_id')
+        department_id = request.GET.get('department_id')
+        limit = int(request.GET.get('limit', 20))
+        
+        if not query and not room_id and not building_id and not department_id:
+            return JsonResponse({'locations': []})
+        
+        # Start with active locations
+        locations = Location.objects.filter(is_active=True).select_related(
+            'room', 'room__building', 'room__department'
+        )
+        
+        # Apply text search if query provided
+        if query:
+            locations = locations.filter(
+                Q(name__icontains=query) |
+                Q(description__icontains=query) |
+                Q(room__name__icontains=query) |
+                Q(room__building__name__icontains=query) |
+                Q(room__department__name__icontains=query)
+            )
+        
+        # Filter by room if specified
+        if room_id:
+            locations = locations.filter(room_id=room_id)
+        
+        # Filter by building if specified
+        if building_id:
+            locations = locations.filter(room__building_id=building_id)
+        
+        # Filter by department if specified
+        if department_id:
+            locations = locations.filter(room__department_id=department_id)
+        
+        # Limit results
+        locations = locations[:limit]
+        
+        # Prepare response data
+        location_data = []
+        for location in locations:
+            # Generate display text
+            display_parts = [location.name]
+            if location.room:
+                display_parts.append(location.room.name)
+                if location.room.building:
+                    display_parts.append(location.room.building.name)
+                if location.room.department:
+                    display_parts.append(location.room.department.name)
+            display_text = " - ".join(display_parts)
+            
+            location_data.append({
+                'id': location.id,
+                'name': location.name,
+                'description': location.description,
+                'room': {
+                    'id': location.room.id if location.room else None,
+                    'name': location.room.name if location.room else None,
+                    'building': {
+                        'id': location.room.building.id if location.room and location.room.building else None,
+                        'name': location.room.building.name if location.room and location.room.building else None
+                    } if location.room else None,
+                    'department': {
+                        'id': location.room.department.id if location.room and location.room.department else None,
+                        'name': location.room.department.name if location.room and location.room.department else None
+                    } if location.room else None
+                } if location.room else None,
+                'display_text': display_text
+            })
+        
+        return JsonResponse({
+            'locations': location_data,
+            'count': len(location_data),
+            'query': query
+        })
+        
+    except ValueError as e:
+        return JsonResponse({'error': 'Invalid limit parameter'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    
+@login_required
+@require_http_methods(["GET"])
 def ajax_get_subcategories(request):
     """AJAX: Get subcategories for category"""
     try:
@@ -4831,7 +4982,7 @@ def ajax_get_locations_by_room(request):
 @login_required
 @require_http_methods(["POST"])
 def ajax_assignment_quick_actions(request, assignment_id):
-    """AJAX: Assignment quick actions"""
+    """AJAX: Assignment quick actions (return, extend, transfer)"""
     try:
         assignment = get_object_or_404(Assignment, assignment_id=assignment_id)
         action = request.POST.get('action')
@@ -4840,9 +4991,60 @@ def ajax_assignment_quick_actions(request, assignment_id):
             assignment.is_active = False
             assignment.actual_return_date = timezone.now().date()
             assignment.save()
-            return JsonResponse({'success': True, 'message': 'Device returned successfully'})
+            
+            # Update device status to available
+            if assignment.device:
+                assignment.device.status = 'available'
+                assignment.device.save()
+            
+            return JsonResponse({
+                'success': True, 
+                'message': 'Device returned successfully',
+                'action': 'return',
+                'assignment_id': assignment_id
+            })
+        
+        elif action == 'extend':
+            days_to_extend = int(request.POST.get('days', 30))
+            if assignment.expected_return_date:
+                assignment.expected_return_date = assignment.expected_return_date + timedelta(days=days_to_extend)
+            else:
+                assignment.expected_return_date = timezone.now().date() + timedelta(days=days_to_extend)
+            assignment.save()
+            
+            return JsonResponse({
+                'success': True, 
+                'message': f'Assignment extended by {days_to_extend} days',
+                'action': 'extend',
+                'new_return_date': assignment.expected_return_date.isoformat(),
+                'assignment_id': assignment_id
+            })
+        
+        elif action == 'transfer':
+            new_staff_id = request.POST.get('new_staff_id')
+            new_department_id = request.POST.get('new_department_id')
+            new_location_id = request.POST.get('new_location_id')
+            
+            if new_staff_id:
+                assignment.assigned_to_staff_id = new_staff_id
+            if new_department_id:
+                assignment.assigned_to_department_id = new_department_id
+            if new_location_id:
+                assignment.assigned_to_location_id = new_location_id
+            
+            assignment.save()
+            
+            return JsonResponse({
+                'success': True, 
+                'message': 'Assignment transferred successfully',
+                'action': 'transfer',
+                'assignment_id': assignment_id
+            })
         
         return JsonResponse({'error': 'Invalid action'}, status=400)
+
+    except ValueError as e:
+        return JsonResponse({'error': 'Invalid input data'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
     

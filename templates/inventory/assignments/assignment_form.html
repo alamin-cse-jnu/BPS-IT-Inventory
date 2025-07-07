@@ -1,0 +1,821 @@
+<!-- File location: D:\Development\projects\BPS-IT-Inventory\templates\inventory\assignments\assignment_form.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - BPS Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: #f8f9fc;
+        border: 1px solid #e3e6f0;
+        border-radius: 0.35rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .form-section h5 {
+        color: #5a5c69;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e3e6f0;
+    }
+    .device-preview {
+        background: white;
+        border: 2px dashed #e3e6f0;
+        border-radius: 0.35rem;
+        padding: 1rem;
+        text-align: center;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+    .device-preview.selected {
+        border-color: #4e73df;
+        background: #f8f9fd;
+    }
+    .assignee-preview {
+        background: white;
+        border: 1px solid #e3e6f0;
+        border-radius: 0.35rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        display: none;
+    }
+    .assignee-preview.active {
+        display: block;
+        animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .assignment-type-info {
+        background: #e7f3ff;
+        border: 1px solid #bee5eb;
+        border-radius: 0.25rem;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .required-field {
+        color: #e74a3b;
+    }
+    .form-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    .btn-preview {
+        border: 2px dashed #6c757d;
+        background: transparent;
+        color: #6c757d;
+        transition: all 0.3s ease;
+    }
+    .btn-preview:hover {
+        border-color: #4e73df;
+        color: #4e73df;
+        background: #f8f9fd;
+    }
+    .date-warning {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        color: #856404;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-{% if form.instance.pk %}edit{% else %}plus{% endif %} text-primary"></i> 
+            {{ title }}
+        </h1>
+        <div class="btn-group">
+            <a href="{% url 'inventory:assignment_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+            {% if form.instance.pk %}
+                <a href="{% url 'inventory:assignment_detail' form.instance.assignment_id %}" class="btn btn-info">
+                    <i class="fas fa-eye"></i> View Details
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Assignment Form -->
+    <form method="post" id="assignmentForm" novalidate>
+        {% csrf_token %}
+        
+        <div class="row">
+            <!-- Main Form -->
+            <div class="col-lg-8">
+                <!-- Device Selection -->
+                <div class="form-section">
+                    <h5><i class="fas fa-laptop text-primary"></i> Device Selection</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="{{ form.device.id_for_label }}" class="font-weight-bold">
+                                    Device <span class="required-field">*</span>
+                                </label>
+                                {{ form.device }}
+                                {% if form.device.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.device.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-help">
+                                    Select the device to be assigned. Only available devices are shown.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="device-preview" id="devicePreview">
+                                <i class="fas fa-laptop fa-2x text-gray-300 mb-2"></i>
+                                <p class="text-muted mb-0">Select a device to see details</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Details -->
+                <div class="form-section">
+                    <h5><i class="fas fa-cog text-success"></i> Assignment Details</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.assignment_type.id_for_label }}" class="font-weight-bold">
+                                    Assignment Type <span class="required-field">*</span>
+                                </label>
+                                {{ form.assignment_type }}
+                                {% if form.assignment_type.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assignment_type.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div id="assignmentTypeInfo" class="assignment-type-info" style="display: none;">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span id="assignmentTypeText"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.start_date.id_for_label }}" class="font-weight-bold">
+                                    Start Date <span class="required-field">*</span>
+                                </label>
+                                {{ form.start_date }}
+                                {% if form.start_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.start_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.expected_return_date.id_for_label }}" class="font-weight-bold">
+                                    Expected Return Date
+                                </label>
+                                {{ form.expected_return_date }}
+                                {% if form.expected_return_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.expected_return_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-help">
+                                    Required for temporary assignments, optional for permanent ones.
+                                </div>
+                                <div id="dateWarning" class="date-warning" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Return date should be after start date.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox mt-4">
+                                    {{ form.is_temporary }}
+                                    <label class="custom-control-label font-weight-bold" for="{{ form.is_temporary.id_for_label }}">
+                                        This is a temporary assignment
+                                    </label>
+                                </div>
+                                <div class="form-help">
+                                    Check if this assignment has a specific return date.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="{{ form.purpose.id_for_label }}" class="font-weight-bold">
+                                    Assignment Purpose
+                                </label>
+                                {{ form.purpose }}
+                                {% if form.purpose.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.purpose.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-help">
+                                    Brief description of why this device is being assigned.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Target -->
+                <div class="form-section">
+                    <h5><i class="fas fa-users text-info"></i> Assignment Target</h5>
+                    <p class="text-muted mb-3">Choose who or where this device will be assigned. Select only one option.</p>
+                    
+                    <!-- Assignment Type Tabs -->
+                    <ul class="nav nav-tabs mb-3" id="assignmentTabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="staff-tab" data-toggle="tab" href="#staff-panel" 
+                               role="tab" aria-controls="staff-panel" aria-selected="true">
+                                <i class="fas fa-user"></i> Staff Member
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="department-tab" data-toggle="tab" href="#department-panel" 
+                               role="tab" aria-controls="department-panel" aria-selected="false">
+                                <i class="fas fa-building"></i> Department
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="location-tab" data-toggle="tab" href="#location-panel" 
+                               role="tab" aria-controls="location-panel" aria-selected="false">
+                                <i class="fas fa-map-marker-alt"></i> Location
+                            </a>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="assignmentTabContent">
+                        <!-- Staff Assignment -->
+                        <div class="tab-pane fade show active" id="staff-panel" role="tabpanel" aria-labelledby="staff-tab">
+                            <div class="form-group">
+                                <label for="{{ form.assigned_to_staff.id_for_label }}" class="font-weight-bold">
+                                    Select Staff Member
+                                </label>
+                                {{ form.assigned_to_staff }}
+                                {% if form.assigned_to_staff.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assigned_to_staff.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-help">
+                                    Assign device to a specific staff member.
+                                </div>
+                            </div>
+                            <div class="assignee-preview" id="staffPreview">
+                                <div class="d-flex align-items-center">
+                                    <img src="{% static 'img/avatars/default-avatar.jpg' %}" 
+                                         class="rounded-circle mr-3" width="50" height="50" alt="Avatar">
+                                    <div>
+                                        <h6 class="mb-1 font-weight-bold" id="staffName">Staff Name</h6>
+                                        <p class="text-muted mb-0" id="staffDetails">Department • Employee ID</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Department Assignment -->
+                        <div class="tab-pane fade" id="department-panel" role="tabpanel" aria-labelledby="department-tab">
+                            <div class="form-group">
+                                <label for="{{ form.assigned_to_department.id_for_label }}" class="font-weight-bold">
+                                    Select Department
+                                </label>
+                                {{ form.assigned_to_department }}
+                                {% if form.assigned_to_department.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assigned_to_department.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-help">
+                                    Assign device to a department pool for shared use.
+                                </div>
+                            </div>
+                            <div class="assignee-preview" id="departmentPreview">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-building fa-2x text-info mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-1 font-weight-bold" id="departmentName">Department Name</h6>
+                                        <p class="text-muted mb-0">Department Pool Assignment</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Location Assignment -->
+                        <div class="tab-pane fade" id="location-panel" role="tabpanel" aria-labelledby="location-tab">
+                            <div class="form-group">
+                                <label for="{{ form.assigned_to_location.id_for_label }}" class="font-weight-bold">
+                                    Select Location
+                                </label>
+                                {{ form.assigned_to_location }}
+                                {% if form.assigned_to_location.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assigned_to_location.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-help">
+                                    Assign device to a specific location or area.
+                                </div>
+                            </div>
+                            <div class="assignee-preview" id="locationPreview">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-map-marker-alt fa-2x text-success mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-1 font-weight-bold" id="locationName">Location Name</h6>
+                                        <p class="text-muted mb-0">Location Assignment</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="form-section">
+                    <h5><i class="fas fa-sticky-note text-warning"></i> Additional Information</h5>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.notes.id_for_label }}" class="font-weight-bold">
+                            Assignment Notes
+                        </label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.notes.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-help">
+                            Any additional notes or special instructions for this assignment.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="form-section">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> 
+                                {% if form.instance.pk %}Update Assignment{% else %}Create Assignment{% endif %}
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-lg ml-2" onclick="window.history.back();">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            {% if not form.instance.pk %}
+                                <button type="button" class="btn btn-outline-info btn-preview" id="previewBtn">
+                                    <i class="fas fa-eye"></i> Preview Assignment
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Assignment Guidelines -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-info-circle"></i> Assignment Guidelines
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 class="font-weight-bold text-success">
+                                <i class="fas fa-check-circle"></i> Permanent Assignments
+                            </h6>
+                            <p class="text-sm text-muted">
+                                Long-term assignments with no expected return date. Ideal for personal laptops, 
+                                office equipment, and role-specific devices.
+                            </p>
+                        </div>
+                        <div class="mb-3">
+                            <h6 class="font-weight-bold text-warning">
+                                <i class="fas fa-clock"></i> Temporary Assignments
+                            </h6>
+                            <p class="text-sm text-muted">
+                                Short-term assignments with a specific return date. Perfect for project work, 
+                                training sessions, or temporary replacements.
+                            </p>
+                        </div>
+                        <div class="mb-3">
+                            <h6 class="font-weight-bold text-info">
+                                <i class="fas fa-project-diagram"></i> Project Assignments
+                            </h6>
+                            <p class="text-sm text-muted">
+                                Devices assigned for specific projects with defined timelines and deliverables.
+                            </p>
+                        </div>
+                        <div>
+                            <h6 class="font-weight-bold text-secondary">
+                                <i class="fas fa-layer-group"></i> Pool Assignments
+                            </h6>
+                            <p class="text-sm text-muted">
+                                Shared devices available to multiple users within a department or location.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Checklist -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-tasks"></i> Assignment Checklist
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="custom-control custom-checkbox mb-2">
+                            <input type="checkbox" class="custom-control-input" id="check1">
+                            <label class="custom-control-label text-sm" for="check1">
+                                Device is available and functional
+                            </label>
+                        </div>
+                        <div class="custom-control custom-checkbox mb-2">
+                            <input type="checkbox" class="custom-control-input" id="check2">
+                            <label class="custom-control-label text-sm" for="check2">
+                                Assignee contact information verified
+                            </label>
+                        </div>
+                        <div class="custom-control custom-checkbox mb-2">
+                            <input type="checkbox" class="custom-control-input" id="check3">
+                            <label class="custom-control-label text-sm" for="check3">
+                                Assignment purpose documented
+                            </label>
+                        </div>
+                        <div class="custom-control custom-checkbox mb-2">
+                            <input type="checkbox" class="custom-control-input" id="check4">
+                            <label class="custom-control-label text-sm" for="check4">
+                                Return date set (if temporary)
+                            </label>
+                        </div>
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="check5">
+                            <label class="custom-control-label text-sm" for="check5">
+                                All required fields completed
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                {% if form.instance.pk %}
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-bolt"></i> Quick Actions
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <a href="{% url 'inventory:assignment_detail' form.instance.assignment_id %}" 
+                           class="btn btn-outline-primary btn-sm btn-block mb-2">
+                            <i class="fas fa-eye"></i> View Assignment Details
+                        </a>
+                        {% if form.instance.is_active %}
+                            <a href="{% url 'inventory:assignment_transfer' form.instance.assignment_id %}" 
+                               class="btn btn-outline-warning btn-sm btn-block mb-2">
+                                <i class="fas fa-exchange-alt"></i> Transfer Assignment
+                            </a>
+                            {% if form.instance.is_temporary %}
+                                <a href="{% url 'inventory:assignment_return' form.instance.assignment_id %}" 
+                                   class="btn btn-outline-success btn-sm btn-block">
+                                    <i class="fas fa-undo"></i> Return Device
+                                </a>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Assignment type information
+    const assignmentTypeInfo = {
+        'PERMANENT': 'Long-term assignment with no expected return date. Device will be permanently assigned to the selected target.',
+        'TEMPORARY': 'Short-term assignment with a specific return date. Return date is required for temporary assignments.',
+        'PROJECT': 'Project-based assignment for specific work or initiatives. Usually has a defined timeline.',
+        'POOL': 'Shared assignment where device is available to multiple users within a department or location.'
+    };
+
+    // Device selection change handler
+    $('#id_device').change(function() {
+        const deviceId = $(this).val();
+        const deviceText = $(this).find('option:selected').text();
+        
+        if (deviceId) {
+            $('#devicePreview').addClass('selected').html(`
+                <i class="fas fa-laptop fa-2x text-primary mb-2"></i>
+                <h6 class="font-weight-bold">${deviceText}</h6>
+                <p class="text-muted mb-0">Selected for assignment</p>
+            `);
+        } else {
+            $('#devicePreview').removeClass('selected').html(`
+                <i class="fas fa-laptop fa-2x text-gray-300 mb-2"></i>
+                <p class="text-muted mb-0">Select a device to see details</p>
+            `);
+        }
+    });
+
+    // Assignment type change handler
+    $('#id_assignment_type').change(function() {
+        const type = $(this).val();
+        const info = assignmentTypeInfo[type];
+        
+        if (info) {
+            $('#assignmentTypeInfo').show();
+            $('#assignmentTypeText').text(info);
+            
+            // Handle return date requirement
+            if (type === 'TEMPORARY') {
+                $('#id_expected_return_date').attr('required', true);
+                $('#id_is_temporary').prop('checked', true);
+            } else {
+                $('#id_expected_return_date').removeAttr('required');
+                if (type === 'PERMANENT') {
+                    $('#id_is_temporary').prop('checked', false);
+                }
+            }
+        } else {
+            $('#assignmentTypeInfo').hide();
+        }
+    });
+
+    // Date validation
+    function validateDates() {
+        const startDate = new Date($('#id_start_date').val());
+        const returnDate = new Date($('#id_expected_return_date').val());
+        
+        if (startDate && returnDate && returnDate <= startDate) {
+            $('#dateWarning').show();
+            return false;
+        } else {
+            $('#dateWarning').hide();
+            return true;
+        }
+    }
+
+    $('#id_start_date, #id_expected_return_date').change(validateDates);
+
+    // Tab change handlers for assignment targets
+    $('#assignmentTabs a').on('click', function(e) {
+        e.preventDefault();
+        $(this).tab('show');
+        
+        // Clear other assignment targets
+        const tabId = $(this).attr('href');
+        if (tabId === '#staff-panel') {
+            $('#id_assigned_to_department').val('');
+            $('#id_assigned_to_location').val('');
+        } else if (tabId === '#department-panel') {
+            $('#id_assigned_to_staff').val('');
+            $('#id_assigned_to_location').val('');
+        } else if (tabId === '#location-panel') {
+            $('#id_assigned_to_staff').val('');
+            $('#id_assigned_to_department').val('');
+        }
+    });
+
+    // Staff selection change
+    $('#id_assigned_to_staff').change(function() {
+        const staffText = $(this).find('option:selected').text();
+        if ($(this).val()) {
+            $('#staffName').text(staffText);
+            $('#staffDetails').text('Staff Member • ' + $(this).val());
+            $('#staffPreview').addClass('active');
+        } else {
+            $('#staffPreview').removeClass('active');
+        }
+    });
+
+    // Department selection change
+    $('#id_assigned_to_department').change(function() {
+        const deptText = $(this).find('option:selected').text();
+        if ($(this).val()) {
+            $('#departmentName').text(deptText);
+            $('#departmentPreview').addClass('active');
+        } else {
+            $('#departmentPreview').removeClass('active');
+        }
+    });
+
+    // Location selection change
+    $('#id_assigned_to_location').change(function() {
+        const locationText = $(this).find('option:selected').text();
+        if ($(this).val()) {
+            $('#locationName').text(locationText);
+            $('#locationPreview').addClass('active');
+        } else {
+            $('#locationPreview').removeClass('active');
+        }
+    });
+
+    // Form validation
+    $('#assignmentForm').on('submit', function(e) {
+        let isValid = true;
+        const assignmentTargets = [
+            $('#id_assigned_to_staff').val(),
+            $('#id_assigned_to_department').val(),
+            $('#id_assigned_to_location').val()
+        ];
+        
+        // Check if at least one assignment target is selected
+        if (!assignmentTargets.some(target => target)) {
+            alert('Please select at least one assignment target (Staff, Department, or Location).');
+            isValid = false;
+        }
+        
+        // Validate dates
+        if (!validateDates()) {
+            isValid = false;
+        }
+        
+        // Check if temporary assignment has return date
+        if ($('#id_assignment_type').val() === 'TEMPORARY' && !$('#id_expected_return_date').val()) {
+            alert('Temporary assignments require an expected return date.');
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+        }
+    });
+
+    // Preview functionality
+    $('#previewBtn').click(function() {
+        const formData = {
+            device: $('#id_device option:selected').text(),
+            assignmentType: $('#id_assignment_type option:selected').text(),
+            startDate: $('#id_start_date').val(),
+            returnDate: $('#id_expected_return_date').val(),
+            purpose: $('#id_purpose').val(),
+            notes: $('#id_notes').val(),
+            assignedTo: getAssignedTo()
+        };
+        
+        showAssignmentPreview(formData);
+    });
+
+    function getAssignedTo() {
+        if ($('#id_assigned_to_staff').val()) {
+            return 'Staff: ' + $('#id_assigned_to_staff option:selected').text();
+        } else if ($('#id_assigned_to_department').val()) {
+            return 'Department: ' + $('#id_assigned_to_department option:selected').text();
+        } else if ($('#id_assigned_to_location').val()) {
+            return 'Location: ' + $('#id_assigned_to_location option:selected').text();
+        }
+        return 'Not specified';
+    }
+
+    function showAssignmentPreview(data) {
+        const previewHtml = `
+            <div class="modal fade" id="assignmentPreviewModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Assignment Preview</h5>
+                            <button type="button" class="close" data-dismiss="modal">
+                                <span>&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Device Information</h6>
+                                    <p><strong>Device:</strong> ${data.device || 'Not selected'}</p>
+                                    <p><strong>Assignment Type:</strong> ${data.assignmentType || 'Not selected'}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Assignment Details</h6>
+                                    <p><strong>Assigned To:</strong> ${data.assignedTo}</p>
+                                    <p><strong>Start Date:</strong> ${data.startDate || 'Not set'}</p>
+                                    ${data.returnDate ? `<p><strong>Return Date:</strong> ${data.returnDate}</p>` : ''}
+                                </div>
+                            </div>
+                            ${data.purpose ? `<div class="mt-3"><h6>Purpose</h6><p>${data.purpose}</p></div>` : ''}
+                            ${data.notes ? `<div class="mt-3"><h6>Notes</h6><p>${data.notes}</p></div>` : ''}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" onclick="$('#assignmentForm').submit();">
+                                <i class="fas fa-save"></i> Create Assignment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        $('#assignmentPreviewModal').remove();
+        
+        // Add and show modal
+        $('body').append(previewHtml);
+        $('#assignmentPreviewModal').modal('show');
+    }
+
+    // Initialize form
+    $('#id_assignment_type').trigger('change');
+    $('#id_device').trigger('change');
+    
+    // Set today as default start date if creating new assignment
+    {% if not form.instance.pk %}
+        if (!$('#id_start_date').val()) {
+            $('#id_start_date').val(new Date().toISOString().split('T')[0]);
+        }
+    {% endif %}
+
+    // Auto-check temporary assignment when return date is set
+    $('#id_expected_return_date').change(function() {
+        if ($(this).val() && $('#id_assignment_type').val() !== 'PERMANENT') {
+            $('#id_is_temporary').prop('checked', true);
+        }
+    });
+
+    // Clear assignment targets when switching tabs
+    $('.nav-link').on('shown.bs.tab', function(e) {
+        const target = $(e.target).attr('href');
+        $('.assignee-preview').removeClass('active');
+        
+        if (target === '#staff-panel') {
+            $('#id_assigned_to_department').val('');
+            $('#id_assigned_to_location').val('');
+            $('#departmentPreview, #locationPreview').removeClass('active');
+        } else if (target === '#department-panel') {
+            $('#id_assigned_to_staff').val('');
+            $('#id_assigned_to_location').val('');
+            $('#staffPreview, #locationPreview').removeClass('active');
+        } else if (target === '#location-panel') {
+            $('#id_assigned_to_staff').val('');
+            $('#id_assigned_to_department').val('');
+            $('#staffPreview, #departmentPreview').removeClass('active');
+        }
+    });
+
+    // Form field validation styling
+    $('input, select, textarea').on('blur', function() {
+        const $field = $(this);
+        const isRequired = $field.prop('required') || $field.hasClass('required');
+        
+        if (isRequired && !$field.val()) {
+            $field.addClass('is-invalid');
+        } else {
+            $field.removeClass('is-invalid').addClass('is-valid');
+        }
+    });
+
+    // Real-time validation for assignment targets
+    $('#id_assigned_to_staff, #id_assigned_to_department, #id_assigned_to_location').change(function() {
+        const hasAnyTarget = $('#id_assigned_to_staff').val() || 
+                            $('#id_assigned_to_department').val() || 
+                            $('#id_assigned_to_location').val();
+        
+        if (hasAnyTarget) {
+            $('.nav-link.active').removeClass('text-danger').addClass('text-success');
+        } else {
+            $('.nav-link.active').removeClass('text-success').addClass('text-danger');
+        }
+    });
+
+    // Checklist functionality
+    $('.custom-control-input[id^="check"]').change(function() {
+        const checkedItems = $('.custom-control-input[id^="check"]:checked').length;
+        const totalItems = $('.custom-control-input[id^="check"]').length;
+        
+        if (checkedItems === totalItems) {
+            $('button[type="submit"]').removeClass('btn-primary').addClass('btn-success');
+        } else {
+            $('button[type="submit"]').removeClass('btn-success').addClass('btn-primary');
+        }
+    });
+});
+</script>
+{% endblock %}

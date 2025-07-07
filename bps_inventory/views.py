@@ -1,9 +1,9 @@
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import JsonResponse, HttpResponse, Http404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
-
+from django.conf import settings
 from inventory.models import Device
 
 def home_view(request):
@@ -51,228 +51,249 @@ def public_qr_verify(request, device_id):
     """Public QR verification view (no login required)"""
     try:
         device = get_object_or_404(Device, device_id=device_id)
-        current_assignment = device.assignments.filter(is_active=True).first()
         
-        # Create scan record if user is authenticated
-        if request.user.is_authenticated:
-            try:
-                from qr_management.models import QRCodeScan
-                QRCodeScan.objects.create(
-                    device=device,
-                    scanned_by=request.user,
-                    scan_type='PUBLIC_VERIFICATION',
-                    verification_success=True,
-                    device_location_at_scan=current_assignment.assigned_to_location if current_assignment else None,
-                    assigned_staff_at_scan=current_assignment.assigned_to_staff if current_assignment else None,
-                    additional_data={
-                        'user_agent': request.META.get('HTTP_USER_AGENT', ''),
-                        'ip_address': request.META.get('REMOTE_ADDR', ''),
-                        'verification_method': 'public_qr_verify'
-                    }
-                )
-            except ImportError:
-                # QRCodeScan model might not exist yet
-                pass
+        # Get current assignment info
+        current_assignment = None
+        try:
+            from inventory.models import Assignment
+            current_assignment = Assignment.objects.filter(
+                device=device, is_active=True
+            ).select_related('assigned_to_staff__user', 'assigned_to_department').first()
+        except:
+            pass
         
+        # Create verification context
         context = {
             'device': device,
-            'assignment': current_assignment,
-            'verification_successful': True,
-            'timestamp': timezone.now(),
-            'is_public_view': True,
-        }
-        
-        return render(request, 'qr_management/public_verify.html', context)
-        
-    except Exception as e:
-        # Create failed scan record if user is authenticated
-        if request.user.is_authenticated:
-            try:
-                from qr_management.models import QRCodeScan
-                QRCodeScan.objects.create(
-                    device_id=device_id,
-                    scanned_by=request.user,
-                    scan_type='PUBLIC_VERIFICATION',
-                    verification_success=False,
-                    error_message=str(e),
-                    additional_data={
-                        'user_agent': request.META.get('HTTP_USER_AGENT', ''),
-                        'ip_address': request.META.get('REMOTE_ADDR', ''),
-                        'verification_method': 'public_qr_verify'
-                    }
-                )
-            except ImportError:
-                pass
-        
-        context = {
-            'error': f"Device {device_id} not found or error occurred: {str(e)}",
-            'device_id': device_id,
-            'verification_successful': False,
-            'timestamp': timezone.now(),
-            'is_public_view': True,
-        }
-        return render(request, 'qr_management/public_verify.html', context)
-
-@login_required
-def system_health_check(request):
-    """System health check view for administrators"""
-    if not request.user.is_staff:
-        return HttpResponse("Access Denied", status=403)
-    
-    try:
-        from django.db import connection
-        from django.core.management import call_command
-        from io import StringIO
-        
-        health_data = {
-            'database': 'OK',
-            'timestamp': timezone.now(),
+            'current_assignment': current_assignment,
+            'verification_time': timezone.now(),
             'system_name': 'BPS IT Inventory Management System',
         }
         
-        # Test database connection
+        # Log QR scan if model exists
         try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                health_data['database'] = 'OK'
-        except Exception as e:
-            health_data['database'] = f'ERROR: {str(e)}'
+            from qr_management.models import QRCodeScan
+            QRCodeScan.objects.create(
+                device=device,
+                scanned_at=timezone.now(),
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:200]
+            )
+        except:
+            pass
         
-        # Check models
-        try:
-            health_data['device_count'] = Device.objects.count()
-            
-            from inventory.models import Assignment, Staff, Department
-            health_data['assignment_count'] = Assignment.objects.count()
-            health_data['staff_count'] = Staff.objects.count()
-            health_data['department_count'] = Department.objects.count()
-            
-        except Exception as e:
-            health_data['model_error'] = str(e)
-        
-        # Check for pending migrations
-        try:
-            out = StringIO()
-            call_command('showmigrations', '--plan', stdout=out)
-            migration_output = out.getvalue()
-            health_data['migrations'] = 'OK' if '[ ]' not in migration_output else 'PENDING'
-        except Exception as e:
-            health_data['migrations'] = f'ERROR: {str(e)}'
-        
-        context = {
-            'health_data': health_data,
-            'is_superuser': request.user.is_superuser,
-        }
-        
-        return render(request, 'system/health_check.html', context)
+        return render(request, 'public/qr_verify.html', context)
         
     except Exception as e:
-        return HttpResponse(f"Health Check Error: {str(e)}", status=500)
+        context = {
+            'error': 'Device not found or invalid QR code',
+            'device_id': device_id,
+            'system_name': 'BPS IT Inventory Management System',
+        }
+        return render(request, 'public/qr_verify.html', context, status=404)
 
+
+def system_health_check(request):
+    """System health check endpoint"""
+    try:
+        # Database connectivity check
+        device_count = Device.objects.count()
+        db_status = "OK"
+    except Exception as e:
+        device_count = 0
+        db_status = f"ERROR: {str(e)}"
+    
+    # Check cache if configured
+    cache_status = "OK"
+    try:
+        from django.core.cache import cache
+        cache.set('health_check', 'test', 30)
+        if cache.get('health_check') != 'test':
+            cache_status = "ERROR: Cache not working"
+    except Exception as e:
+        cache_status = f"ERROR: {str(e)}"
+    
+    # Media directory check
+    import os
+    media_status = "OK" if os.path.exists(settings.MEDIA_ROOT) else "ERROR: Media directory not found"
+    
+    # Static files check
+    static_status = "OK" if os.path.exists(settings.STATIC_ROOT) else "WARNING: Static directory not found"
+    
+    health_data = {
+        'status': 'healthy' if db_status == "OK" and cache_status == "OK" else 'unhealthy',
+        'timestamp': timezone.now().isoformat(),
+        'checks': {
+            'database': {
+                'status': db_status,
+                'device_count': device_count
+            },
+            'cache': {
+                'status': cache_status
+            },
+            'media': {
+                'status': media_status,
+                'path': str(settings.MEDIA_ROOT)
+            },
+            'static': {
+                'status': static_status,
+                'path': str(settings.STATIC_ROOT)
+            }
+        },
+        'system_info': {
+            'debug_mode': settings.DEBUG,
+            'allowed_hosts': settings.ALLOWED_HOSTS,
+            'database_engine': settings.DATABASES['default']['ENGINE']
+        }
+    }
+    
+    if request.GET.get('format') == 'json':
+        return JsonResponse(health_data)
+    
+    return render(request, 'system/health.html', {'health_data': health_data})
+
+
+@login_required
+def system_status(request):
+    """Detailed system status for authenticated users"""
+    try:
+        from inventory.models import Assignment, Staff, Department, Location
+        
+        # System statistics
+        stats = {
+            'devices': {
+                'total': Device.objects.count(),
+                'active': Device.objects.filter(status='AVAILABLE').count(),
+                'assigned': Device.objects.filter(status='ASSIGNED').count(),
+                'maintenance': Device.objects.filter(status='MAINTENANCE').count(),
+            },
+            'assignments': {
+                'total': Assignment.objects.count(),
+                'active': Assignment.objects.filter(is_active=True).count(),
+                'overdue': Assignment.objects.filter(
+                    is_active=True,
+                    is_temporary=True,
+                    expected_return_date__lt=timezone.now().date()
+                ).count(),
+            },
+            'staff': {
+                'total': Staff.objects.count(),
+                'active': Staff.objects.filter(is_active=True).count(),
+            },
+            'locations': {
+                'total': Location.objects.count(),
+                'active': Location.objects.filter(is_active=True).count(),
+            },
+            'departments': {
+                'total': Department.objects.count(),
+                'active': Department.objects.filter(is_active=True).count(),
+            }
+        }
+        
+        # Recent activity
+        recent_activities = []
+        try:
+            from inventory.models import AuditLog
+            recent_activities = AuditLog.objects.select_related('user').order_by('-timestamp')[:10]
+        except:
+            pass
+        
+        # System uptime (approximate)
+        import datetime
+        uptime_data = {
+            'server_time': timezone.now(),
+            'django_version': getattr(settings, 'DJANGO_VERSION', 'Unknown'),
+            'debug_mode': settings.DEBUG,
+        }
+        
+        context = {
+            'stats': stats,
+            'recent_activities': recent_activities,
+            'uptime_data': uptime_data,
+            'title': 'System Status Dashboard'
+        }
+        
+        return render(request, 'system/status.html', context)
+        
+    except Exception as e:
+        context = {
+            'error': str(e),
+            'title': 'System Status - Error'
+        }
+        return render(request, 'system/status.html', context)
+
+@login_required
 def api_documentation(request):
     """API documentation view"""
+    
+    # API endpoints documentation
     api_endpoints = [
         {
-            'name': 'Device Information',
-            'url': '/inventory/api/device/<device_id>/info/',
+            'name': 'Device List',
             'method': 'GET',
-            'description': 'Get detailed device information',
-            'authentication': 'Required',
+            'endpoint': '/api/v1/devices/',
+            'description': 'Get list of all devices',
+            'parameters': ['page', 'limit', 'status', 'category'],
+            'example_response': {
+                'count': 150,
+                'results': [
+                    {
+                        'device_id': 'LAP-001',
+                        'device_name': 'Dell Laptop',
+                        'status': 'AVAILABLE',
+                        'category': 'Laptop'
+                    }
+                ]
+            }
         },
         {
-            'name': 'Quick Assign Device',
-            'url': '/inventory/api/device/assign/',
-            'method': 'POST',
-            'description': 'Quickly assign a device to staff/department',
-            'authentication': 'Required',
-        },
-        {
-            'name': 'Search Suggestions',
-            'url': '/inventory/api/search/suggestions/',
+            'name': 'Device Detail',
             'method': 'GET',
-            'description': 'Get search suggestions for devices, staff, departments',
-            'authentication': 'Required',
+            'endpoint': '/api/v1/devices/{device_id}/',
+            'description': 'Get detailed information about a specific device',
+            'parameters': ['device_id'],
+            'example_response': {
+                'device_id': 'LAP-001',
+                'device_name': 'Dell Laptop',
+                'status': 'AVAILABLE',
+                'specifications': {},
+                'current_assignment': None
+            }
         },
         {
-            'name': 'Device Availability',
-            'url': '/inventory/api/device/availability/',
+            'name': 'Assignment List',
             'method': 'GET',
-            'description': 'Check if a device is available for assignment',
-            'authentication': 'Required',
-        },
-        {
-            'name': 'Staff by Department',
-            'url': '/inventory/api/staff/department/<department_id>/',
-            'method': 'GET',
-            'description': 'Get staff members in a specific department',
-            'authentication': 'Required',
-        },
-        {
-            'name': 'QR Code Verification',
-            'url': '/verify/<device_id>/',
-            'method': 'GET',
-            'description': 'Public QR code verification (no auth required)',
-            'authentication': 'None',
-        },
-        {
-            'name': 'Mobile QR Scan',
-            'url': '/qr/scan/mobile/',
-            'method': 'POST',
-            'description': 'Mobile-optimized QR scanning interface',
-            'authentication': 'Required',
-        },
-        {
-            'name': 'Report Progress',
-            'url': '/reports/ajax/progress/<report_id>/',
-            'method': 'GET',
-            'description': 'Get report generation progress via AJAX',
-            'authentication': 'Required',
-        },
+            'endpoint': '/api/v1/assignments/',
+            'description': 'Get list of all assignments',
+            'parameters': ['page', 'limit', 'is_active', 'staff_id'],
+            'example_response': {
+                'count': 75,
+                'results': [
+                    {
+                        'assignment_id': 'ASN-001',
+                        'device': 'LAP-001',
+                        'assigned_to_staff': 'John Doe',
+                        'is_active': True
+                    }
+                ]
+            }
+        }
     ]
+    
+    # Authentication information
+    auth_info = {
+        'method': 'Token Authentication',
+        'header': 'Authorization: Token your_api_token_here',
+        'obtain_token_endpoint': '/api/v1/auth/token/',
+        'example': 'curl -H "Authorization: Token abc123" /api/v1/devices/'
+    }
     
     context = {
         'api_endpoints': api_endpoints,
-        'system_name': 'BPS IT Inventory Management System',
-        'version': '1.0.0',
+        'auth_info': auth_info,
+        'base_url': request.build_absolute_uri('/api/v1/'),
+        'title': 'API Documentation'
     }
     
-    return render(request, 'api/documentation.html', context)
+    return render(request, 'system/api_docs.html', context)
 
-def system_status(request):
-    """Public system status page"""
-    try:
-        # Basic system information (public)
-        status_info = {
-            'system_name': 'BPS IT Inventory Management System',
-            'status': 'Operational',
-            'timestamp': timezone.now(),
-            'version': '1.0.0',
-        }
-        
-        # Add basic stats if user is authenticated
-        if request.user.is_authenticated:
-            status_info.update({
-                'total_devices': Device.objects.count(),
-                'active_devices': Device.objects.filter(status='ACTIVE').count(),
-                'database_status': 'Connected',
-            })
-        
-        context = {
-            'status_info': status_info,
-            'is_authenticated': request.user.is_authenticated,
-        }
-        
-        return render(request, 'system/status.html', context)
-        
-    except Exception as e:
-        context = {
-            'status_info': {
-                'system_name': 'BPS IT Inventory Management System',
-                'status': 'Error',
-                'error': str(e),
-                'timestamp': timezone.now(),
-            },
-            'is_authenticated': request.user.is_authenticated,
-        }
-        
-        return render(request, 'system/status.html', context)

@@ -1,350 +1,239 @@
 # qr_management/admin.py
+# Location: bps_inventory/apps/qr_management/admin.py
+
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from django.db.models import Count, Q, Sum, Avg
-from django.contrib.admin import SimpleListFilter
 from django.utils import timezone
-from datetime import timedelta
-import qrcode
-from io import BytesIO
-import base64
-import json
-
 from .models import (
-    QRCodeScan, QRAnalytics, QRCampaign, QRMobileSession,
-    QRBulkVerification, QRCodeTemplate, QRCodePrintJob,
-    QRVerificationRule, QRScanLocation, QRCodeBatch
+    QRCodeTemplate, QRCodeBatch, QRCodeScan, QRCampaign
 )
 
-
 # ================================
-# CUSTOM FILTERS
-# ================================
-
-class ScanTypeFilter(SimpleListFilter):
-    title = 'Scan Type'
-    parameter_name = 'scan_type'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('VERIFICATION', 'Device Verification'),
-            ('INVENTORY', 'Inventory Check'),
-            ('ASSIGNMENT', 'Assignment Verification'),
-            ('MAINTENANCE', 'Maintenance Scan'),
-            ('AUDIT', 'Audit Scan'),
-            ('BATCH_VERIFICATION', 'Batch Verification'),
-            ('MOBILE_SCAN', 'Mobile App Scan'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(scan_type=self.value())
-        return queryset
-
-
-class VerificationStatusFilter(SimpleListFilter):
-    title = 'Verification Status'
-    parameter_name = 'verification_status'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('SUCCESS', 'Verification Successful'),
-            ('FAILED', 'Verification Failed'),
-            ('WARNING', 'Verification with Warnings'),
-            ('ERROR', 'Scan Error'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(verification_status=self.value())
-        return queryset
-
-
-class CampaignStatusFilter(SimpleListFilter):
-    title = 'Campaign Status'
-    parameter_name = 'campaign_status'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('PLANNED', 'Planned'),
-            ('ACTIVE', 'Active'),
-            ('PAUSED', 'Paused'),
-            ('COMPLETED', 'Completed'),
-            ('CANCELLED', 'Cancelled'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value():
-            return queryset.filter(status=self.value())
-        return queryset
-
-
-class TimeRangeFilter(SimpleListFilter):
-    title = 'Time Range'
-    parameter_name = 'time_range'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('today', 'Today'),
-            ('yesterday', 'Yesterday'),
-            ('week', 'This Week'),
-            ('month', 'This Month'),
-            ('quarter', 'This Quarter'),
-        ]
-
-    def queryset(self, request, queryset):
-        now = timezone.now()
-        today = now.date()
-        
-        if self.value() == 'today':
-            return queryset.filter(timestamp__date=today)
-        elif self.value() == 'yesterday':
-            yesterday = today - timedelta(days=1)
-            return queryset.filter(timestamp__date=yesterday)
-        elif self.value() == 'week':
-            week_start = today - timedelta(days=today.weekday())
-            return queryset.filter(timestamp__date__gte=week_start)
-        elif self.value() == 'month':
-            month_start = today.replace(day=1)
-            return queryset.filter(timestamp__date__gte=month_start)
-        elif self.value() == 'quarter':
-            quarter_start = today.replace(month=((today.month - 1) // 3) * 3 + 1, day=1)
-            return queryset.filter(timestamp__date__gte=quarter_start)
-        return queryset
-
-
-# ================================
-# INLINE ADMIN CLASSES
+# QR CODE TEMPLATE MANAGEMENT
 # ================================
 
-class QRCodeScanInline(admin.TabularInline):
-    model = QRCodeScan
-    extra = 0
-    readonly_fields = ('id', 'timestamp', 'scanned_by', 'verification_status')
-    fields = ('scan_type', 'scanned_by', 'verification_status', 'timestamp')
-    show_change_link = True
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('scanned_by').order_by('-timestamp')[:10]
-
-
-class QRAnalyticsInline(admin.TabularInline):
-    model = QRAnalytics
-    extra = 0
-    readonly_fields = ('period_start', 'period_end', 'value', 'calculated_at')
-    fields = ('metric_type', 'period_start', 'value', 'calculated_at')
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).order_by('-period_start')[:5]
-
+@admin.register(QRCodeTemplate)
+class QRCodeTemplateAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'template_type', 'is_active', 'get_created_at', 'created_by'
+    )
+    list_filter = ('template_type', 'is_active', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('get_created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Template Information', {
+            'fields': ('name', 'description', 'template_type', 'is_active')
+        }),
+        ('Template Configuration', {
+            'fields': ('template_config',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'get_created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_created_at(self, obj):
+        """Get the created_at timestamp"""
+        return obj.created_at
+    get_created_at.short_description = 'Created At'
 
 # ================================
-# MAIN ADMIN CLASSES
+# QR CODE BATCH MANAGEMENT
+# ================================
+
+@admin.register(QRCodeBatch)
+class QRCodeBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'get_batch_type', 'get_total_codes', 'get_generated_codes', 
+        'status', 'created_at'
+    )
+    list_filter = ('status', 'created_at')
+    search_fields = ('name', 'description')
+    readonly_fields = ('get_created_at', 'get_updated_at', 'get_generated_count', 'get_scan_count', 'get_completion_percentage')
+    
+    fieldsets = (
+        ('Batch Information', {
+            'fields': ('name', 'description', 'template', 'status')
+        }),
+        ('Generation Settings', {
+            'fields': ('quantity', 'prefix', 'suffix'),
+            'classes': ('collapse',)
+        }),
+        ('Statistics', {
+            'fields': ('get_generated_count', 'get_scan_count', 'get_completion_percentage'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'get_created_at', 'get_updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_batch_type(self, obj):
+        """Get batch type from template"""
+        return obj.template.template_type if obj.template else "No Template"
+    get_batch_type.short_description = 'Batch Type'
+    
+    def get_total_codes(self, obj):
+        """Get total number of codes in batch"""
+        return obj.quantity or 0
+    get_total_codes.short_description = 'Total Codes'
+    
+    def get_generated_codes(self, obj):
+        """Get number of generated codes"""
+        return getattr(obj, 'generated_count', 0)
+    get_generated_codes.short_description = 'Generated Codes'
+    
+    def get_created_at(self, obj):
+        """Get creation timestamp"""
+        return obj.created_at
+    get_created_at.short_description = 'Created At'
+    
+    def get_updated_at(self, obj):
+        """Get update timestamp"""
+        return obj.updated_at
+    get_updated_at.short_description = 'Updated At'
+    
+    def get_generated_count(self, obj):
+        """Get generated count for readonly field"""
+        return getattr(obj, 'generated_count', 0)
+    get_generated_count.short_description = 'Generated Count'
+    
+    def get_scan_count(self, obj):
+        """Get scan count for readonly field"""
+        return getattr(obj, 'scan_count', 0)
+    get_scan_count.short_description = 'Scan Count'
+    
+    def get_completion_percentage(self, obj):
+        """Calculate completion percentage"""
+        if obj.quantity and hasattr(obj, 'generated_count'):
+            return f"{(obj.generated_count / obj.quantity * 100):.1f}%"
+        return "0%"
+    get_completion_percentage.short_description = 'Completion %'
+
+# ================================
+# QR CODE SCAN MANAGEMENT
 # ================================
 
 @admin.register(QRCodeScan)
 class QRCodeScanAdmin(admin.ModelAdmin):
     list_display = (
-        'device', 'scan_type', 'scanned_by', 'verification_status_display',
-        'timestamp', 'scan_location', 'device_status_at_scan', 'actions'
+        'device', 'scanned_by', 'timestamp', 'verification_success', 'get_discrepancy_count'
     )
-    list_filter = (
-        ScanTypeFilter, VerificationStatusFilter, TimeRangeFilter,
-        'timestamp', 'device_status_at_scan'
-    )
+    list_filter = ('verification_success', 'timestamp', 'scan_type')
     search_fields = (
-        'device__device_id', 'device__device_name', 'scanned_by__username',
-        'scan_location__name', 'notes'
+        'device__device_id', 'scanned_by__username', 'device_location_at_scan__name'
     )
-    readonly_fields = (
-        'id', 'timestamp', 'device_status_at_scan', 'device_location_at_scan',
-        'assigned_staff_at_scan', 'assigned_department_at_scan'
-    )
+    readonly_fields = ('timestamp', 'gps_coordinates', 'device_info')
+    date_hierarchy = 'timestamp'
     
     fieldsets = (
         ('Scan Information', {
-            'fields': (
-                'id', 'device', 'scan_type', 'scanned_by', 'timestamp'
-            )
+            'fields': ('device', 'scanned_by', 'timestamp', 'scan_type')
         }),
-        ('Location Information', {
-            'fields': ('scan_location', 'gps_coordinates'),
-        }),
-        ('Device State at Scan', {
-            'fields': (
-                'device_status_at_scan', 'device_location_at_scan',
-                'assigned_staff_at_scan', 'assigned_department_at_scan'
-            ),
+        ('Scan Results', {
+            'fields': ('verification_success', 'discrepancies_found', 'scan_notes'),
             'classes': ('collapse',)
         }),
-        ('Verification Results', {
-            'fields': (
-                'verification_status', 'verification_data', 'discrepancies_found'
-            ),
-        }),
-        ('Additional Information', {
-            'fields': ('notes', 'follow_up_required', 'follow_up_notes'),
+        ('Location & Metadata', {
+            'fields': ('gps_coordinates', 'device_info'),
             'classes': ('collapse',)
-        }),
+        })
     )
+    
+    def get_discrepancy_count(self, obj):
+        """Calculate discrepancy count based on scan results"""
+        return len(obj.discrepancies_found.strip()) if obj.discrepancies_found else 0
+    get_discrepancy_count.short_description = 'Discrepancy Count'
 
-    def verification_status_display(self, obj):
-        status_colors = {
-            'SUCCESS': 'green',
-            'FAILED': 'red',
-            'WARNING': 'orange',
-            'ERROR': 'purple'
-        }
-        color = status_colors.get(obj.verification_status, 'black')
-        
-        status_icons = {
-            'SUCCESS': '✅',
-            'FAILED': '❌',
-            'WARNING': '⚠️',
-            'ERROR': '🔴'
-        }
-        icon = status_icons.get(obj.verification_status, '❓')
-        
-        return format_html(
-            '<span style="color: {};">{} {}</span>',
-            color, icon, obj.get_verification_status_display()
-        )
-    verification_status_display.short_description = 'Status'
-
-    def action_buttons(self, obj):
-        actions_html = []
-        
-        # View device details
-        actions_html.append(
-            f'<a class="button" href="{reverse("inventory:device_detail", args=[obj.device.device_id])}">View Device</a>'
-        )
-        
-        # If follow-up required, show follow-up action
-        if obj.follow_up_required:
-            actions_html.append('<span style="color: orange;">📋 Follow-up Required</span>')
-        
-        # View verification details
-        actions_html.append(
-            f'<a class="button" href="{reverse("qr_management:qr_scan_detail", args=[obj.pk])}">Details</a>'
-        )
-        
-        return format_html(' '.join(actions_html))
-    action_buttons.short_description = 'Actions'
-
-
-@admin.register(QRAnalytics)
-class QRAnalyticsAdmin(admin.ModelAdmin):
-    list_display = (
-   'metric_type', 'aggregation_period', 'period_start', 'period_end',
-   'value', 'department', 'location', 'calculated_at', 'action_buttons'
-    )
-    list_filter = (
-        'metric_type', 'aggregation_period', 'department',
-        'location', 'period_start'
-    )
-    search_fields = ('metric_type',)
-    readonly_fields = (
-        'calculated_at', 'calculation_time_ms', 'data_points_count'
-    )
-
-    fieldsets = (
-        ('Metric Information', {
-            'fields': ('metric_type', 'value', 'aggregation_period')
-        }),
-        ('Time Period', {
-            'fields': ('period_start', 'period_end')
-        }),
-        ('Scope', {
-            'fields': ('department', 'location', 'device_category'),
-        }),
-        ('Calculation Details', {
-            'fields': (
-                'calculated_at', 'calculation_time_ms', 'data_points_count'
-            ),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def has_add_permission(self, request):
-        return False  # Analytics are calculated automatically
-
+# ================================
+# QR CAMPAIGN MANAGEMENT
+# ================================
 
 @admin.register(QRCampaign)
 class QRCampaignAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 'campaign_type', 'status_display', 'progress_display',
-        'start_date', 'end_date', 'target_count', 'actions'
+        'name', 'campaign_type', 'status', 'start_date', 'end_date',
+        'get_batches_count'
     )
-    list_filter = (
-        CampaignStatusFilter, 'campaign_type', 'start_date', 'end_date'
-    )
+    list_filter = ('campaign_type', 'status', 'start_date', 'end_date')
     search_fields = ('name', 'description')
-    readonly_fields = (
-        'id', 'created_at', 'updated_at', 'completed_at',
-        'devices_scanned', 'success_rate'
-    )
-    filter_horizontal = ('target_locations', 'target_departments', 'assigned_users')
+    readonly_fields = ('get_created_at', 'get_campaign_stats')
     
     fieldsets = (
         ('Campaign Information', {
-            'fields': (
-                'id', 'name', 'description', 'campaign_type', 'status'
-            )
-        }),
-        ('Campaign Scope', {
-            'fields': (
-                'target_devices', 'target_locations', 'target_departments'
-            ),
+            'fields': ('name', 'description', 'campaign_type', 'status')
         }),
         ('Schedule', {
-            'fields': ('start_date', 'end_date', 'estimated_duration'),
-        }),
-        ('Execution', {
-            'fields': ('assigned_users', 'verification_rules'),
+            'fields': ('start_date', 'end_date'),
             'classes': ('collapse',)
         }),
-        ('Progress Tracking', {
-            'fields': (
-                'devices_scanned', 'success_rate', 'completion_percentage'
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Results', {
-            'fields': ('campaign_results', 'completed_at'),
+        ('Statistics', {
+            'fields': ('get_campaign_stats',),
             'classes': ('collapse',)
         }),
         ('Metadata', {
-            'fields': ('created_by', 'created_at', 'updated_at'),
+            'fields': ('created_by', 'get_created_at'),
             'classes': ('collapse',)
-        }),
+        })
     )
-
-    def status_display(self, obj):
-        status_colors = {
-            'PLANNED': 'blue',
-            'ACTIVE': 'green',
-            'PAUSED': 'orange',
-            'COMPLETED': 'gray',
-            'CANCELLED': 'red'
+    
+    def get_batches_count(self, obj):
+        """Get number of batches in campaign"""
+        return obj.batches.count() if hasattr(obj, 'batches') else 0
+    get_batches_count.short_description = 'Batches'
+    
+    def get_created_at(self, obj):
+        """Get creation timestamp"""
+        return obj.created_at
+    get_created_at.short_description = 'Created At'
+    
+    def get_campaign_stats(self, obj):
+        """Get campaign statistics"""
+        stats = {
+            'batches': getattr(obj, 'batches_count', 0),
+            'total_codes': getattr(obj, 'total_codes', 0),
+            'scanned_codes': getattr(obj, 'scanned_codes', 0),
         }
-        color = status_colors.get(obj.status, 'black')
-        
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color, obj.get_status_display()
-        )
-    status_display.short_description = 'Status'
+        return f"Batches: {stats['batches']}, Codes: {stats['total_codes']}, Scanned: {stats['scanned_codes']}"
+    get_campaign_stats.short_description = 'Statistics'
 
-    def progress_display(self, obj):
-        if hasattr(obj, 'completion_percentage') and obj.completion_percentage is not None:
-            percentage = obj.completion_percentage
-            return format_html(
-                '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px; overflow: hidden;">'
-                '<div style="width: {}px; background-color: #007cba; height: 20px; '
-                'text-align: center; color: white; font-size: 12px; line-height: 20px; '
-                'transition: width 0.3s ease;">{}</div></div>',
-                percentage, f'{percentage}%'
-            )
-        return '-'
+# ================================
+# ADMIN ACTIONS
+# ================================
+
+def activate_templates(modeladmin, request, queryset):
+    """Activate selected templates"""
+    updated = queryset.update(is_active=True)
+    modeladmin.message_user(
+        request,
+        f'{updated} template(s) activated.'
+    )
+activate_templates.short_description = "Activate selected templates"
+
+def deactivate_templates(modeladmin, request, queryset):
+    """Deactivate selected templates"""
+    updated = queryset.update(is_active=False)
+    modeladmin.message_user(
+        request,
+        f'{updated} template(s) deactivated.'
+    )
+deactivate_templates.short_description = "Deactivate selected templates"
+
+def mark_scans_as_valid(modeladmin, request, queryset):
+    """Mark selected scans as valid"""
+    updated = queryset.update(verification_success=True)
+    modeladmin.message_user(
+        request,
+        f'{updated} scan(s) marked as valid.'
+    )
+mark_scans_as_valid.short_description = "Mark selected scans as valid"
+
+# Add actions to admin classes
+QRCodeTemplateAdmin.actions = [activate_templates, deactivate_templates]
+QRCodeScanAdmin.actions = [mark_scans_as_valid]

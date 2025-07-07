@@ -1,0 +1,644 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ staff.get_full_name|default:staff.user.username }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .staff-header {
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .staff-avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 2.5rem;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        margin-right: 1.5rem;
+    }
+    
+    .staff-info h1 {
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+    }
+    
+    .staff-meta {
+        opacity: 0.9;
+        font-size: 1.1rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        text-align: center;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-weight: 500;
+        text-transform: uppercase;
+        font-size: 0.875rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .info-card {
+        background: white;
+        border-radius: 0.5rem;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+    }
+    
+    .info-card .card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-bottom: 1px solid #dee2e6;
+        font-weight: 600;
+        padding: 1rem 1.5rem;
+    }
+    
+    .info-card .card-body {
+        padding: 1.5rem;
+    }
+    
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f1f3f4;
+    }
+    
+    .info-row:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    .info-label {
+        font-weight: 600;
+        color: #495057;
+        min-width: 150px;
+    }
+    
+    .info-value {
+        color: #212529;
+        text-align: right;
+        flex-grow: 1;
+    }
+    
+    .assignment-item {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.2s ease;
+    }
+    
+    .assignment-item:hover {
+        border-color: #0066cc;
+        box-shadow: 0 2px 8px rgba(0, 102, 204, 0.1);
+    }
+    
+    .assignment-device {
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.25rem;
+    }
+    
+    .assignment-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-active {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-returned {
+        background-color: #d1ecf1;
+        color: #0c5460;
+    }
+    
+    .status-overdue {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .activity-item {
+        display: flex;
+        align-items: start;
+        padding: 1rem 0;
+        border-bottom: 1px solid #f1f3f4;
+    }
+    
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+    
+    .activity-icon {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+    }
+    
+    .activity-content {
+        flex-grow: 1;
+    }
+    
+    .activity-title {
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.25rem;
+    }
+    
+    .activity-desc {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .activity-time {
+        color: #adb5bd;
+        font-size: 0.75rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .btn-action {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-action:hover {
+        transform: translateY(-1px);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    @media (max-width: 768px) {
+        .staff-header {
+            padding: 1.5rem 1rem;
+        }
+        
+        .staff-avatar {
+            width: 70px;
+            height: 70px;
+            font-size: 1.8rem;
+            margin-right: 1rem;
+        }
+        
+        .staff-info h1 {
+            font-size: 1.75rem;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+        }
+        
+        .action-buttons {
+            justify-content: center;
+        }
+        
+        .info-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+        
+        .info-label {
+            min-width: auto;
+        }
+        
+        .info-value {
+            text-align: left;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Staff Header -->
+    <div class="staff-header">
+        <div class="container">
+            <div class="d-flex align-items-center">
+                <div class="staff-avatar">
+                    {{ staff.first_name.0|upper|default:staff.user.first_name.0|upper }}{{ staff.last_name.0|upper|default:staff.user.last_name.0|upper }}
+                </div>
+                <div class="staff-info flex-grow-1">
+                    <h1>{{ staff.get_full_name|default:staff.user.username }}</h1>
+                    <div class="staff-meta">
+                        <div>{{ staff.designation|default:"Staff Member" }} • {{ staff.department.name|default:"No Department" }}</div>
+                        <div>Employee ID: {{ staff.employee_id|default:"Not Assigned" }}</div>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <a href="{% url 'inventory:staff_edit' staff.staff_id %}" class="btn btn-light btn-action">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                    <a href="{% url 'inventory:staff_assignments' staff.staff_id %}" class="btn btn-light btn-action">
+                        <i class="fas fa-laptop"></i> View All Assignments
+                    </a>
+                    <div class="dropdown">
+                        <button class="btn btn-light btn-action dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="window.print()">
+                                <i class="fas fa-print"></i> Print Profile
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'inventory:assignment_add' %}?staff={{ staff.staff_id }}">
+                                <i class="fas fa-plus"></i> New Assignment
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{% url 'inventory:staff_delete' staff.staff_id %}">
+                                <i class="fas fa-trash"></i> Delete Staff
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Statistics Cards -->
+        <div class="col-12 mb-4">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-primary">{{ active_assignments }}</div>
+                        <div class="stat-label">Active Assignments</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-info">{{ total_assignments }}</div>
+                        <div class="stat-label">Total Assignments</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-success">${{ total_value|floatformat:0 }}</div>
+                        <div class="stat-label">Current Value</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-warning">{{ overdue_count|default:0 }}</div>
+                        <div class="stat-label">Overdue Items</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Staff Information -->
+        <div class="col-lg-8">
+            <!-- Personal Information -->
+            <div class="info-card">
+                <div class="card-header">
+                    <i class="fas fa-user"></i> Personal Information
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="info-label">Full Name</span>
+                        <span class="info-value">{{ staff.get_full_name|default:staff.user.username }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Employee ID</span>
+                        <span class="info-value">{{ staff.employee_id|default:"Not Assigned" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Email</span>
+                        <span class="info-value">
+                            <a href="mailto:{{ staff.email|default:staff.user.email }}" class="text-decoration-none">
+                                {{ staff.email|default:staff.user.email|default:"Not Provided" }}
+                            </a>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Phone</span>
+                        <span class="info-value">{{ staff.phone|default:"Not Provided" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Department</span>
+                        <span class="info-value">
+                            {% if staff.department %}
+                                <a href="{% url 'inventory:department_detail' staff.department.department_id %}" class="text-decoration-none">
+                                    {{ staff.department.name }}
+                                </a>
+                            {% else %}
+                                No Department Assigned
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Designation</span>
+                        <span class="info-value">{{ staff.designation|default:"Not Specified" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Employment Type</span>
+                        <span class="info-value">{{ staff.get_employment_type_display|default:"Not Specified" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Join Date</span>
+                        <span class="info-value">{{ staff.join_date|date:"F d, Y"|default:"Not Recorded" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status</span>
+                        <span class="info-value">
+                            {% if staff.is_active %}
+                                <span class="status-badge status-active">Active</span>
+                            {% else %}
+                                <span class="status-badge bg-secondary text-white">Inactive</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Assignments -->
+            <div class="info-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-laptop"></i> Current Assignments</span>
+                    <span class="badge bg-primary">{{ current_assignments.count }}</span>
+                </div>
+                <div class="card-body">
+                    {% if current_assignments %}
+                        {% for assignment in current_assignments %}
+                        <div class="assignment-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="assignment-device">
+                                        <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" class="text-decoration-none">
+                                            {{ assignment.device.asset_tag|default:assignment.device.device_id }}
+                                        </a>
+                                    </div>
+                                    <div class="assignment-meta">
+                                        <strong>{{ assignment.device.device_type.name|default:"Unknown Device" }}</strong>
+                                        <br>Serial: {{ assignment.device.serial_number|default:"N/A" }}
+                                        <br>Assigned: {{ assignment.assigned_date|date:"M d, Y" }}
+                                        {% if assignment.expected_return_date %}
+                                            <br>Expected Return: {{ assignment.expected_return_date|date:"M d, Y" }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="status-badge status-active">Active</span>
+                                    <div class="mt-2">
+                                        <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-laptop"></i>
+                            <h6>No Current Assignments</h6>
+                            <p class="mb-0">This staff member has no active device assignments.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Assignment History -->
+            <div class="info-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-history"></i> Recent Assignment History</span>
+                    <a href="{% url 'inventory:staff_assignments' staff.staff_id %}" class="btn btn-sm btn-outline-primary">
+                        View All
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if assignment_history %}
+                        {% for assignment in assignment_history|slice:":5" %}
+                        <div class="assignment-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="assignment-device">
+                                        <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" class="text-decoration-none">
+                                            {{ assignment.device.asset_tag|default:assignment.device.device_id }}
+                                        </a>
+                                    </div>
+                                    <div class="assignment-meta">
+                                        <strong>{{ assignment.device.device_type.name|default:"Unknown Device" }}</strong>
+                                        <br>Assigned: {{ assignment.assigned_date|date:"M d, Y" }}
+                                        {% if assignment.returned_date %}
+                                            <br>Returned: {{ assignment.returned_date|date:"M d, Y" }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="status-badge status-returned">{{ assignment.get_status_display|default:"Returned" }}</span>
+                                    <div class="mt-2">
+                                        <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-history"></i>
+                            <h6>No Assignment History</h6>
+                            <p class="mb-0">No previous assignments found for this staff member.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="info-card">
+                <div class="card-header">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'inventory:assignment_add' %}?staff={{ staff.staff_id }}" class="btn btn-primary btn-action">
+                            <i class="fas fa-plus"></i> New Assignment
+                        </a>
+                        <a href="{% url 'inventory:staff_edit' staff.staff_id %}" class="btn btn-outline-secondary btn-action">
+                            <i class="fas fa-edit"></i> Edit Profile
+                        </a>
+                        <a href="{% url 'inventory:staff_assignments' staff.staff_id %}" class="btn btn-outline-info btn-action">
+                            <i class="fas fa-list"></i> All Assignments
+                        </a>
+                        <button class="btn btn-outline-success btn-action" onclick="window.print()">
+                            <i class="fas fa-print"></i> Print Profile
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="info-card">
+                <div class="card-header">
+                    <i class="fas fa-clock"></i> Recent Activity
+                </div>
+                <div class="card-body">
+                    {% if audit_logs %}
+                        {% for log in audit_logs|slice:":5" %}
+                        <div class="activity-item">
+                            <div class="activity-icon {% if log.action == 'CREATE' %}bg-success text-white{% elif log.action == 'UPDATE' %}bg-info text-white{% elif log.action == 'DELETE' %}bg-danger text-white{% else %}bg-secondary text-white{% endif %}">
+                                {% if log.action == 'CREATE' %}
+                                    <i class="fas fa-plus"></i>
+                                {% elif log.action == 'UPDATE' %}
+                                    <i class="fas fa-edit"></i>
+                                {% elif log.action == 'DELETE' %}
+                                    <i class="fas fa-trash"></i>
+                                {% else %}
+                                    <i class="fas fa-cog"></i>
+                                {% endif %}
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-title">{{ log.get_action_display|default:log.action }}</div>
+                                <div class="activity-desc">{{ log.model_name }} {{ log.object_repr|truncatechars:50 }}</div>
+                                <div class="activity-time">{{ log.timestamp|timesince }} ago</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-clock"></i>
+                            <h6>No Recent Activity</h6>
+                            <p class="mb-0">No recent activity logs found.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- System Information -->
+            <div class="info-card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i> System Information
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="info-label">Staff ID</span>
+                        <span class="info-value">{{ staff.staff_id }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">User Account</span>
+                        <span class="info-value">
+                            {% if staff.user.is_active %}
+                                <span class="status-badge status-active">Active</span>
+                            {% else %}
+                                <span class="status-badge bg-danger text-white">Inactive</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Last Login</span>
+                        <span class="info-value">{{ staff.user.last_login|date:"M d, Y H:i"|default:"Never" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Created</span>
+                        <span class="info-value">{{ staff.created_at|date:"M d, Y" }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Last Updated</span>
+                        <span class="info-value">{{ staff.updated_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add smooth scrolling to anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        });
+    });
+    
+    // Auto-refresh activity feed every 30 seconds
+    setInterval(function() {
+        // You can implement AJAX refresh here if needed
+    }, 30000);
+});
+</script>
+{% endblock %}

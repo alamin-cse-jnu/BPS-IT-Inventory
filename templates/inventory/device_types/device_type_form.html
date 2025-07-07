@@ -1,0 +1,563 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Device Type - BPS Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0 0 15px 15px;
+    }
+    
+    .form-card {
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 10px;
+    }
+    
+    .form-card .card-header {
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        font-weight: 600;
+        color: #495057;
+        border-radius: 10px 10px 0 0;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-control {
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    
+    .form-select {
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        padding: 0.75rem 1rem;
+    }
+    
+    .form-check {
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .form-check-input {
+        margin-top: 0.4rem;
+    }
+    
+    .form-check-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 25px;
+        font-weight: 600;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-save:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+    
+    .btn-cancel {
+        background: #6c757d;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 25px;
+        font-weight: 600;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-cancel:hover {
+        background: #5a6268;
+        transform: translateY(-2px);
+        color: white;
+    }
+    
+    .help-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        border: 1px solid #f5c6cb;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-custom {
+        background: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-custom .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: rgba(255,255,255,0.7);
+    }
+    
+    .json-editor {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        background: #f8f9fa;
+        border: 1px solid #ced4da;
+        border-radius: 8px;
+        min-height: 120px;
+    }
+    
+    .json-help {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 1rem;
+        margin-top: 0.5rem;
+        border-radius: 0 8px 8px 0;
+    }
+    
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+        font-weight: bold;
+    }
+    
+    .form-actions {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 0 0 10px 10px;
+        margin-top: 2rem;
+    }
+    
+    .preview-card {
+        background: #fff;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="form-header">
+        <div class="container">
+            <nav aria-label="breadcrumb" class="breadcrumb-custom">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'inventory:dashboard' %}" class="text-white-50">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item">
+                        <a href="{% url 'inventory:device_type_list' %}" class="text-white-50">Device Types</a>
+                    </li>
+                    <li class="breadcrumb-item active text-white">
+                        {% if form.instance.pk %}Edit {{ form.instance.name }}{% else %}Add New Device Type{% endif %}
+                    </li>
+                </ol>
+            </nav>
+            
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="h2 mb-2">
+                        <i class="fas fa-{% if form.instance.pk %}edit{% else %}plus{% endif %} me-2"></i>
+                        {% if form.instance.pk %}Edit Device Type{% else %}Add New Device Type{% endif %}
+                    </h1>
+                    <p class="mb-0 text-white-50">
+                        {% if form.instance.pk %}
+                            Update the device type information and settings
+                        {% else %}
+                            Create a new device type for categorizing devices
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'inventory:device_type_list' %}" class="btn btn-light btn-lg">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Section -->
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        <i class="fas fa-{% if message.tags == 'error' %}exclamation-triangle{% elif message.tags == 'success' %}check-circle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" id="deviceTypeForm" novalidate>
+                {% csrf_token %}
+                
+                <div class="form-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Device Type Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Category & Subcategory -->
+                        <div class="form-group">
+                            <label for="{{ form.subcategory.id_for_label }}" class="form-label required-field">
+                                <i class="fas fa-folder me-1"></i>
+                                Subcategory
+                            </label>
+                            {{ form.subcategory }}
+                            {% if form.subcategory.help_text %}
+                                <div class="help-text">{{ form.subcategory.help_text }}</div>
+                            {% endif %}
+                            {% if form.subcategory.errors %}
+                                <div class="error-message">
+                                    {% for error in form.subcategory.errors %}
+                                        <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Device Type Name -->
+                        <div class="form-group">
+                            <label for="{{ form.name.id_for_label }}" class="form-label required-field">
+                                <i class="fas fa-tag me-1"></i>
+                                Device Type Name
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.help_text %}
+                                <div class="help-text">{{ form.name.help_text }}</div>
+                            {% endif %}
+                            {% if form.name.errors %}
+                                <div class="error-message">
+                                    {% for error in form.name.errors %}
+                                        <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">
+                                <i class="fas fa-align-left me-1"></i>
+                                Description
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.help_text %}
+                                <div class="help-text">{{ form.description.help_text }}</div>
+                            {% endif %}
+                            {% if form.description.errors %}
+                                <div class="error-message">
+                                    {% for error in form.description.errors %}
+                                        <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Status -->
+                        <div class="form-group">
+                            <div class="form-check">
+                                {{ form.is_active }}
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                    <i class="fas fa-toggle-on me-1"></i>
+                                    {{ form.is_active.label }}
+                                </label>
+                                {% if form.is_active.help_text %}
+                                    <div class="help-text">{{ form.is_active.help_text }}</div>
+                                {% endif %}
+                            </div>
+                            {% if form.is_active.errors %}
+                                <div class="error-message">
+                                    {% for error in form.is_active.errors %}
+                                        <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Specifications Template -->
+                <div class="form-card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-code me-2"></i>
+                            Specifications Template
+                            <small class="text-muted">(Optional)</small>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="{{ form.specifications_template.id_for_label }}" class="form-label">
+                                <i class="fas fa-cogs me-1"></i>
+                                Template Configuration
+                            </label>
+                            {{ form.specifications_template }}
+                            {% if form.specifications_template.errors %}
+                                <div class="error-message">
+                                    {% for error in form.specifications_template.errors %}
+                                        <i class="fas fa-exclamation-circle me-1"></i>{{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="json-help">
+                                <h6><i class="fas fa-lightbulb me-1"></i> JSON Template Help</h6>
+                                <p class="mb-2">Define default specifications for devices of this type using JSON format:</p>
+                                <code>
+{
+  "processor": "Intel Core i5",
+  "memory": "8GB DDR4",
+  "storage": "256GB SSD",
+  "display": "14 inch",
+  "ports": ["USB-A", "USB-C", "HDMI"],
+  "warranty_years": 3
+}
+                                </code>
+                                <small class="d-block mt-2 text-muted">
+                                    This template will be used as default values when creating new devices of this type.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- JSON Validation Status -->
+                        <div id="jsonValidation" class="mt-2" style="display: none;">
+                            <div class="alert alert-success" id="jsonValid" style="display: none;">
+                                <i class="fas fa-check-circle me-1"></i>
+                                Valid JSON format
+                            </div>
+                            <div class="alert alert-danger" id="jsonInvalid" style="display: none;">
+                                <i class="fas fa-times-circle me-1"></i>
+                                Invalid JSON format: <span id="jsonError"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Card -->
+                {% if form.instance.pk %}
+                <div class="preview-card">
+                    <h6><i class="fas fa-eye me-1"></i> Current Device Type Preview</h6>
+                    <div class="row text-start mt-3">
+                        <div class="col-md-6">
+                            <strong>Category:</strong> {{ form.instance.subcategory.category.name|default:"Not set" }}<br>
+                            <strong>Subcategory:</strong> {{ form.instance.subcategory.name|default:"Not set" }}<br>
+                            <strong>Name:</strong> {{ form.instance.name|default:"Not set" }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Status:</strong> 
+                            {% if form.instance.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}<br>
+                            <strong>Created:</strong> {{ form.instance.created_at|date:"M d, Y" }}<br>
+                            <strong>Devices Count:</strong> {{ form.instance.devices.count }} devices
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Form Actions -->
+                <div class="form-actions text-center">
+                    <button type="button" class="btn btn-cancel me-3" onclick="history.back()">
+                        <i class="fas fa-times me-1"></i>
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-save" id="submitBtn">
+                        <i class="fas fa-save me-1"></i>
+                        {% if form.instance.pk %}Update Device Type{% else %}Create Device Type{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('deviceTypeForm');
+    const specsField = document.getElementById('{{ form.specifications_template.id_for_label }}');
+    const jsonValidation = document.getElementById('jsonValidation');
+    const jsonValid = document.getElementById('jsonValid');
+    const jsonInvalid = document.getElementById('jsonInvalid');
+    const jsonError = document.getElementById('jsonError');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // JSON validation for specifications template
+    function validateJSON() {
+        const jsonValue = specsField.value.trim();
+        
+        if (jsonValue === '') {
+            jsonValidation.style.display = 'none';
+            return true;
+        }
+        
+        try {
+            JSON.parse(jsonValue);
+            jsonValidation.style.display = 'block';
+            jsonValid.style.display = 'block';
+            jsonInvalid.style.display = 'none';
+            return true;
+        } catch (e) {
+            jsonValidation.style.display = 'block';
+            jsonValid.style.display = 'none';
+            jsonInvalid.style.display = 'block';
+            jsonError.textContent = e.message;
+            return false;
+        }
+    }
+
+    // Validate JSON on input
+    if (specsField) {
+        specsField.addEventListener('input', validateJSON);
+        specsField.addEventListener('blur', validateJSON);
+        
+        // Initial validation if field has content
+        if (specsField.value.trim()) {
+            validateJSON();
+        }
+    }
+
+    // Form submission handling
+    form.addEventListener('submit', function(e) {
+        let isValid = true;
+        
+        // Validate required fields
+        const requiredFields = form.querySelectorAll('[required]');
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                isValid = false;
+                field.classList.add('is-invalid');
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+        
+        // Validate JSON if present
+        if (specsField && specsField.value.trim() && !validateJSON()) {
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+            
+            // Show error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'alert alert-danger alert-dismissible fade show';
+            errorDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Please correct the errors below before submitting.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            form.insertBefore(errorDiv, form.firstChild);
+            
+            // Scroll to top
+            form.scrollIntoView({ behavior: 'smooth' });
+            
+            return false;
+        }
+        
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+    });
+
+    // Auto-format JSON on blur
+    if (specsField) {
+        specsField.addEventListener('blur', function() {
+            const jsonValue = this.value.trim();
+            if (jsonValue) {
+                try {
+                    const parsed = JSON.parse(jsonValue);
+                    this.value = JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    // Leave as is if invalid JSON
+                }
+            }
+        });
+    }
+
+    // Dynamic subcategory loading (if needed for future enhancement)
+    const categoryField = document.querySelector('[name="category"]');
+    const subcategoryField = document.querySelector('[name="subcategory"]');
+    
+    if (categoryField && subcategoryField) {
+        categoryField.addEventListener('change', function() {
+            const categoryId = this.value;
+            if (categoryId) {
+                // Future: Load subcategories via AJAX
+                console.log('Category changed to:', categoryId);
+            }
+        });
+    }
+
+    // Field validation styling
+    const formFields = form.querySelectorAll('.form-control, .form-select');
+    formFields.forEach(field => {
+        field.addEventListener('input', function() {
+            if (this.checkValidity()) {
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+            } else {
+                this.classList.remove('is-valid');
+                this.classList.add('is-invalid');
+            }
+        });
+    });
+
+    // Auto-save draft (future enhancement)
+    let autoSaveTimer;
+    form.addEventListener('input', function() {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(function() {
+            // Future: Implement auto-save functionality
+            console.log('Auto-save draft');
+        }, 30000); // Save after 30 seconds of inactivity
+    });
+});
+</script>
+{% endblock %}

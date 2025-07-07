@@ -1,0 +1,690 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QR Code - {{ device.device_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/qr-code.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Devices</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:device_detail' device.device_id %}">{{ device.device_name }}</a></li>
+                    <li class="breadcrumb-item active">QR Code</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0 text-gray-800">QR Code Generator</h1>
+            <p class="text-muted mb-0">Generate and manage QR codes for {{ device.device_name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:device_detail' device.device_id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Device
+            </a>
+            <button type="button" class="btn btn-outline-primary" id="printQRButton">
+                <i class="fas fa-print me-1"></i>Print
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- QR Code Generation -->
+        <div class="col-xl-8">
+            <!-- Device Info Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-laptop me-2 text-primary"></i>Device Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-2 text-center">
+                            <div class="device-icon">
+                                {% if device.device_type.subcategory.category.name == 'Laptop' %}
+                                    <i class="fas fa-laptop fa-3x text-primary"></i>
+                                {% elif device.device_type.subcategory.category.name == 'Desktop' %}
+                                    <i class="fas fa-desktop fa-3x text-info"></i>
+                                {% elif device.device_type.subcategory.category.name == 'Mobile' %}
+                                    <i class="fas fa-mobile-alt fa-3x text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-computer fa-3x text-secondary"></i>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-10">
+                            <table class="table table-borderless mb-0">
+                                <tr>
+                                    <td class="fw-bold text-muted" style="width: 25%;">Device Name:</td>
+                                    <td class="fw-bold">{{ device.device_name }}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Device ID:</td>
+                                    <td><code class="bg-light px-2 py-1 rounded">{{ device.device_id }}</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Asset Tag:</td>
+                                    <td>
+                                        {% if device.asset_tag %}
+                                            <span class="badge bg-secondary">{{ device.asset_tag }}</span>
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-muted">Type:</td>
+                                    <td>{{ device.device_type.name }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QR Code Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog me-2 text-primary"></i>QR Code Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="qrConfigForm">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="qrSize" class="form-label">Size</label>
+                                <select id="qrSize" class="form-select">
+                                    <option value="100">Small (100x100px)</option>
+                                    <option value="200" selected>Medium (200x200px)</option>
+                                    <option value="300">Large (300x300px)</option>
+                                    <option value="400">Extra Large (400x400px)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="qrFormat" class="form-label">Format</label>
+                                <select id="qrFormat" class="form-select">
+                                    <option value="png" selected>PNG Image</option>
+                                    <option value="svg">SVG Vector</option>
+                                    <option value="pdf">PDF Document</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="errorCorrection" class="form-label">Error Correction</label>
+                                <select id="errorCorrection" class="form-select">
+                                    <option value="L">Low (~7%)</option>
+                                    <option value="M" selected>Medium (~15%)</option>
+                                    <option value="Q">Quartile (~25%)</option>
+                                    <option value="H">High (~30%)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Include in QR Code:</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="includeDeviceInfo" checked>
+                                    <label class="form-check-label" for="includeDeviceInfo">
+                                        Device Information
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="includeVerifyUrl" checked>
+                                    <label class="form-check-label" for="includeVerifyUrl">
+                                        Verification URL
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="includeTimestamp" checked>
+                                    <label class="form-check-label" for="includeTimestamp">
+                                        Generation Timestamp
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Label Options:</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="showDeviceName" checked>
+                                    <label class="form-check-label" for="showDeviceName">
+                                        Show Device Name
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="showAssetTag" checked>
+                                    <label class="form-check-label" for="showAssetTag">
+                                        Show Asset Tag
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="showLogo" checked>
+                                    <label class="form-check-label" for="showLogo">
+                                        Include BPS Logo
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" id="generateQRButton">
+                                <i class="fas fa-qrcode me-1"></i>Generate QR Code
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="resetConfigButton">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Generated QR Code -->
+            <div class="card" id="qrResultCard" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-qrcode me-2 text-success"></i>Generated QR Code
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div id="qrCodeContainer" class="mb-4">
+                        <!-- QR Code will be inserted here -->
+                    </div>
+                    <div class="d-flex justify-content-center gap-2">
+                        <button type="button" class="btn btn-success" id="downloadQRButton">
+                            <i class="fas fa-download me-1"></i>Download
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="copyQRButton">
+                            <i class="fas fa-copy me-1"></i>Copy Image
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="shareQRButton">
+                            <i class="fas fa-share me-1"></i>Share
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-xl-4">
+            <!-- QR Code Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2 text-info"></i>QR Code Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6 class="text-primary mb-3">What's included in QR codes:</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Device ID and Asset Tag
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Device Name and Model
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Category and Serial Number
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Verification URL
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check text-success me-2"></i>
+                            Generation Timestamp
+                        </li>
+                    </ul>
+                    
+                    <hr>
+                    
+                    <h6 class="text-primary mb-3">Usage Instructions:</h6>
+                    <ol class="small">
+                        <li>Configure QR code settings above</li>
+                        <li>Click "Generate QR Code"</li>
+                        <li>Download or print the QR code</li>
+                        <li>Attach to physical device</li>
+                        <li>Use mobile app to scan and verify</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- QR Code History -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2 text-warning"></i>Generation History
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline" id="qrHistory">
+                        <!-- History items will be populated here -->
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">
+                                <i class="fas fa-qrcode text-white"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="fw-bold small">Initial QR Code</div>
+                                <div class="text-muted small">{{ device.created_at|date:"M d, Y g:i A" }}</div>
+                                <div class="text-muted small">Generated during device creation</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2 text-warning"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-primary" onclick="generateBulkQR()">
+                            <i class="fas fa-layer-group me-1"></i>Bulk Generate
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="verifyQRCode()">
+                            <i class="fas fa-check-circle me-1"></i>Verify QR Code
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="printLabels()">
+                            <i class="fas fa-tags me-1"></i>Print Labels
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="viewAnalytics()">
+                            <i class="fas fa-chart-bar me-1"></i>View Analytics
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Preview Modal -->
+<div class="modal fade" id="qrPreviewModal" tabindex="-1" aria-labelledby="qrPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="qrPreviewModalLabel">QR Code Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div id="modalQRContainer">
+                    <!-- QR Code preview will be shown here -->
+                </div>
+                <div class="mt-3">
+                    <p class="text-muted">Scan this QR code to verify device information</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="modalDownloadButton">
+                    <i class="fas fa-download me-1"></i>Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const generateButton = document.getElementById('generateQRButton');
+    const resetButton = document.getElementById('resetConfigButton');
+    const downloadButton = document.getElementById('downloadQRButton');
+    const copyButton = document.getElementById('copyQRButton');
+    const shareButton = document.getElementById('shareQRButton');
+    const printButton = document.getElementById('printQRButton');
+    const qrResultCard = document.getElementById('qrResultCard');
+    const qrContainer = document.getElementById('qrCodeContainer');
+    
+    let currentQRCode = null;
+    let qrCanvas = null;
+
+    // Generate QR Code
+    generateButton.addEventListener('click', function() {
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+        
+        setTimeout(() => {
+            generateQRCode();
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-qrcode me-1"></i>Generate QR Code';
+        }, 1000);
+    });
+
+    function generateQRCode() {
+        const size = parseInt(document.getElementById('qrSize').value);
+        const format = document.getElementById('qrFormat').value;
+        const errorCorrection = document.getElementById('errorCorrection').value;
+        
+        // Build QR data
+        const qrData = {
+            deviceId: '{{ device.device_id }}',
+            deviceName: '{{ device.device_name }}',
+            assetTag: '{{ device.asset_tag|default:"" }}',
+            deviceType: '{{ device.device_type.name }}',
+            category: '{{ device.device_type.subcategory.category.name }}',
+            serialNumber: '{{ device.serial_number|default:"" }}',
+            verifyUrl: `${window.location.origin}/qr/verify/{{ device.device_id }}/`,
+            generatedAt: new Date().toISOString(),
+            generatedBy: '{{ request.user.username }}'
+        };
+
+        // Clear previous QR code
+        qrContainer.innerHTML = '';
+
+        // Create canvas for QR code
+        const canvas = document.createElement('canvas');
+        qrCanvas = canvas;
+
+        // Generate QR code
+        QRCode.toCanvas(canvas, JSON.stringify(qrData), {
+            width: size,
+            height: size,
+            errorCorrectionLevel: errorCorrection,
+            type: 'image/png',
+            quality: 0.92,
+            margin: 2,
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+            }
+        }, function(error) {
+            if (error) {
+                console.error('QR Code generation failed:', error);
+                showAlert('Error generating QR code', 'danger');
+                return;
+            }
+
+            // Create QR code wrapper
+            const qrWrapper = document.createElement('div');
+            qrWrapper.className = 'qr-code-wrapper';
+            
+            // Add label if enabled
+            if (document.getElementById('showDeviceName').checked || 
+                document.getElementById('showAssetTag').checked || 
+                document.getElementById('showLogo').checked) {
+                
+                const label = document.createElement('div');
+                label.className = 'qr-label mb-3';
+                
+                if (document.getElementById('showLogo').checked) {
+                    label.innerHTML += '<img src="{% static "img/logos/bps-logo.png" %}" alt="BPS Logo" style="height: 30px;" class="mb-2"><br>';
+                }
+                
+                if (document.getElementById('showDeviceName').checked) {
+                    label.innerHTML += `<strong>{{ device.device_name }}</strong><br>`;
+                }
+                
+                if (document.getElementById('showAssetTag').checked && '{{ device.asset_tag }}') {
+                    label.innerHTML += `Asset: {{ device.asset_tag }}<br>`;
+                }
+                
+                label.innerHTML += `<small class="text-muted">{{ device.device_id }}</small>`;
+                qrWrapper.appendChild(label);
+            }
+
+            qrWrapper.appendChild(canvas);
+            
+            // Add generation info
+            const info = document.createElement('div');
+            info.className = 'qr-info mt-2';
+            info.innerHTML = `<small class="text-muted">Generated: ${new Date().toLocaleString()}</small>`;
+            qrWrapper.appendChild(info);
+
+            qrContainer.appendChild(qrWrapper);
+            qrResultCard.style.display = 'block';
+            
+            // Scroll to result
+            qrResultCard.scrollIntoView({ behavior: 'smooth' });
+            
+            // Add to history
+            addToHistory();
+            
+            showAlert('QR code generated successfully!', 'success');
+        });
+    }
+
+    // Download QR Code
+    downloadButton.addEventListener('click', function() {
+        if (qrCanvas) {
+            const link = document.createElement('a');
+            link.download = `qr_code_${('{{ device.device_id }}').replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+            link.href = qrCanvas.toDataURL();
+            link.click();
+        }
+    });
+
+    // Copy QR Code
+    copyButton.addEventListener('click', function() {
+        if (qrCanvas) {
+            qrCanvas.toBlob(function(blob) {
+                const item = new ClipboardItem({ 'image/png': blob });
+                navigator.clipboard.write([item]).then(function() {
+                    showAlert('QR code copied to clipboard!', 'success');
+                }).catch(function(err) {
+                    console.error('Failed to copy QR code:', err);
+                    showAlert('Failed to copy QR code', 'danger');
+                });
+            });
+        }
+    });
+
+    // Share QR Code
+    shareButton.addEventListener('click', function() {
+        if (navigator.share && qrCanvas) {
+            qrCanvas.toBlob(function(blob) {
+                const file = new File([blob], `qr_code_{{ device.device_id }}.png`, { type: 'image/png' });
+                navigator.share({
+                    title: 'QR Code - {{ device.device_name }}',
+                    text: 'Device QR Code for {{ device.device_name }}',
+                    files: [file]
+                }).catch(console.error);
+            });
+        } else {
+            showAlert('Sharing not supported on this device', 'warning');
+        }
+    });
+
+    // Print QR Code
+    printButton.addEventListener('click', function() {
+        if (qrCanvas) {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>QR Code - {{ device.device_name }}</title>
+                        <style>
+                            body { margin: 0; padding: 20px; text-align: center; font-family: Arial, sans-serif; }
+                            .print-header { margin-bottom: 20px; }
+                            .qr-image { max-width: 100%; height: auto; }
+                            .device-info { margin-top: 20px; }
+                            @media print { body { margin: 0; } }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="print-header">
+                            <h2>{{ device.device_name }}</h2>
+                            <p>Device ID: {{ device.device_id }}</p>
+                        </div>
+                        <img src="${qrCanvas.toDataURL()}" class="qr-image" alt="QR Code">
+                        <div class="device-info">
+                            <p><strong>Asset Tag:</strong> {{ device.asset_tag|default:"Not assigned" }}</p>
+                            <p><strong>Type:</strong> {{ device.device_type.name }}</p>
+                            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+                        </div>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+    });
+
+    // Reset configuration
+    resetButton.addEventListener('click', function() {
+        document.getElementById('qrSize').value = '200';
+        document.getElementById('qrFormat').value = 'png';
+        document.getElementById('errorCorrection').value = 'M';
+        document.getElementById('includeDeviceInfo').checked = true;
+        document.getElementById('includeVerifyUrl').checked = true;
+        document.getElementById('includeTimestamp').checked = true;
+        document.getElementById('showDeviceName').checked = true;
+        document.getElementById('showAssetTag').checked = true;
+        document.getElementById('showLogo').checked = true;
+        
+        qrResultCard.style.display = 'none';
+        qrContainer.innerHTML = '';
+    });
+
+    function addToHistory() {
+        const historyContainer = document.getElementById('qrHistory');
+        const newItem = document.createElement('div');
+        newItem.className = 'timeline-item';
+        newItem.innerHTML = `
+            <div class="timeline-marker bg-success">
+                <i class="fas fa-qrcode text-white"></i>
+            </div>
+            <div class="timeline-content">
+                <div class="fw-bold small">QR Code Generated</div>
+                <div class="text-muted small">${new Date().toLocaleString()}</div>
+                <div class="text-muted small">Size: ${document.getElementById('qrSize').value}px</div>
+            </div>
+        `;
+        historyContainer.insertBefore(newItem, historyContainer.firstChild);
+    }
+
+    function showAlert(message, type) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container-fluid');
+        container.insertBefore(alertDiv, container.firstChild);
+        
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 5000);
+    }
+});
+
+// Quick action functions
+function generateBulkQR() {
+    window.location.href = '{% url "inventory:bulk_qr_generate" %}';
+}
+
+function verifyQRCode() {
+    window.location.href = `/qr/verify/{{ device.device_id }}/`;
+}
+
+function printLabels() {
+    window.location.href = `/qr/print-labels/?device={{ device.device_id }}`;
+}
+
+function viewAnalytics() {
+    window.location.href = '/qr/analytics/';
+}
+</script>
+
+<style>
+.qr-code-wrapper {
+    display: inline-block;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.qr-label {
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.qr-info {
+    text-align: center;
+    font-size: 12px;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e9ecef;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -22px;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.timeline-content {
+    background: #f8f9fa;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    margin-left: 1rem;
+}
+
+.device-icon {
+    opacity: 0.8;
+}
+
+@media print {
+    .btn, .card-header, .breadcrumb, .d-flex.justify-content-between {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .qr-code-wrapper {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+}
+
+@media (max-width: 768px) {
+    .d-flex.gap-2 {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .row.g-4 {
+        --bs-gutter-x: 1rem;
+    }
+}
+</style>
+{% endblock %}

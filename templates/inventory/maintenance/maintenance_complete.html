@@ -1,0 +1,455 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Complete Maintenance - BPS IT Inventory{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/custom.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:maintenance_list' %}">Maintenance</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:maintenance_detail' maintenance.id %}">{{ maintenance.device.device_id }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Complete</li>
+        </ol>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-success">
+                <i class="fas fa-check-circle me-2"></i>Complete Maintenance
+            </h1>
+            <p class="text-muted mb-0">Mark maintenance as completed for {{ maintenance.device.device_id }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:maintenance_detail' maintenance.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Details
+            </a>
+            <a href="{% url 'inventory:maintenance_list' %}" class="btn btn-outline-primary">
+                <i class="fas fa-list me-1"></i>All Maintenance
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Completion Form Card -->
+            <div class="card card-bps">
+                <div class="card-header card-header-bps">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-check me-2"></i>Maintenance Completion Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="maintenanceCompleteForm">
+                        {% csrf_token %}
+                        
+                        <!-- Maintenance Summary -->
+                        <div class="alert alert-info border-left-info mb-4">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-info mb-2">
+                                        <i class="fas fa-info-circle me-2"></i>Maintenance Summary
+                                    </h6>
+                                    <div class="mb-2"><strong>Device:</strong> {{ maintenance.device.device_id }}</div>
+                                    <div class="mb-2"><strong>Type:</strong> {{ maintenance.get_maintenance_type_display }}</div>
+                                    <div class="mb-2"><strong>Scheduled:</strong> {{ maintenance.scheduled_date|date:'M d, Y' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-2"><strong>Vendor:</strong> {{ maintenance.vendor|default:'Internal' }}</div>
+                                    <div class="mb-2"><strong>Status:</strong> 
+                                        <span class="badge bg-warning">{{ maintenance.get_status_display }}</span>
+                                    </div>
+                                    <div class="mb-2"><strong>Created by:</strong> {{ maintenance.created_by.get_full_name|default:maintenance.created_by.username }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Original Description -->
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">Original Description</h6>
+                            <div class="bg-light p-3 rounded">
+                                <p class="mb-0">{{ maintenance.description|default:'No description provided' }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Completion Details -->
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">Completion Details</h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label fw-bold">Completion Date</label>
+                                        <input type="text" class="form-control bg-light" 
+                                               value="{{ 'today'|date:'M d, Y' }}" readonly>
+                                        <small class="form-text text-muted">Automatically set to today</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="actual_cost" class="form-label fw-bold">Actual Cost (BDT)</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">৳</span>
+                                            <input type="number" class="form-control" id="actual_cost" name="actual_cost" 
+                                                   step="0.01" min="0" placeholder="0.00"
+                                                   value="{{ maintenance.estimated_cost|default:'' }}">
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            {% if maintenance.estimated_cost %}
+                                                Estimated cost: ৳{{ maintenance.estimated_cost }}
+                                            {% else %}
+                                                Enter the actual cost of maintenance
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="completion_notes" class="form-label fw-bold">
+                                    Completion Notes <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control" id="completion_notes" name="completion_notes" 
+                                          rows="4" required placeholder="Describe the work performed, parts replaced, issues resolved, etc."></textarea>
+                                <small class="form-text text-muted">Provide detailed notes about the maintenance work completed</small>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="completed_by" class="form-label fw-bold">Completed By</label>
+                                <input type="text" class="form-control" id="completed_by" name="completed_by" 
+                                       value="{{ request.user.get_full_name|default:request.user.username }}"
+                                       placeholder="Name of person who completed the work">
+                                <small class="form-text text-muted">Name of technician or person who performed the maintenance</small>
+                            </div>
+                        </div>
+
+                        <!-- Device Condition Assessment -->
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">Post-Maintenance Assessment</h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="device_condition" class="form-label fw-bold">Device Condition After Maintenance</label>
+                                        <select class="form-control" id="device_condition" name="device_condition">
+                                            <option value="">Select condition...</option>
+                                            <option value="EXCELLENT">Excellent</option>
+                                            <option value="GOOD" selected>Good</option>
+                                            <option value="FAIR">Fair</option>
+                                            <option value="POOR">Poor</option>
+                                            <option value="DAMAGED">Damaged</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="next_maintenance" class="form-label fw-bold">Recommended Next Maintenance</label>
+                                        <input type="date" class="form-control" id="next_maintenance" name="next_maintenance"
+                                               min="{{ 'today'|date:'Y-m-d' }}">
+                                        <small class="form-text text-muted">When should the next maintenance be scheduled?</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Information -->
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">Additional Information</h6>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="warranty_work" name="warranty_work">
+                                <label class="form-check-label fw-bold" for="warranty_work">
+                                    This was warranty work
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="parts_replaced" name="parts_replaced">
+                                <label class="form-check-label fw-bold" for="parts_replaced">
+                                    Parts were replaced during maintenance
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="follow_up_required" name="follow_up_required">
+                                <label class="form-check-label fw-bold" for="follow_up_required">
+                                    Follow-up maintenance required
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <div class="text-muted small">
+                                <i class="fas fa-clock me-1"></i>
+                                This will mark the maintenance as completed and cannot be undone
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'inventory:maintenance_detail' maintenance.id %}" class="btn btn-secondary">
+                                    <i class="fas fa-times me-1"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-success" id="completeBtn">
+                                    <i class="fas fa-check me-1"></i>Complete Maintenance
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Information -->
+        <div class="col-lg-4">
+            <!-- Quick Stats Card -->
+            <div class="card card-bps mb-4">
+                <div class="card-header card-header-bps">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Maintenance Stats
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="text-muted small">Duration</div>
+                            <div class="fw-bold h5 text-primary">
+                                {% if maintenance.scheduled_date %}
+                                    {{ maintenance.scheduled_date|timesince:'today' }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-muted small">Priority</div>
+                            <div class="fw-bold h5">
+                                {% if maintenance.priority == 'HIGH' %}
+                                    <span class="text-danger">High</span>
+                                {% elif maintenance.priority == 'MEDIUM' %}
+                                    <span class="text-warning">Medium</span>
+                                {% else %}
+                                    <span class="text-info">Low</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device Information Card -->
+            <div class="card card-bps mb-4">
+                <div class="card-header card-header-bps">
+                    <h6 class="mb-0">
+                        <i class="fas fa-desktop me-2"></i>Device Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>Model:</strong> {{ maintenance.device.model|default:'N/A' }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Serial:</strong> {{ maintenance.device.serial_number|default:'N/A' }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Current Condition:</strong> 
+                        <span class="badge bg-secondary">{{ maintenance.device.get_condition_display }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Location:</strong> {{ maintenance.device.location|default:'N/A' }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Assigned to:</strong> 
+                        {% if maintenance.device.current_assignment %}
+                            {{ maintenance.device.current_assignment.assigned_to_staff|default:'Department' }}
+                        {% else %}
+                            Unassigned
+                        {% endif %}
+                    </div>
+                    
+                    <hr>
+                    
+                    <a href="{% url 'inventory:device_detail' maintenance.device.device_id %}" 
+                       class="btn btn-outline-primary btn-sm w-100">
+                        <i class="fas fa-eye me-1"></i>View Device Details
+                    </a>
+                </div>
+            </div>
+
+            <!-- Maintenance History Card -->
+            <div class="card card-bps">
+                <div class="card-header card-header-bps">
+                    <h6 class="mb-0">
+                        <i class="fas fa-history me-2"></i>Recent Maintenance
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if maintenance.device.maintenance_history.all %}
+                        {% for hist in maintenance.device.maintenance_history.all|slice:":3" %}
+                            <div class="d-flex justify-content-between align-items-center mb-2 {% if not forloop.last %}border-bottom pb-2{% endif %}">
+                                <div>
+                                    <div class="fw-bold small">{{ hist.get_maintenance_type_display }}</div>
+                                    <div class="text-muted small">{{ hist.completed_date|date:'M d, Y'|default:'Scheduled' }}</div>
+                                </div>
+                                <div>
+                                    {% if hist.status == 'COMPLETED' %}
+                                        <span class="badge bg-success">Done</span>
+                                    {% elif hist.status == 'IN_PROGRESS' %}
+                                        <span class="badge bg-warning">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-info">Scheduled</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                        
+                        <div class="text-center mt-3">
+                            <a href="{% url 'inventory:maintenance_list' %}?device={{ maintenance.device.device_id }}" 
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-list me-1"></i>View All
+                            </a>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted">
+                            <i class="fas fa-clipboard-list fa-2x mb-2 opacity-50"></i>
+                            <p class="mb-0">No previous maintenance records</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('maintenanceCompleteForm');
+    const completeBtn = document.getElementById('completeBtn');
+    const completionNotesField = document.getElementById('completion_notes');
+    const actualCostField = document.getElementById('actual_cost');
+    
+    // Form validation
+    function validateForm() {
+        const notes = completionNotesField.value.trim();
+        const isValid = notes.length >= 10;
+        
+        completeBtn.disabled = !isValid;
+        
+        if (!isValid && notes.length > 0) {
+            completionNotesField.classList.add('is-invalid');
+        } else {
+            completionNotesField.classList.remove('is-invalid');
+        }
+        
+        return isValid;
+    }
+    
+    // Real-time validation
+    completionNotesField.addEventListener('input', validateForm);
+    
+    // Initial validation
+    validateForm();
+    
+    // Cost validation
+    actualCostField.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        if (value < 0) {
+            this.value = 0;
+        }
+    });
+    
+    // Form submission with confirmation
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (!validateForm()) {
+            alert('Please provide detailed completion notes (at least 10 characters).');
+            return false;
+        }
+        
+        // Show confirmation dialog
+        const deviceId = '{{ maintenance.device.device_id }}';
+        const maintenanceType = '{{ maintenance.get_maintenance_type_display }}';
+        
+        if (confirm(`Are you sure you want to mark this ${maintenanceType} maintenance for ${deviceId} as completed?\n\nThis action cannot be undone.`)) {
+            // Disable submit button to prevent double submission
+            completeBtn.disabled = true;
+            completeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Completing...';
+            
+            // Submit the form
+            this.submit();
+        }
+    });
+    
+    // Auto-suggest next maintenance date based on type
+    const maintenanceType = '{{ maintenance.maintenance_type }}';
+    const nextMaintenanceField = document.getElementById('next_maintenance');
+    
+    if (nextMaintenanceField && !nextMaintenanceField.value) {
+        const today = new Date();
+        let suggestedDate = new Date(today);
+        
+        // Suggest dates based on maintenance type
+        switch(maintenanceType) {
+            case 'PREVENTIVE':
+                suggestedDate.setMonth(today.getMonth() + 6); // 6 months
+                break;
+            case 'ROUTINE':
+                suggestedDate.setMonth(today.getMonth() + 3); // 3 months
+                break;
+            case 'EMERGENCY':
+                suggestedDate.setMonth(today.getMonth() + 1); // 1 month
+                break;
+            default:
+                suggestedDate.setMonth(today.getMonth() + 6); // 6 months default
+        }
+        
+        nextMaintenanceField.value = suggestedDate.toISOString().split('T')[0];
+    }
+    
+    // Toggle additional fields based on checkboxes
+    const warrantyCheckbox = document.getElementById('warranty_work');
+    const partsCheckbox = document.getElementById('parts_replaced');
+    
+    warrantyCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            actualCostField.value = '0.00';
+            actualCostField.readOnly = true;
+            actualCostField.classList.add('bg-light');
+        } else {
+            actualCostField.readOnly = false;
+            actualCostField.classList.remove('bg-light');
+        }
+    });
+    
+    // Character counter for completion notes
+    const maxLength = 1000;
+    const charCounter = document.createElement('small');
+    charCounter.className = 'form-text text-muted text-end';
+    completionNotesField.parentNode.appendChild(charCounter);
+    
+    function updateCharCounter() {
+        const remaining = maxLength - completionNotesField.value.length;
+        charCounter.textContent = `${completionNotesField.value.length}/${maxLength} characters`;
+        
+        if (remaining < 50) {
+            charCounter.classList.add('text-warning');
+        } else {
+            charCounter.classList.remove('text-warning');
+        }
+    }
+    
+    completionNotesField.addEventListener('input', updateCharCounter);
+    updateCharCounter();
+});
+</script>
+{% endblock %}

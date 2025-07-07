@@ -1,0 +1,445 @@
+{% load static %}
+
+<!-- Main Footer -->
+<footer class="footer-bps mt-auto">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <!-- Left Side - Copyright and Organization Info -->
+            <div class="col-md-6">
+                <div class="footer-info">
+                    <div class="footer-brand mb-2">
+                        <img src="{% static 'images/bps-logo-small.png' %}" alt="BPS Logo" class="footer-logo me-2">
+                        <span class="footer-title">BPS IT Inventory Management System</span>
+                    </div>
+                    <div class="footer-text">
+                        <p class="mb-1">
+                            <strong>Bangladesh Parliament Secretariat</strong><br>
+                            Sher-e-Bangla Nagar, Dhaka-1207, Bangladesh
+                        </p>
+                        <p class="mb-0">
+                            <i class="fas fa-copyright me-1"></i>
+                            © {{ "now"|date:"Y" }} Bangladesh Parliament Secretariat. All rights reserved.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side - System Info and Links -->
+            <div class="col-md-6 text-md-end">
+                <div class="footer-meta">
+                    <div class="footer-version mb-2">
+                        <span class="badge bg-primary">
+                            <i class="fas fa-code-branch me-1"></i>Version 1.0.0
+                        </span>
+                        {% if user.is_authenticated %}
+                        <span class="badge bg-success ms-2">
+                            <i class="fas fa-user me-1"></i>{{ user.get_full_name|default:user.username }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="footer-links">
+                        {% if user.is_authenticated %}
+                        <a href="{% url 'system_health' %}" class="footer-link me-3" title="System Health">
+                            <i class="fas fa-heartbeat me-1"></i>System Health
+                        </a>
+                        
+                        {% if user.is_staff %}
+                        <a href="{% url 'system_status' %}" class="footer-link me-3" title="System Status">
+                            <i class="fas fa-server me-1"></i>Status
+                        </a>
+                        <a href="{% url 'api_docs' %}" class="footer-link me-3" title="API Documentation">
+                            <i class="fas fa-code me-1"></i>API Docs
+                        </a>
+                        {% endif %}
+                        {% endif %}
+                        
+                        <a href="#" class="footer-link" data-bs-toggle="modal" data-bs-target="#aboutModal" title="About System">
+                            <i class="fas fa-info-circle me-1"></i>About
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Footer Row for System Status -->
+        <div class="row mt-3 pt-3 border-top">
+            <div class="col-md-8">
+                <div class="footer-stats d-flex flex-wrap gap-3">
+                    {% if user.is_authenticated %}
+                    <div class="stat-item">
+                        <i class="fas fa-database text-primary me-1"></i>
+                        <small class="text-muted">Database: <span class="text-success">Connected</span></small>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-clock text-primary me-1"></i>
+                        <small class="text-muted">Last Updated: <span id="lastUpdated">{{ "now"|date:"M d, Y H:i" }}</span></small>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-shield-alt text-primary me-1"></i>
+                        <small class="text-muted">Session: <span class="text-success">Active</span></small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <div class="footer-support">
+                    <small class="text-muted">
+                        <i class="fas fa-envelope me-1"></i>
+                        IT Support: <a href="mailto:it@parliament.gov.bd" class="footer-link">it@parliament.gov.bd</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- About Modal -->
+<div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content modal-bps">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aboutModalLabel">
+                    <i class="fas fa-info-circle text-primary me-2"></i>
+                    About BPS IT Inventory Management System
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <img src="{% static 'images/bps-logo.png' %}" alt="BPS Logo" class="img-fluid mb-3" style="max-height: 120px;">
+                    </div>
+                    <div class="col-md-8">
+                        <h6 class="text-primary">Bangladesh Parliament Secretariat</h6>
+                        <h5 class="mb-3">IT Inventory Management System</h5>
+                        
+                        <p class="text-muted">
+                            A comprehensive solution for managing IT assets, assignments, and maintenance 
+                            within the Bangladesh Parliament Secretariat. This system provides efficient 
+                            tracking and management of all IT equipment and resources.
+                        </p>
+                        
+                        <div class="row mt-4">
+                            <div class="col-6">
+                                <h6 class="text-primary mb-2">System Information</h6>
+                                <ul class="list-unstyled small">
+                                    <li><strong>Version:</strong> 1.0.0</li>
+                                    <li><strong>Release Date:</strong> {{ "now"|date:"F Y" }}</li>
+                                    <li><strong>Framework:</strong> Django 4.2</li>
+                                    <li><strong>Database:</strong> MySQL</li>
+                                </ul>
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-primary mb-2">Key Features</h6>
+                                <ul class="list-unstyled small">
+                                    <li><i class="fas fa-check text-success me-1"></i> Device Management</li>
+                                    <li><i class="fas fa-check text-success me-1"></i> Assignment Tracking</li>
+                                    <li><i class="fas fa-check text-success me-1"></i> QR Code System</li>
+                                    <li><i class="fas fa-check text-success me-1"></i> Reports & Analytics</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-2">Contact Information</h6>
+                        <address class="small">
+                            <strong>Bangladesh Parliament Secretariat</strong><br>
+                            Sher-e-Bangla Nagar<br>
+                            Dhaka-1207, Bangladesh<br>
+                            <i class="fas fa-phone me-1"></i> +880-2-9123456<br>
+                            <i class="fas fa-envelope me-1"></i> <a href="mailto:info@parliament.gov.bd">info@parliament.gov.bd</a>
+                        </address>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary mb-2">IT Support</h6>
+                        <address class="small">
+                            <strong>IT Department</strong><br>
+                            Bangladesh Parliament Secretariat<br>
+                            <i class="fas fa-phone me-1"></i> +880-2-9123456 ext. 101<br>
+                            <i class="fas fa-envelope me-1"></i> <a href="mailto:it@parliament.gov.bd">it@parliament.gov.bd</a><br>
+                            <i class="fas fa-clock me-1"></i> Support Hours: 9:00 AM - 5:00 PM
+                        </address>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="d-flex justify-content-between w-100">
+                    <div class="text-muted small">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Secure System | All activities are logged and monitored
+                    </div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Footer Styles -->
+<style>
+.footer-bps {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-top: 2px solid #dee2e6;
+    padding: 2rem 0 1rem 0;
+    margin-top: auto;
+    position: relative;
+}
+
+.footer-logo {
+    height: 24px;
+    width: auto;
+}
+
+.footer-title {
+    font-weight: 600;
+    color: #495057;
+    font-size: 1rem;
+}
+
+.footer-text {
+    color: #6c757d;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.footer-text strong {
+    color: #495057;
+}
+
+.footer-version .badge {
+    font-size: 0.75rem;
+}
+
+.footer-links {
+    margin-bottom: 0.5rem;
+}
+
+.footer-link {
+    color: #0066cc;
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: color 0.3s ease;
+}
+
+.footer-link:hover {
+    color: #004499;
+    text-decoration: underline;
+}
+
+.footer-stats {
+    margin-bottom: 0;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.footer-support {
+    margin-bottom: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .footer-bps {
+        padding: 1.5rem 0 1rem 0;
+        text-align: center;
+    }
+    
+    .footer-stats {
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    
+    .footer-links {
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .footer-meta {
+        margin-top: 1rem;
+    }
+    
+    .col-md-6.text-md-end {
+        text-align: center !important;
+    }
+}
+
+/* Dark mode compatibility */
+@media (prefers-color-scheme: dark) {
+    .footer-bps {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        border-top-color: #495057;
+    }
+    
+    .footer-title,
+    .footer-text strong {
+        color: #f8f9fa;
+    }
+    
+    .footer-text {
+        color: #adb5bd;
+    }
+    
+    .footer-link {
+        color: #66b3ff;
+    }
+    
+    .footer-link:hover {
+        color: #99ccff;
+    }
+}
+
+/* Print styles */
+@media print {
+    .footer-bps {
+        display: none !important;
+    }
+}
+
+/* Animation for last updated time */
+@keyframes pulse-text {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+.footer-stats .text-success {
+    animation: pulse-text 2s infinite;
+}
+
+/* Back to top button */
+.back-to-top {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.back-to-top.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    background: #004499;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.4);
+}
+
+@media (max-width: 768px) {
+    .back-to-top {
+        width: 45px;
+        height: 45px;
+        bottom: 15px;
+        right: 15px;
+    }
+}
+</style>
+
+<!-- Back to Top Button -->
+<button class="back-to-top" id="backToTop" title="Back to Top">
+    <i class="fas fa-chevron-up"></i>
+</button>
+
+<!-- Footer JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update last updated time
+    function updateLastUpdated() {
+        const now = new Date();
+        const formatted = now.toLocaleDateString('en-US', {
+            month: 'short',
+            day: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        const lastUpdatedElement = document.getElementById('lastUpdated');
+        if (lastUpdatedElement) {
+            lastUpdatedElement.textContent = formatted;
+        }
+    }
+
+    // Update every minute
+    setInterval(updateLastUpdated, 60000);
+
+    // Back to top functionality
+    const backToTopButton = document.getElementById('backToTop');
+    
+    // Show/hide back to top button
+    window.addEventListener('scroll', function() {
+        if (window.pageYOffset > 300) {
+            backToTopButton.classList.add('show');
+        } else {
+            backToTopButton.classList.remove('show');
+        }
+    });
+    
+    // Smooth scroll to top
+    backToTopButton.addEventListener('click', function() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+
+    // System status check (for authenticated users)
+    {% if user.is_authenticated %}
+    function checkSystemStatus() {
+        // This would typically make an AJAX call to check system health
+        // For now, we'll just update the UI to show system is active
+        const dbStatus = document.querySelector('.footer-stats .text-success');
+        if (dbStatus) {
+            dbStatus.style.animation = 'pulse-text 2s infinite';
+        }
+    }
+    
+    // Check system status every 5 minutes
+    setInterval(checkSystemStatus, 300000);
+    {% endif %}
+
+    // Initialize tooltips if using Bootstrap tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+});
+
+// Global footer utilities
+window.BPS_Footer = {
+    showAbout: function() {
+        const aboutModal = new bootstrap.Modal(document.getElementById('aboutModal'));
+        aboutModal.show();
+    },
+    
+    updateSystemStatus: function(status) {
+        const statusElements = document.querySelectorAll('.footer-stats .text-success');
+        statusElements.forEach(function(element) {
+            element.textContent = status;
+            element.className = status === 'Connected' ? 'text-success' : 'text-danger';
+        });
+    }
+};
+</script>

@@ -1,0 +1,520 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ error_code|default:"403" }} - Access Forbidden | {{ system_name|default:"BPS Inventory" }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .error-container {
+        min-height: calc(100vh - 200px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .error-card {
+        max-width: 700px;
+        text-align: center;
+        padding: 3rem;
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    }
+    
+    .error-icon {
+        font-size: 6rem;
+        color: #ffc107;
+        margin-bottom: 1.5rem;
+        animation: shake 1s ease-in-out infinite;
+    }
+    
+    .error-code {
+        font-size: 4rem;
+        font-weight: 700;
+        color: #dc3545;
+        margin-bottom: 0.5rem;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .error-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+    }
+    
+    .error-message {
+        font-size: 1.1rem;
+        color: #6c757d;
+        margin-bottom: 2rem;
+        line-height: 1.6;
+    }
+    
+    .permission-details {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 2rem 0;
+        text-align: left;
+    }
+    
+    .permission-details h6 {
+        color: #856404;
+        margin-bottom: 1rem;
+    }
+    
+    .permission-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .permission-list li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #ffeaa7;
+    }
+    
+    .permission-list li:last-child {
+        border-bottom: none;
+    }
+    
+    .permission-list .permission-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .permission-status {
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .permission-granted {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .permission-denied {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 2rem;
+    }
+    
+    .btn-error {
+        padding: 0.75rem 2rem;
+        border-radius: 25px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-error:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    .security-notice {
+        background: #d1ecf1;
+        border: 1px solid #b6d4db;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 2rem 0;
+        border-left: 4px solid #17a2b8;
+    }
+    
+    .user-info-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 2rem 0;
+        text-align: left;
+    }
+    
+    .contact-admin {
+        background: #e2e3e5;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 2rem 0;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+    
+    .access-level {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin: 0.5rem 0;
+    }
+    
+    .access-user {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .access-staff {
+        background: #cce5ff;
+        color: #004085;
+    }
+    
+    .access-admin {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .resource-info {
+        background: #f8f9fa;
+        border-left: 4px solid #6c757d;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 5px 5px 0;
+    }
+    
+    @media (max-width: 768px) {
+        .error-card {
+            padding: 2rem 1rem;
+            margin: 1rem;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+        }
+        
+        .error-code {
+            font-size: 3rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .btn-error {
+            width: 100%;
+            max-width: 300px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="card error-card">
+        <!-- Error Icon -->
+        <div class="error-icon">
+            <i class="fas fa-shield-alt"></i>
+        </div>
+        
+        <!-- Error Code -->
+        <div class="error-code">
+            {{ error_code|default:"403" }}
+        </div>
+        
+        <!-- Error Title -->
+        <h1 class="error-title">
+            {{ error_title|default:"Access Forbidden" }}
+        </h1>
+        
+        <!-- Error Message -->
+        <p class="error-message">
+            {{ error_message|default:"You don't have permission to access this resource. This could be due to insufficient privileges or the resource being restricted." }}
+        </p>
+        
+        <!-- User Information Card -->
+        {% if user.is_authenticated %}
+        <div class="user-info-card">
+            <h6 class="mb-3">
+                <i class="fas fa-user me-2"></i>Your Account Information
+            </h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Username:</strong> {{ user.username }}</p>
+                    <p class="mb-1"><strong>Full Name:</strong> {{ user.get_full_name|default:"Not provided" }}</p>
+                    <p class="mb-1"><strong>Email:</strong> {{ user.email|default:"Not provided" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Account Type:</strong></p>
+                    {% if user.is_superuser %}
+                        <span class="access-level access-admin">
+                            <i class="fas fa-crown"></i>Super Administrator
+                        </span>
+                    {% elif user.is_staff %}
+                        <span class="access-level access-staff">
+                            <i class="fas fa-user-tie"></i>Staff Member
+                        </span>
+                    {% else %}
+                        <span class="access-level access-user">
+                            <i class="fas fa-user"></i>Regular User
+                        </span>
+                    {% endif %}
+                    <p class="mb-1 mt-2"><strong>Last Login:</strong> {{ user.last_login|default:"Never"|date:"M d, Y H:i" }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Resource Information -->
+        <div class="resource-info">
+            <h6 class="mb-2">
+                <i class="fas fa-info-circle me-2"></i>Resource Details
+            </h6>
+            <p class="mb-1"><strong>Requested URL:</strong> <code>{{ request.get_full_path }}</code></p>
+            <p class="mb-1"><strong>Request Method:</strong> <span class="badge bg-secondary">{{ request.method }}</span></p>
+            <p class="mb-0"><strong>Timestamp:</strong> {{ "now"|date:"M d, Y H:i:s" }}</p>
+        </div>
+        
+        <!-- Permission Details -->
+        <div class="permission-details">
+            <h6>
+                <i class="fas fa-key me-2"></i>Permission Requirements
+            </h6>
+            <p class="text-muted mb-3">This resource requires one or more of the following permissions:</p>
+            <ul class="permission-list">
+                <li>
+                    <div class="permission-item">
+                        <span><i class="fas fa-laptop me-2"></i>Inventory Management Access</span>
+                        <span class="permission-status {% if user.is_authenticated %}permission-granted{% else %}permission-denied{% endif %}">
+                            {% if user.is_authenticated %}Granted{% else %}Denied{% endif %}
+                        </span>
+                    </div>
+                </li>
+                <li>
+                    <div class="permission-item">
+                        <span><i class="fas fa-users me-2"></i>Staff Privileges</span>
+                        <span class="permission-status {% if user.is_staff %}permission-granted{% else %}permission-denied{% endif %}">
+                            {% if user.is_staff %}Granted{% else %}Denied{% endif %}
+                        </span>
+                    </div>
+                </li>
+                <li>
+                    <div class="permission-item">
+                        <span><i class="fas fa-cogs me-2"></i>Administrative Access</span>
+                        <span class="permission-status {% if user.is_superuser %}permission-granted{% else %}permission-denied{% endif %}">
+                            {% if user.is_superuser %}Granted{% else %}Denied{% endif %}
+                        </span>
+                    </div>
+                </li>
+                <li>
+                    <div class="permission-item">
+                        <span><i class="fas fa-file-alt me-2"></i>Report Generation</span>
+                        <span class="permission-status {% if user.is_staff or user.is_superuser %}permission-granted{% else %}permission-denied{% endif %}">
+                            {% if user.is_staff or user.is_superuser %}Granted{% else %}Denied{% endif %}
+                        </span>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- Security Notice -->
+        <div class="security-notice">
+            <h6 class="mb-2">
+                <i class="fas fa-shield-alt me-2"></i>Security Notice
+            </h6>
+            <p class="mb-0">
+                This access attempt has been logged for security purposes. Unauthorized access attempts 
+                are monitored and may result in account restrictions. If you believe you should have 
+                access to this resource, please contact your system administrator.
+            </p>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            {% if user.is_authenticated %}
+                <a href="{% url 'inventory:dashboard' %}" class="btn btn-primary btn-error">
+                    <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                </a>
+                <a href="{% url 'authentication:profile' %}" class="btn btn-outline-primary btn-error">
+                    <i class="fas fa-user-cog me-2"></i>View Profile
+                </a>
+            {% else %}
+                <a href="{% url 'authentication:login' %}" class="btn btn-primary btn-error">
+                    <i class="fas fa-sign-in-alt me-2"></i>Login
+                </a>
+            {% endif %}
+            
+            <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-error">
+                <i class="fas fa-home me-2"></i>Go Home
+            </a>
+            
+            <button class="btn btn-outline-secondary btn-error" onclick="window.history.back()">
+                <i class="fas fa-arrow-left me-2"></i>Go Back
+            </button>
+        </div>
+        
+        <!-- Contact Administrator -->
+        <div class="contact-admin">
+            <h6 class="mb-3">
+                <i class="fas fa-envelope me-2"></i>Need Access?
+            </h6>
+            <p class="mb-3">
+                If you believe you should have access to this resource, please contact your system administrator 
+                with the following information:
+            </p>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="small fw-bold">Contact Information:</h6>
+                    <ul class="list-unstyled small">
+                        <li><i class="fas fa-envelope me-2"></i>it@parliament.gov.bd</li>
+                        <li><i class="fas fa-phone me-2"></i>+880-2-9123456 ext. 101</li>
+                        <li><i class="fas fa-clock me-2"></i>9:00 AM - 5:00 PM</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="small fw-bold">Reference Information:</h6>
+                    <ul class="list-unstyled small">
+                        <li><strong>Error Code:</strong> 403</li>
+                        <li><strong>Resource:</strong> {{ request.get_full_path|truncatechars:30 }}</li>
+                        <li><strong>User:</strong> {{ user.username|default:"Anonymous" }}</li>
+                        <li><strong>Time:</strong> {{ "now"|date:"Y-m-d H:i:s" }}</li>
+                    </ul>
+                </div>
+            </div>
+            
+            {% if user.is_authenticated %}
+            <div class="mt-3">
+                <a href="mailto:it@parliament.gov.bd?subject=Access Request - {{ request.get_full_path }}&body=Hello,%0D%0A%0D%0AI am requesting access to: {{ request.get_full_path }}%0D%0A%0D%0AUser: {{ user.username }}%0D%0ATime: {{ "now"|date:"Y-m-d H:i:s" }}%0D%0A%0D%0APlease grant me the necessary permissions.%0D%0A%0D%0AThank you." 
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-envelope me-2"></i>Send Access Request Email
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- System Info -->
+        <div class="mt-4 pt-3 border-top">
+            <small class="text-muted">
+                <i class="fas fa-server me-1"></i>
+                {{ system_name|default:"BPS IT Inventory Management System" }} | 
+                <i class="fas fa-shield-alt me-1"></i>
+                Secure Access Control | 
+                <i class="fas fa-clock me-1"></i>
+                {{ "now"|date:"M d, Y H:i" }}
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Enhanced UX -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Log 403 error for security monitoring
+    console.log('403 Access Denied:', {
+        url: window.location.href,
+        user: '{{ user.username|default:"anonymous" }}',
+        timestamp: new Date().toISOString(),
+        referrer: document.referrer
+    });
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'h' && !e.ctrlKey && !e.metaKey) {
+            window.location.href = '{% url "home" %}';
+        } else if (e.key === 'l' && !e.ctrlKey && !e.metaKey) {
+            {% if not user.is_authenticated %}
+            window.location.href = '{% url "authentication:login" %}';
+            {% endif %}
+        } else if (e.key === 'd' && !e.ctrlKey && !e.metaKey) {
+            {% if user.is_authenticated %}
+            window.location.href = '{% url "inventory:dashboard" %}';
+            {% endif %}
+        }
+    });
+    
+    // Auto-focus contact button if user is authenticated
+    {% if user.is_authenticated %}
+    const contactBtn = document.querySelector('a[href^="mailto:"]');
+    if (contactBtn) {
+        contactBtn.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.05)';
+        });
+        contactBtn.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+    }
+    {% endif %}
+    
+    // Report 403 error for analytics/security
+    if (typeof fetch !== 'undefined') {
+        fetch('/api/errors/403/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                url: window.location.href,
+                user: '{{ user.username|default:"" }}',
+                timestamp: new Date().toISOString(),
+                user_agent: navigator.userAgent,
+                referrer: document.referrer
+            })
+        }).catch(() => {}); // Silent fail
+    }
+    
+    // Copy reference info to clipboard
+    function copyReferenceInfo() {
+        const refInfo = `Error: 403 Access Forbidden
+Resource: {{ request.get_full_path }}
+User: {{ user.username|default:"Anonymous" }}
+Time: {{ "now"|date:"Y-m-d H:i:s" }}
+System: {{ system_name|default:"BPS Inventory" }}`;
+
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(refInfo).then(() => {
+                alert('Reference information copied to clipboard');
+            });
+        }
+    }
+    
+    // Add copy functionality to reference info
+    const referenceSection = document.querySelector('.contact-admin');
+    if (referenceSection) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn btn-outline-secondary btn-sm mt-2';
+        copyBtn.innerHTML = '<i class="fas fa-copy me-2"></i>Copy Reference Info';
+        copyBtn.onclick = copyReferenceInfo;
+        referenceSection.appendChild(copyBtn);
+    }
+});
+
+// Show help tips
+function showAccessTips() {
+    const tips = [
+        'Contact your administrator for access',
+        'Check if you are logged in with the correct account',
+        'Verify your account permissions',
+        'Try logging out and back in'
+    ];
+    
+    alert('💡 Access Tips:\n' + tips.join('\n• '));
+}
+
+// Add tips button
+setTimeout(() => {
+    const actionsDiv = document.querySelector('.action-buttons');
+    if (actionsDiv) {
+        const tipsBtn = document.createElement('button');
+        tipsBtn.className = 'btn btn-outline-info btn-error';
+        tipsBtn.innerHTML = '<i class="fas fa-lightbulb me-2"></i>Access Tips';
+        tipsBtn.onclick = showAccessTips;
+        actionsDiv.appendChild(tipsBtn);
+    }
+}, 1000);
+</script>
+{% endblock %}

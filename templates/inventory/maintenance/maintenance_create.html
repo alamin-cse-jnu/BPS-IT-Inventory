@@ -1,0 +1,1002 @@
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Schedule New Maintenance - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/custom.css' %}">
+<link rel="stylesheet" href="{% static 'css/bps-theme.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-gray-800">
+                <i class="fas fa-plus-circle text-primary me-2"></i>
+                Schedule New Maintenance
+            </h1>
+            <p class="text-muted mb-0">Create a maintenance schedule for device servicing</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:maintenance_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>
+                Back to List
+            </a>
+            <a href="{% url 'inventory:maintenance_schedule' %}" class="btn btn-outline-info">
+                <i class="fas fa-calendar-alt me-1"></i>
+                Calendar View
+            </a>
+        </div>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="step-item active" id="step1">
+                            <div class="step-circle">1</div>
+                            <div class="step-label">Device Selection</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step-item" id="step2">
+                            <div class="step-circle">2</div>
+                            <div class="step-label">Maintenance Details</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step-item" id="step3">
+                            <div class="step-circle">3</div>
+                            <div class="step-label">Schedule & Cost</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step-item" id="step4">
+                            <div class="step-circle">4</div>
+                            <div class="step-label">Review & Submit</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Main Form -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-cog me-1"></i>
+                        <span id="stepTitle">Device Selection</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="maintenanceCreateForm" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Step 1: Device Selection -->
+                        <div class="form-step" id="formStep1">
+                            <div class="row mb-4">
+                                <div class="col-md-8">
+                                    <label for="{{ form.device.id_for_label }}" class="form-label required">
+                                        <i class="fas fa-laptop me-1"></i>
+                                        Select Device
+                                    </label>
+                                    {{ form.device }}
+                                    {% if form.device.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.device.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">Choose the device that requires maintenance</div>
+                                    
+                                    <!-- Device Info Display -->
+                                    <div id="deviceInfo" class="mt-3" style="display: none;">
+                                        <div class="alert alert-info">
+                                            <h6 class="alert-heading">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                Device Information
+                                            </h6>
+                                            <div id="deviceDetails"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title">
+                                                <i class="fas fa-search me-1"></i>
+                                                Device Search
+                                            </h6>
+                                            <input type="text" class="form-control mb-2" id="deviceSearch" 
+                                                   placeholder="Search device ID...">
+                                            <small class="text-muted">
+                                                Start typing to filter devices by ID or name
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Recent Devices -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <h6 class="text-gray-700 mb-3">Recently Serviced Devices</h6>
+                                    <div class="row" id="recentDevices">
+                                        <!-- Will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Maintenance Details -->
+                        <div class="form-step" id="formStep2" style="display: none;">
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label for="{{ form.maintenance_type.id_for_label }}" class="form-label required">
+                                        <i class="fas fa-wrench me-1"></i>
+                                        Maintenance Type
+                                    </label>
+                                    {{ form.maintenance_type }}
+                                    {% if form.maintenance_type.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.maintenance_type.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="priority" class="form-label">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        Priority Level
+                                    </label>
+                                    <select class="form-select" id="priority" name="priority">
+                                        <option value="LOW">Low Priority</option>
+                                        <option value="MEDIUM" selected>Medium Priority</option>
+                                        <option value="HIGH">High Priority</option>
+                                        <option value="URGENT">Urgent</option>
+                                    </select>
+                                    <div class="form-text">Select the urgency level for this maintenance</div>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="{{ form.description.id_for_label }}" class="form-label required">
+                                    <i class="fas fa-align-left me-1"></i>
+                                    Description
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.description.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">Provide detailed description of the maintenance work required</div>
+                            </div>
+
+                            <!-- Maintenance Templates -->
+                            <div class="mb-4">
+                                <h6 class="text-gray-700 mb-3">
+                                    <i class="fas fa-clipboard-list me-1"></i>
+                                    Common Maintenance Templates
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 template-btn" 
+                                                data-template="preventive">
+                                            <i class="fas fa-shield-alt me-1"></i>
+                                            Preventive Maintenance
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 template-btn" 
+                                                data-template="software-update">
+                                            <i class="fas fa-download me-1"></i>
+                                            Software Update
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 template-btn" 
+                                                data-template="hardware-repair">
+                                            <i class="fas fa-tools me-1"></i>
+                                            Hardware Repair
+                                        </button>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 template-btn" 
+                                                data-template="cleaning">
+                                            <i class="fas fa-broom me-1"></i>
+                                            Deep Cleaning
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Schedule & Cost -->
+                        <div class="form-step" id="formStep3" style="display: none;">
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label for="scheduled_date" class="form-label required">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        Scheduled Date & Time
+                                    </label>
+                                    <input type="datetime-local" class="form-control" id="scheduled_date" 
+                                           name="scheduled_date" required>
+                                    <div class="form-text">When should this maintenance be performed</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="estimated_duration" class="form-label">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Estimated Duration (hours)
+                                    </label>
+                                    <input type="number" class="form-control" id="estimated_duration" 
+                                           name="estimated_duration" min="0.5" max="72" step="0.5" 
+                                           placeholder="2.0">
+                                    <div class="form-text">Expected time to complete</div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label for="{{ form.vendor.id_for_label }}" class="form-label">
+                                        <i class="fas fa-building me-1"></i>
+                                        Service Provider
+                                    </label>
+                                    {{ form.vendor }}
+                                    {% if form.vendor.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.vendor.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">Leave blank for internal maintenance</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="estimated_cost" class="form-label">
+                                        <i class="fas fa-dollar-sign me-1"></i>
+                                        Estimated Cost
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="estimated_cost" 
+                                               name="estimated_cost" min="0" step="0.01" placeholder="0.00">
+                                    </div>
+                                    <div class="form-text">Estimated cost for this maintenance</div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label for="assigned_technician" class="form-label">
+                                        <i class="fas fa-user-cog me-1"></i>
+                                        Assigned Technician
+                                    </label>
+                                    <input type="text" class="form-control" id="assigned_technician" 
+                                           name="assigned_technician" placeholder="Enter technician name">
+                                    <div class="form-text">Person responsible for the maintenance</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="{{ form.status.id_for_label }}" class="form-label">
+                                        <i class="fas fa-flag me-1"></i>
+                                        Initial Status
+                                    </label>
+                                    {{ form.status }}
+                                    {% if form.status.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.status.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Special Instructions -->
+                            <div class="mb-4">
+                                <label for="special_instructions" class="form-label">
+                                    <i class="fas fa-clipboard-list me-1"></i>
+                                    Special Instructions
+                                </label>
+                                <textarea class="form-control" id="special_instructions" name="special_instructions" 
+                                          rows="3" placeholder="Any special requirements or instructions..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Review & Submit -->
+                        <div class="form-step" id="formStep4" style="display: none;">
+                            <div class="alert alert-info">
+                                <h5 class="alert-heading">
+                                    <i class="fas fa-eye me-1"></i>
+                                    Review Your Maintenance Schedule
+                                </h5>
+                                <p class="mb-0">Please review all details before submitting the maintenance schedule.</p>
+                            </div>
+
+                            <div id="reviewContent">
+                                <!-- Review content will be populated by JavaScript -->
+                            </div>
+
+                            <!-- Notifications -->
+                            <div class="mt-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="notifyTechnician" name="notify_technician" checked>
+                                    <label class="form-check-label" for="notifyTechnician">
+                                        <i class="fas fa-bell me-1"></i>
+                                        Notify assigned technician via email
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="notifyManager" name="notify_manager">
+                                    <label class="form-check-label" for="notifyManager">
+                                        <i class="fas fa-envelope me-1"></i>
+                                        Send notification to department manager
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Navigation -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" class="btn btn-outline-secondary" id="prevBtn" style="display: none;">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Previous
+                            </button>
+                            <div></div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-primary" id="saveAsDraftBtn">
+                                    <i class="fas fa-save me-1"></i>
+                                    Save as Draft
+                                </button>
+                                <button type="button" class="btn btn-primary" id="nextBtn">
+                                    Next
+                                    <i class="fas fa-arrow-right ms-1"></i>
+                                </button>
+                                <button type="submit" class="btn btn-success" id="submitBtn" style="display: none;">
+                                    <i class="fas fa-check me-1"></i>
+                                    Schedule Maintenance
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Progress Info -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Step Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="stepInfo">
+                        <div class="step-info active" data-step="1">
+                            <h6 class="text-primary">Step 1: Device Selection</h6>
+                            <p class="small text-muted mb-0">
+                                Choose the device that requires maintenance. You can search by device ID 
+                                or select from recently serviced devices.
+                            </p>
+                        </div>
+                        <div class="step-info" data-step="2">
+                            <h6 class="text-primary">Step 2: Maintenance Details</h6>
+                            <p class="small text-muted mb-0">
+                                Specify the type of maintenance and provide detailed description. 
+                                Use templates for common maintenance tasks.
+                            </p>
+                        </div>
+                        <div class="step-info" data-step="3">
+                            <h6 class="text-primary">Step 3: Schedule & Cost</h6>
+                            <p class="small text-muted mb-0">
+                                Set the schedule, assign technician, and estimate costs. 
+                                Choose service provider if external maintenance is required.
+                            </p>
+                        </div>
+                        <div class="step-info" data-step="4">
+                            <h6 class="text-primary">Step 4: Review & Submit</h6>
+                            <p class="small text-muted mb-0">
+                                Review all information and submit the maintenance schedule. 
+                                Configure notifications for relevant personnel.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Tips -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-lightbulb me-1"></i>
+                        Quick Tips
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <div class="mb-3">
+                            <strong class="text-success">
+                                <i class="fas fa-check me-1"></i>
+                                Best Practices:
+                            </strong>
+                            <ul class="mt-1 mb-0">
+                                <li>Schedule during off-hours when possible</li>
+                                <li>Provide detailed work descriptions</li>
+                                <li>Set realistic time estimates</li>
+                                <li>Notify all relevant personnel</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong class="text-info">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Reminder:
+                            </strong>
+                            <p class="mt-1 mb-0">
+                                Preventive maintenance should be scheduled regularly 
+                                to avoid costly emergency repairs.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-clock me-1"></i>
+                        Recent Maintenance
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="small">
+                        <div class="mb-2">
+                            <div class="fw-bold">DEV-001</div>
+                            <div class="text-muted">Preventive maintenance completed</div>
+                            <div class="text-muted">2 days ago</div>
+                        </div>
+                        <hr class="my-2">
+                        <div class="mb-2">
+                            <div class="fw-bold">DEV-015</div>
+                            <div class="text-muted">Hardware repair scheduled</div>
+                            <div class="text-muted">5 days ago</div>
+                        </div>
+                        <hr class="my-2">
+                        <div class="text-center">
+                            <a href="{% url 'inventory:maintenance_list' %}" class="btn btn-sm btn-outline-primary">
+                                View All
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentStep = 1;
+    const totalSteps = 4;
+    const form = document.getElementById('maintenanceCreateForm');
+    
+    // Maintenance templates
+    const templates = {
+        'preventive': {
+            description: 'Regular preventive maintenance including system check, cleaning, and performance optimization.',
+            duration: 2,
+            type: 'PREVENTIVE'
+        },
+        'software-update': {
+            description: 'Update operating system, drivers, and software applications to latest versions.',
+            duration: 1.5,
+            type: 'SOFTWARE_UPDATE'
+        },
+        'hardware-repair': {
+            description: 'Diagnose and repair hardware components including replacement of faulty parts.',
+            duration: 4,
+            type: 'CORRECTIVE'
+        },
+        'cleaning': {
+            description: 'Deep cleaning of device components including dust removal and thermal paste replacement.',
+            duration: 1,
+            type: 'PREVENTIVE'
+        }
+    };
+
+    // Step navigation
+    function showStep(step) {
+        // Hide all steps
+        document.querySelectorAll('.form-step').forEach(s => s.style.display = 'none');
+        document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.step-info').forEach(s => s.classList.remove('active'));
+        
+        // Show current step
+        document.getElementById(`formStep${step}`).style.display = 'block';
+        document.getElementById(`step${step}`).classList.add('active');
+        document.querySelector(`.step-info[data-step="${step}"]`).classList.add('active');
+        
+        // Update step title
+        const titles = {
+            1: 'Device Selection',
+            2: 'Maintenance Details', 
+            3: 'Schedule & Cost',
+            4: 'Review & Submit'
+        };
+        document.getElementById('stepTitle').textContent = titles[step];
+        
+        // Update buttons
+        document.getElementById('prevBtn').style.display = step > 1 ? 'block' : 'none';
+        document.getElementById('nextBtn').style.display = step < totalSteps ? 'block' : 'none';
+        document.getElementById('submitBtn').style.display = step === totalSteps ? 'block' : 'none';
+        
+        currentStep = step;
+        
+        // Special handling for review step
+        if (step === 4) {
+            generateReview();
+        }
+    }
+
+    // Form validation for each step
+    function validateStep(step) {
+        let isValid = true;
+        const currentStepEl = document.getElementById(`formStep${step}`);
+        
+        if (step === 1) {
+            const device = document.getElementById('{{ form.device.id_for_label }}');
+            if (!device.value) {
+                device.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                device.classList.remove('is-invalid');
+            }
+        } else if (step === 2) {
+            const maintenanceType = document.getElementById('{{ form.maintenance_type.id_for_label }}');
+            const description = document.getElementById('{{ form.description.id_for_label }}');
+            
+            if (!maintenanceType.value) {
+                maintenanceType.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                maintenanceType.classList.remove('is-invalid');
+            }
+            
+            if (!description.value.trim()) {
+                description.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                description.classList.remove('is-invalid');
+            }
+        } else if (step === 3) {
+            const scheduledDate = document.getElementById('scheduled_date');
+            if (!scheduledDate.value) {
+                scheduledDate.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                scheduledDate.classList.remove('is-invalid');
+            }
+        }
+        
+        return isValid;
+    }
+
+    // Generate review content
+    function generateReview() {
+        const device = document.getElementById('{{ form.device.id_for_label }}');
+        const maintenanceType = document.getElementById('{{ form.maintenance_type.id_for_label }}');
+        const description = document.getElementById('{{ form.description.id_for_label }}');
+        const scheduledDate = document.getElementById('scheduled_date');
+        const priority = document.getElementById('priority');
+        const vendor = document.getElementById('{{ form.vendor.id_for_label }}');
+        const cost = document.getElementById('estimated_cost');
+        const technician = document.getElementById('assigned_technician');
+        
+        const reviewContent = document.getElementById('reviewContent');
+        reviewContent.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <th width="25%">Device</th>
+                            <td>${device.options[device.selectedIndex]?.text || 'Not selected'}</td>
+                        </tr>
+                        <tr>
+                            <th>Maintenance Type</th>
+                            <td>${maintenanceType.options[maintenanceType.selectedIndex]?.text || 'Not selected'}</td>
+                        </tr>
+                        <tr>
+                            <th>Priority</th>
+                            <td><span class="badge bg-${getPriorityColor(priority.value)}">${priority.options[priority.selectedIndex].text}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Scheduled Date</th>
+                            <td>${scheduledDate.value ? new Date(scheduledDate.value).toLocaleString() : 'Not set'}</td>
+                        </tr>
+                        <tr>
+                            <th>Service Provider</th>
+                            <td>${vendor.value ? vendor.options[vendor.selectedIndex].text : 'Internal'}</td>
+                        </tr>
+                        <tr>
+                            <th>Estimated Cost</th>
+                            <td>${cost.value ? '$' + parseFloat(cost.value).toFixed(2) : 'Not specified'}</td>
+                        </tr>
+                        <tr>
+                            <th>Assigned Technician</th>
+                            <td>${technician.value || 'Not assigned'}</td>
+                        </tr>
+                        <tr>
+                            <th>Description</th>
+                            <td>${description.value || 'No description provided'}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function getPriorityColor(priority) {
+        const colors = {
+            'LOW': 'secondary',
+            'MEDIUM': 'warning',
+            'HIGH': 'danger',
+            'URGENT': 'danger'
+        };
+        return colors[priority] || 'secondary';
+    }
+
+    // Event listeners
+    document.getElementById('nextBtn').addEventListener('click', function() {
+        if (validateStep(currentStep)) {
+            if (currentStep < totalSteps) {
+                showStep(currentStep + 1);
+            }
+        }
+    });
+
+    document.getElementById('prevBtn').addEventListener('click', function() {
+        if (currentStep > 1) {
+            showStep(currentStep - 1);
+        }
+    });
+
+    // Template buttons
+    document.querySelectorAll('.template-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const templateKey = this.dataset.template;
+            const template = templates[templateKey];
+            
+            if (template) {
+                document.getElementById('{{ form.description.id_for_label }}').value = template.description;
+                document.getElementById('estimated_duration').value = template.duration;
+                
+                // Update maintenance type if it matches
+                const maintenanceType = document.getElementById('{{ form.maintenance_type.id_for_label }}');
+                for (let option of maintenanceType.options) {
+                    if (option.value === template.type) {
+                        option.selected = true;
+                        break;
+                    }
+                }
+                
+                // Visual feedback
+                this.classList.add('btn-success');
+                setTimeout(() => {
+                    this.classList.remove('btn-success');
+                }, 1000);
+            }
+        });
+    });
+
+    // Device selection handler
+    const deviceSelect = document.getElementById('{{ form.device.id_for_label }}');
+    deviceSelect.addEventListener('change', function() {
+        if (this.value) {
+            // Show device info (simulate API call)
+            showDeviceInfo(this.value);
+        } else {
+            document.getElementById('deviceInfo').style.display = 'block';
+    }
+
+    // Device search functionality
+    const deviceSearch = document.getElementById('deviceSearch');
+    deviceSearch.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const deviceSelect = document.getElementById('{{ form.device.id_for_label }}');
+        
+        for (let option of deviceSelect.options) {
+            if (option.value) {
+                const text = option.text.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            }
+        }
+    });
+
+    // Set minimum date for scheduling (today + 1 hour)
+    const scheduledDateInput = document.getElementById('scheduled_date');
+    const now = new Date();
+    now.setHours(now.getHours() + 1);
+    const minDate = now.toISOString().slice(0, 16);
+    scheduledDateInput.min = minDate;
+    
+    // Set default date to tomorrow 9 AM
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    scheduledDateInput.value = tomorrow.toISOString().slice(0, 16);
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (validateStep(4)) {
+            // Show loading state
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Scheduling...';
+            submitBtn.disabled = true;
+            
+            // Simulate form submission (replace with actual submission)
+            setTimeout(() => {
+                // Reset button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                
+                // Submit the actual form
+                this.submit();
+            }, 2000);
+        }
+    });
+
+    // Save as draft functionality
+    document.getElementById('saveAsDraftBtn').addEventListener('click', function() {
+        const formData = new FormData(form);
+        formData.append('save_as_draft', 'true');
+        
+        // Save to localStorage as backup
+        const draftData = {};
+        for (let [key, value] of formData.entries()) {
+            draftData[key] = value;
+        }
+        localStorage.setItem('maintenanceDraft', JSON.stringify(draftData));
+        
+        // Show success message
+        showNotification('Draft saved successfully!', 'success');
+    });
+
+    // Load draft on page load
+    const savedDraft = localStorage.getItem('maintenanceDraft');
+    if (savedDraft) {
+        try {
+            const draftData = JSON.parse(savedDraft);
+            
+            // Ask user if they want to load the draft
+            if (confirm('A saved draft was found. Would you like to load it?')) {
+                Object.keys(draftData).forEach(key => {
+                    const field = form.querySelector(`[name="${key}"]`);
+                    if (field && draftData[key]) {
+                        field.value = draftData[key];
+                    }
+                });
+                showNotification('Draft loaded successfully!', 'info');
+            }
+        } catch (e) {
+            console.error('Error loading draft:', e);
+        }
+    }
+
+    // Clear draft after successful submission
+    form.addEventListener('submit', function() {
+        localStorage.removeItem('maintenanceDraft');
+    });
+
+    // Notification helper function
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+
+    // Populate recent devices (simulate API call)
+    function loadRecentDevices() {
+        const recentDevices = document.getElementById('recentDevices');
+        const devices = [
+            { id: 'DEV-001', name: 'Dell Laptop', lastMaintenance: '2024-01-15' },
+            { id: 'DEV-015', name: 'HP Desktop', lastMaintenance: '2024-01-10' },
+            { id: 'DEV-023', name: 'MacBook Pro', lastMaintenance: '2024-01-08' }
+        ];
+        
+        recentDevices.innerHTML = devices.map(device => `
+            <div class="col-md-4 mb-2">
+                <div class="card h-100 recent-device-card" data-device-id="${device.id}">
+                    <div class="card-body p-2">
+                        <h6 class="card-title mb-1">${device.id}</h6>
+                        <p class="card-text small text-muted mb-1">${device.name}</p>
+                        <small class="text-muted">Last: ${device.lastMaintenance}</small>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        // Add click handlers for recent devices
+        document.querySelectorAll('.recent-device-card').forEach(card => {
+            card.addEventListener('click', function() {
+                const deviceId = this.dataset.deviceId;
+                const deviceSelect = document.getElementById('{{ form.device.id_for_label }}');
+                
+                // Find and select the device
+                for (let option of deviceSelect.options) {
+                    if (option.text.includes(deviceId)) {
+                        option.selected = true;
+                        deviceSelect.dispatchEvent(new Event('change'));
+                        break;
+                    }
+                }
+                
+                // Visual feedback
+                this.classList.add('border-primary');
+                setTimeout(() => {
+                    this.classList.remove('border-primary');
+                }, 1000);
+            });
+        });
+    }
+
+    // Initialize
+    showStep(1);
+    loadRecentDevices();
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            document.getElementById('saveAsDraftBtn').click();
+        }
+        if (e.key === 'Escape') {
+            // Close any open modals or go back
+            if (currentStep > 1) {
+                document.getElementById('prevBtn').click();
+            }
+        }
+    });
+});
+</script>
+
+<style>
+.step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.step-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #e3e6f0;
+    color: #858796;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.step-item.active .step-circle {
+    background-color: #4e73df;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    color: #858796;
+    text-align: center;
+}
+
+.step-item.active .step-label {
+    color: #4e73df;
+    font-weight: 600;
+}
+
+.step-line {
+    flex: 1;
+    height: 2px;
+    background-color: #e3e6f0;
+    margin: 0 1rem;
+    margin-top: 20px;
+}
+
+.recent-device-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #e3e6f0;
+}
+
+.recent-device-card:hover {
+    border-color: #4e73df;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.template-btn {
+    transition: all 0.2s ease;
+}
+
+.template-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-step {
+    min-height: 400px;
+}
+
+.step-info {
+    display: none;
+}
+
+.step-info.active {
+    display: block;
+}
+
+.required::after {
+    content: " *";
+    color: #e74a3b;
+}
+
+@media (max-width: 768px) {
+    .step-item {
+        margin: 0 0.5rem;
+    }
+    
+    .step-circle {
+        width: 30px;
+        height: 30px;
+        font-size: 0.875rem;
+    }
+    
+    .step-label {
+        font-size: 0.75rem;
+    }
+    
+    .step-line {
+        margin: 0 0.5rem;
+        margin-top: 15px;
+    }
+}
+</style>
+{% endblock %}

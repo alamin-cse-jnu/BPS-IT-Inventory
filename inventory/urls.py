@@ -129,10 +129,10 @@ urlpatterns = [
     # ================================
     # AJAX ENDPOINTS - CONFIRMED EXISTS
     # ================================
-    path('ajax/get-subcategories/', views.ajax_get_subcategories, name='ajax_get_subcategories'),
-    path('ajax/get-device-types/', views.ajax_get_device_types, name='ajax_get_device_types'),
+    path('ajax/get-subcategories/', views.ajax_subcategories_by_category, name='ajax_get_subcategories'), 
+    path('ajax/get-device-types/', views.ajax_device_types_by_subcategory, name='ajax_get_device_types'),  
     path('ajax/device-stats/<str:device_id>/', views.ajax_device_stats, name='ajax_device_stats'),
-    path('ajax/assignment-check/', views.ajax_assignment_check, name='ajax_assignment_check'),
+    path('ajax/assignment-quick-actions/<str:assignment_id>/', views.ajax_assignment_quick_actions, name='ajax_assignment_quick_actions'),
     path('ajax/staff-search/', views.ajax_staff_search, name='ajax_staff_search'),
     path('ajax/location-search/', views.ajax_location_search, name='ajax_location_search'),
     

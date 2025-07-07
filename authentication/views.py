@@ -1,90 +1,84 @@
-# authentication/views.py
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.contrib.auth.models import User
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm, PasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
-from django.urls import reverse_lazy
+import logging
+
+from django.conf import settings
 from django.utils import timezone
+from django.urls import reverse_lazy
 from django.http import JsonResponse
+from django.db.models import Q
+from django.core.paginator import Paginator
+from django.shortcuts import render, redirect, get_object_or_404
+
+from django.contrib import messages
+from django.contrib.auth import (
+    authenticate, login, logout,
+    update_session_auth_hash,
+)
+from django.contrib.auth.decorators import (
+    login_required, user_passes_test
+)
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import (
+    AuthenticationForm, UserCreationForm, PasswordChangeForm
+)
+
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
-import logging
-from django.conf import settings
+
 
 logger = logging.getLogger(__name__)
 
-@csrf_protect
-@never_cache
 def login_view(request):
-    """Custom login view with enhanced security and logging"""
-    
+    """Handle user login"""
     if request.user.is_authenticated:
         return redirect('inventory:dashboard')
     
     if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        remember_me = request.POST.get('remember_me')
         
-        if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
+        if username and password:
             user = authenticate(request, username=username, password=password)
             
             if user is not None:
                 if user.is_active:
                     login(request, user)
                     
-                    # Log successful login
-                    logger.info(f"User {username} logged in successfully from IP {request.META.get('REMOTE_ADDR')}")
+                    # Set session expiry
+                    if not remember_me:
+                        request.session.set_expiry(0)  # Browser close
+                    else:
+                        request.session.set_expiry(1209600)  # 2 weeks
                     
-                    # Create audit log if model exists
+                    # Update last login activity
                     try:
-                        from inventory.models import AuditLog
-                        AuditLog.objects.create(
-                            user=user,
-                            action='LOGIN',
-                            model_name='User',
-                            object_id=user.id,
-                            object_repr=str(user),
-                            changes={'login_time': timezone.now().isoformat()},
-                            ip_address=request.META.get('REMOTE_ADDR'),
-                            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
-                        )
-                    except ImportError:
+                        from inventory.models import Staff
+                        staff = Staff.objects.filter(user=user).first()
+                        if staff:
+                            staff.last_activity = timezone.now()
+                            staff.save(update_fields=['last_activity'])
+                    except:
                         pass
-                    
-                    # Set session variables
-                    request.session['last_activity'] = timezone.now().isoformat()
-                    request.session['login_time'] = timezone.now().isoformat()
                     
                     messages.success(request, f'Welcome back, {user.get_full_name() or user.username}!')
                     
-                    # Redirect to next parameter or dashboard
-                    next_url = request.GET.get('next', 'inventory:dashboard')
-                    return redirect(next_url)
+                    # Redirect to next page or dashboard
+                    next_page = request.GET.get('next', 'inventory:dashboard')
+                    return redirect(next_page)
                 else:
-                    messages.error(request, 'Your account has been deactivated. Please contact administrator.')
-                    logger.warning(f"Inactive user {username} attempted login from IP {request.META.get('REMOTE_ADDR')}")
+                    messages.error(request, 'Your account has been deactivated.')
             else:
                 messages.error(request, 'Invalid username or password.')
-                logger.warning(f"Failed login attempt for username {username} from IP {request.META.get('REMOTE_ADDR')}")
         else:
-            messages.error(request, 'Please correct the errors below.')
-            logger.warning(f"Login form validation failed from IP {request.META.get('REMOTE_ADDR')}")
-    else:
-        form = AuthenticationForm()
+            messages.error(request, 'Please enter both username and password.')
     
     context = {
-        'form': form,
         'title': 'Login - BPS Inventory System',
-        'system_name': 'BPS IT Inventory Management System',
-        'organization': 'Bangladesh Parliament Secretariat'
+        'next': request.GET.get('next', ''),
     }
     
-    return render(request, 'registration/login.html', context)
+    return render(request, 'authentication/login.html', context)
 
 @login_required
 def logout_view(request):
@@ -118,74 +112,83 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
-    """User profile view"""
-    
-    user = request.user
-    
-    # Get user's recent activity
-    recent_activity = []
+    """User profile management"""
     try:
-        from inventory.models import AuditLog
-        recent_activity = AuditLog.objects.filter(
-            user=user
-        ).order_by('-timestamp')[:10]
-    except ImportError:
-        pass
-    
-    # Get user's assignments if they're a staff member
-    staff_assignments = []
-    try:
-        from inventory.models import Staff, Assignment
-        staff = Staff.objects.filter(user=user).first()
-        if staff:
-            staff_assignments = Assignment.objects.filter(
-                assigned_to_staff=staff,
-                is_active=True
-            ).select_related('device')[:5]
-    except ImportError:
-        pass
-    
-    context = {
-        'user': user,
-        'recent_activity': recent_activity,
-        'staff_assignments': staff_assignments,
-    }
-    
-    return render(request, 'authentication/profile.html', context)
+        # Get staff profile if exists
+        staff_profile = None
+        try:
+            from inventory.models import Staff
+            staff_profile = Staff.objects.get(user=request.user)
+        except:
+            pass
+        
+        # Get user's recent activity
+        recent_assignments = []
+        try:
+            from inventory.models import Assignment
+            recent_assignments = Assignment.objects.filter(
+                assigned_to_staff__user=request.user
+            ).select_related('device').order_by('-assigned_at')[:5]
+        except:
+            pass
+        
+        # Get user statistics
+        user_stats = {}
+        try:
+            from inventory.models import Assignment, AuditLog
+            user_stats = {
+                'total_assignments': Assignment.objects.filter(assigned_to_staff__user=request.user).count(),
+                'active_assignments': Assignment.objects.filter(
+                    assigned_to_staff__user=request.user,
+                    is_active=True
+                ).count(),
+                'total_activities': AuditLog.objects.filter(user=request.user).count(),
+            }
+        except:
+            user_stats = {'total_assignments': 0, 'active_assignments': 0, 'total_activities': 0}
+        
+        context = {
+            'staff_profile': staff_profile,
+            'recent_assignments': recent_assignments,
+            'user_stats': user_stats,
+            'title': 'My Profile'
+        }
+        
+        return render(request, 'authentication/profile.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error loading profile: {str(e)}')
+        return redirect('inventory:dashboard')
 
 @login_required
 def change_password_view(request):
-    """Change password view"""
-    
+    """Handle password change"""
     if request.method == 'POST':
         form = PasswordChangeForm(request.user, request.POST)
-        
         if form.is_valid():
             user = form.save()
-            update_session_auth_hash(request, user)  # Important for keeping user logged in
+            update_session_auth_hash(request, user)  # Keep user logged in
             
-            # Log password change
-            logger.info(f"User {user.username} changed password")
-            
-            # Create audit log
+            # Log the activity
             try:
                 from inventory.models import AuditLog
                 AuditLog.objects.create(
-                    user=user,
-                    action='PASSWORD_CHANGE',
+                    user=request.user,
+                    action='UPDATE',
                     model_name='User',
-                    object_id=user.id,
-                    object_repr=str(user),
-                    changes={'password_changed': timezone.now().isoformat()},
+                    object_id=request.user.id,
+                    object_repr=str(request.user),
+                    changes={'action': 'password_changed'},
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
-            except ImportError:
+            except:
                 pass
             
-            messages.success(request, 'Your password has been successfully changed.')
+            messages.success(request, 'Your password has been changed successfully.')
             return redirect('authentication:profile')
         else:
-            messages.error(request, 'Please correct the errors below.')
+            for error in form.errors.values():
+                messages.error(request, error[0])
     else:
         form = PasswordChangeForm(request.user)
     
@@ -194,119 +197,151 @@ def change_password_view(request):
         'title': 'Change Password'
     }
     
-    return render(request, 'registration/password_change_form.html', context)
+    return render(request, 'authentication/change_password.html', context)
 
 @login_required
 @require_http_methods(["POST"])
 def update_last_activity(request):
     """AJAX endpoint to update user's last activity"""
-    
-    request.session['last_activity'] = timezone.now().isoformat()
-    
-    return JsonResponse({
-        'success': True,
-        'timestamp': timezone.now().isoformat()
-    })
-
-@require_http_methods(["GET"])
-def check_session_status(request):
-    """Check if user session is still valid"""
-    
-    if not request.user.is_authenticated:
-        return JsonResponse({
-            'authenticated': False,
-            'redirect_url': reverse_lazy('authentication:login')
-        })
-    
-    # Check session timeout
-    last_activity = request.session.get('last_activity')
-    if last_activity:
+    try:
+        # Update user's last activity timestamp
         try:
-            from datetime import datetime
-            last_activity_time = datetime.fromisoformat(last_activity.replace('Z', '+00:00'))
-            timeout_minutes = getattr(settings, 'AUTO_LOGOUT_MINUTES', 60)
-            
-            if (timezone.now() - last_activity_time).total_seconds() > (timeout_minutes * 60):
-                logout(request)
-                return JsonResponse({
-                    'authenticated': False,
-                    'timeout': True,
-                    'redirect_url': reverse_lazy('authentication:login')
-                })
+            from inventory.models import Staff
+            staff = Staff.objects.filter(user=request.user).first()
+            if staff:
+                staff.last_activity = timezone.now()
+                staff.save(update_fields=['last_activity'])
         except:
             pass
-    
-    return JsonResponse({
-        'authenticated': True,
-        'user': {
-            'username': request.user.username,
-            'full_name': request.user.get_full_name(),
-            'is_staff': request.user.is_staff,
-            'is_superuser': request.user.is_superuser
-        }
-    })
+        
+        return JsonResponse({
+            'status': 'success',
+            'timestamp': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=400)
 
-# User management views for admins
 @login_required
+@require_http_methods(["GET"])
+def check_session_status(request):
+    """AJAX endpoint to check session status"""
+    try:
+        session_expiry = request.session.get_expiry_date()
+        time_remaining = None
+        
+        if session_expiry:
+            time_remaining = (session_expiry - timezone.now()).total_seconds()
+        
+        return JsonResponse({
+            'authenticated': request.user.is_authenticated,
+            'username': request.user.username,
+            'expires_at': session_expiry.isoformat() if session_expiry else None,
+            'time_remaining_seconds': max(0, time_remaining) if time_remaining else None,
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'authenticated': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_list(request):
     """List all users (admin only)"""
-    
-    if not request.user.is_staff:
-        messages.error(request, 'You do not have permission to view this page.')
-        return redirect('inventory:dashboard')
-    
-    users = User.objects.all().order_by('username')
-    
-    # Search functionality
-    search = request.GET.get('search')
-    if search:
-        from django.db.models import Q
-        users = users.filter(
-            Q(username__icontains=search) |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search) |
-            Q(email__icontains=search)
-        )
-    
-    # Pagination
-    from django.core.paginator import Paginator
-    paginator = Paginator(users, 25)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        'page_obj': page_obj,
-        'search': search,
-        'title': 'User Management'
-    }
-    
-    return render(request, 'authentication/user_list.html', context)
+    try:
+        # Get search parameters
+        search = request.GET.get('search', '')
+        is_active = request.GET.get('is_active', '')
+        is_staff = request.GET.get('is_staff', '')
+        
+        # Build queryset
+        users = User.objects.all()
+        
+        if search:
+            users = users.filter(
+                Q(username__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+        
+        if is_active:
+            users = users.filter(is_active=is_active == 'true')
+        
+        if is_staff:
+            users = users.filter(is_staff=is_staff == 'true')
+        
+        users = users.order_by('username')
+        
+        # Pagination
+        paginator = Paginator(users, 25)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'page_obj': page_obj,
+            'search': search,
+            'is_active': is_active,
+            'is_staff': is_staff,
+            'title': 'User Management'
+        }
+        
+        return render(request, 'authentication/user_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error loading users: {str(e)}')
+        return redirect('authentication:profile')
 
 @login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
 def user_detail(request, user_id):
-    """User detail view (admin only)"""
-    
-    if not request.user.is_staff:
-        messages.error(request, 'You do not have permission to view this page.')
-        return redirect('inventory:dashboard')
-    
-    from django.shortcuts import get_object_or_404
-    user = get_object_or_404(User, id=user_id)
-    
-    # Get user's audit logs
-    recent_activity = []
+    """View user details (admin only)"""
     try:
-        from inventory.models import AuditLog
-        recent_activity = AuditLog.objects.filter(
-            user=user
-        ).order_by('-timestamp')[:20]
-    except ImportError:
-        pass
-    
-    context = {
-        'user_detail': user,  # Renamed to avoid conflict with request.user
-        'recent_activity': recent_activity,
-        'title': f'User: {user.username}'
-    }
-    
-    return render(request, 'authentication/user_detail.html', context)
+        user = get_object_or_404(User, id=user_id)
+        
+        # Get staff profile if exists
+        staff_profile = None
+        try:
+            from inventory.models import Staff
+            staff_profile = Staff.objects.get(user=user)
+        except:
+            pass
+        
+        # Get user's assignments
+        user_assignments = []
+        try:
+            from inventory.models import Assignment
+            user_assignments = Assignment.objects.filter(
+                assigned_to_staff__user=user
+            ).select_related('device').order_by('-assigned_at')[:10]
+        except:
+            pass
+        
+        # Get user's activity log
+        user_activities = []
+        try:
+            from inventory.models import AuditLog
+            user_activities = AuditLog.objects.filter(
+                user=user
+            ).order_by('-timestamp')[:10]
+        except:
+            pass
+        
+        context = {
+            'user_profile': user,
+            'staff_profile': staff_profile,
+            'user_assignments': user_assignments,
+            'user_activities': user_activities,
+            'title': f'User: {user.get_full_name() or user.username}'
+        }
+        
+        return render(request, 'authentication/user_detail.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error loading user details: {str(e)}')
+        return redirect('authentication:user_list')

@@ -1,0 +1,601 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if form.instance.pk %}Edit Device{% else %}Add New Device{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/form.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Devices</a></li>
+                    <li class="breadcrumb-item active">
+                        {% if form.instance.pk %}Edit Device{% else %}Add Device{% endif %}
+                    </li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0 text-gray-800">
+                {% if form.instance.pk %}
+                    Edit Device: {{ form.instance.device_name }}
+                {% else %}
+                    Add New Device
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if form.instance.pk %}
+                    Update device information and specifications
+                {% else %}
+                    Enter device details to add to inventory
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to List
+            </a>
+            {% if form.instance.pk %}
+            <a href="{% url 'inventory:device_detail' form.instance.device_id %}" class="btn btn-outline-info">
+                <i class="fas fa-eye me-1"></i>View Device
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <form method="post" novalidate class="needs-validation">
+        {% csrf_token %}
+        
+        <!-- Form Alerts -->
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+            <h6><i class="fas fa-exclamation-triangle me-2"></i>Please correct the following errors:</h6>
+            {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <div class="row g-4">
+            <!-- Main Form Content -->
+            <div class="col-xl-8">
+                <!-- Basic Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2 text-primary"></i>Basic Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.device_id.id_for_label }}" class="form-label required">
+                                    Device ID
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ form.device_id }}
+                                {% if form.device_id.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.device_id.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Format: BPS-XX-001 (e.g., BPS-LT-001 for laptops)
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.asset_tag.id_for_label }}" class="form-label">Asset Tag</label>
+                                {{ form.asset_tag }}
+                                {% if form.asset_tag.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.asset_tag.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Optional: Internal asset tracking number
+                                </div>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label for="{{ form.device_name.id_for_label }}" class="form-label required">
+                                    Device Name
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ form.device_name }}
+                                {% if form.device_name.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.device_name.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Descriptive name for the device (e.g., "HP EliteBook 840 G8")
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label for="{{ form.device_type.id_for_label }}" class="form-label required">
+                                    Device Type
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ form.device_type }}
+                                {% if form.device_type.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.device_type.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label for="{{ form.brand.id_for_label }}" class="form-label">Brand</label>
+                                {{ form.brand }}
+                                {% if form.brand.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.brand.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label for="{{ form.model.id_for_label }}" class="form-label">Model</label>
+                                {{ form.model }}
+                                {% if form.model.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.model.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.serial_number.id_for_label }}" class="form-label">Serial Number</label>
+                                {{ form.serial_number }}
+                                {% if form.serial_number.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.serial_number.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.status.id_for_label }}" class="form-label required">
+                                    Status
+                                    <span class="text-danger">*</span>
+                                </label>
+                                {{ form.status }}
+                                {% if form.status.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.status.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Technical Specifications -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs me-2 text-primary"></i>Technical Specifications
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.processor.id_for_label }}" class="form-label">Processor</label>
+                                {{ form.processor }}
+                                {% if form.processor.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.processor.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    e.g., Intel Core i7-1165G7
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.memory_ram.id_for_label }}" class="form-label">Memory (RAM)</label>
+                                {{ form.memory_ram }}
+                                {% if form.memory_ram.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.memory_ram.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    e.g., 16GB DDR4
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.storage_capacity.id_for_label }}" class="form-label">Storage</label>
+                                {{ form.storage_capacity }}
+                                {% if form.storage_capacity.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.storage_capacity.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    e.g., 512GB SSD
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.operating_system.id_for_label }}" class="form-label">Operating System</label>
+                                {{ form.operating_system }}
+                                {% if form.operating_system.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.operating_system.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    e.g., Windows 11 Pro
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-dollar-sign me-2 text-primary"></i>Financial Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="{{ form.purchase_price.id_for_label }}" class="form-label">Purchase Price</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.purchase_price }}
+                                </div>
+                                {% if form.purchase_price.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.purchase_price.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label for="{{ form.purchase_date.id_for_label }}" class="form-label">Purchase Date</label>
+                                {{ form.purchase_date }}
+                                {% if form.purchase_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.purchase_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label for="{{ form.vendor.id_for_label }}" class="form-label">Vendor</label>
+                                {{ form.vendor }}
+                                {% if form.vendor.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.vendor.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warranty Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-shield-alt me-2 text-primary"></i>Warranty Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.warranty_start_date.id_for_label }}" class="form-label">Warranty Start Date</label>
+                                {{ form.warranty_start_date }}
+                                {% if form.warranty_start_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.warranty_start_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="{{ form.warranty_end_date.id_for_label }}" class="form-label">Warranty End Date</label>
+                                {{ form.warranty_end_date }}
+                                {% if form.warranty_end_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.warranty_end_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clipboard me-2 text-primary"></i>Additional Information
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="{{ form.notes.id_for_label }}" class="form-label">Notes</label>
+                                {{ form.notes }}
+                                {% if form.notes.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.notes.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    Additional notes, special configurations, or important information
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-xl-4">
+                <!-- Status & Location -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-map-marker-alt me-2 text-primary"></i>Status & Location
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="{{ form.device_condition.id_for_label }}" class="form-label">Device Condition</label>
+                            {{ form.device_condition }}
+                            {% if form.device_condition.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.device_condition.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.location.id_for_label }}" class="form-label">Location</label>
+                            {{ form.location }}
+                            {% if form.location.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.location.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="form-check">
+                            {{ form.is_critical }}
+                            <label class="form-check-label" for="{{ form.is_critical.id_for_label }}">
+                                Critical Infrastructure Device
+                            </label>
+                            {% if form.is_critical.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.is_critical.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Mark this device as critical for business operations
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-save me-2 text-primary"></i>Save Device
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>
+                                {% if form.instance.pk %}Update Device{% else %}Create Device{% endif %}
+                            </button>
+                            
+                            {% if form.instance.pk %}
+                            <button type="submit" name="save_and_continue" class="btn btn-outline-primary">
+                                <i class="fas fa-edit me-1"></i>Save and Continue Editing
+                            </button>
+                            {% else %}
+                            <button type="submit" name="save_and_add_another" class="btn btn-outline-success">
+                                <i class="fas fa-plus me-1"></i>Save and Add Another
+                            </button>
+                            {% endif %}
+                            
+                            <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </a>
+                        </div>
+                        
+                        {% if form.instance.pk %}
+                        <hr class="my-3">
+                        <div class="text-center">
+                            <a href="{% url 'inventory:device_delete' form.instance.device_id %}" class="btn btn-outline-danger btn-sm">
+                                <i class="fas fa-trash me-1"></i>Delete Device
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Quick Tips -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-lightbulb me-2 text-warning"></i>Quick Tips
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                Use consistent naming for easy identification
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                Serial numbers help with warranty tracking
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                Mark critical devices for priority support
+                            </li>
+                            <li class="mb-0">
+                                <i class="fas fa-check text-success me-2"></i>
+                                Add detailed notes for future reference
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add validation classes
+    const form = document.querySelector('.needs-validation');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value && this.checkValidity()) {
+                this.classList.add('is-valid');
+                this.classList.remove('is-invalid');
+            } else if (this.value) {
+                this.classList.add('is-invalid');
+                this.classList.remove('is-valid');
+            }
+        });
+    });
+    
+    // Auto-fill warranty start date with purchase date
+    const purchaseDate = document.getElementById('{{ form.purchase_date.id_for_label }}');
+    const warrantyStartDate = document.getElementById('{{ form.warranty_start_date.id_for_label }}');
+    
+    if (purchaseDate && warrantyStartDate) {
+        purchaseDate.addEventListener('change', function() {
+            if (this.value && !warrantyStartDate.value) {
+                warrantyStartDate.value = this.value;
+            }
+        });
+    }
+    
+    // Device ID format validation
+    const deviceIdField = document.getElementById('{{ form.device_id.id_for_label }}');
+    if (deviceIdField) {
+        deviceIdField.addEventListener('input', function() {
+            const value = this.value.toUpperCase();
+            this.value = value;
+            
+            const pattern = /^[A-Z]{2,4}-[A-Z]{2}-\d{3,6}$/;
+            if (value && !pattern.test(value)) {
+                this.setCustomValidity('Format should be: BPS-XX-001');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+    
+    // Auto-save draft to localStorage (but not in artifacts)
+    const formData = {};
+    inputs.forEach(input => {
+        if (input.value) {
+            formData[input.name] = input.value;
+        }
+        
+        input.addEventListener('change', function() {
+            // In a real environment, you could save to localStorage here
+            console.log('Field changed:', this.name, this.value);
+        });
+    });
+});
+
+// Confirm before leaving with unsaved changes
+let formChanged = false;
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            formChanged = true;
+        });
+    });
+    
+    window.addEventListener('beforeunload', function(e) {
+        if (formChanged) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+    
+    form.addEventListener('submit', function() {
+        formChanged = false;
+    });
+});
+</script>
+
+<style>
+.required {
+    position: relative;
+}
+
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.is-valid {
+    border-color: #28a745;
+}
+
+.is-invalid {
+    border-color: #dc3545;
+}
+
+.card-header h5 {
+    color: #495057;
+}
+
+.form-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.input-group-text {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}
+
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn-group {
+        display: block;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 0.5rem;
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}

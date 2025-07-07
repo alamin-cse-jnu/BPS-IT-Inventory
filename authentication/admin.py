@@ -1,169 +1,27 @@
+# authentication/admin.py
+# Location: bps_inventory/apps/authentication/admin.py
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
+from .models import UserRole, UserRoleAssignment, UserProfile, UserSession
 from django.urls import reverse
-from django.utils.safestring import mark_safe
-from django.db.models import Count, Q
-from django.contrib.admin import SimpleListFilter
 from django.utils import timezone
-from datetime import timedelta
-
-from .models import (
-    UserRole, UserProfile, LoginAttempt, UserSession,
-    PasswordHistory, SecurityQuestion, UserPreference,
-    UserActivity, TwoFactorAuth, ApiKey
-)
-
 
 # ================================
-# CUSTOM FILTERS
-# ================================
-
-class UserStatusFilter(SimpleListFilter):
-    title = 'User Status'
-    parameter_name = 'user_status'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('active', 'Active Users'),
-            ('inactive', 'Inactive Users'),
-            ('staff', 'Staff Users'),
-            ('superuser', 'Superusers'),
-            ('recent_login', 'Recent Login (7 days)'),
-            ('no_login', 'Never Logged In'),
-        ]
-
-    def queryset(self, request, queryset):
-        seven_days_ago = timezone.now() - timedelta(days=7)
-        
-        if self.value() == 'active':
-            return queryset.filter(is_active=True)
-        elif self.value() == 'inactive':
-            return queryset.filter(is_active=False)
-        elif self.value() == 'staff':
-            return queryset.filter(is_staff=True)
-        elif self.value() == 'superuser':
-            return queryset.filter(is_superuser=True)
-        elif self.value() == 'recent_login':
-            return queryset.filter(last_login__gte=seven_days_ago)
-        elif self.value() == 'no_login':
-            return queryset.filter(last_login__isnull=True)
-        return queryset
-
-
-class LoginAttemptStatusFilter(SimpleListFilter):
-    title = 'Login Status'
-    parameter_name = 'login_status'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('successful', 'Successful'),
-            ('failed', 'Failed'),
-            ('blocked', 'Blocked'),
-            ('suspicious', 'Suspicious'),
-        ]
-
-    def queryset(self, request, queryset):
-        if self.value() == 'successful':
-            return queryset.filter(is_successful=True)
-        elif self.value() == 'failed':
-            return queryset.filter(is_successful=False)
-        elif self.value() == 'blocked':
-            return queryset.filter(is_blocked=True)
-        elif self.value() == 'suspicious':
-            return queryset.filter(is_suspicious=True)
-        return queryset
-
-
-class SessionStatusFilter(SimpleListFilter):
-    title = 'Session Status'
-    parameter_name = 'session_status'
-
-    def lookups(self, request, model_admin):
-        return [
-            ('active', 'Active Sessions'),
-            ('expired', 'Expired Sessions'),
-            ('ended', 'Manually Ended'),
-            ('long_duration', 'Long Duration (>8 hours)'),
-        ]
-
-    def queryset(self, request, queryset):
-        now = timezone.now()
-        eight_hours_ago = now - timedelta(hours=8)
-        
-        if self.value() == 'active':
-            return queryset.filter(is_active=True, expires_at__gt=now)
-        elif self.value() == 'expired':
-            return queryset.filter(expires_at__lte=now)
-        elif self.value() == 'ended':
-            return queryset.filter(is_active=False, ended_at__isnull=False)
-        elif self.value() == 'long_duration':
-            return queryset.filter(
-                started_at__lte=eight_hours_ago,
-                is_active=True
-            )
-        return queryset
-
-
-# ================================
-# INLINE ADMIN CLASSES
-# ================================
-
-class UserProfileInline(admin.StackedInline):
-    model = UserProfile
-    can_delete = False
-    verbose_name_plural = 'Profile Information'
-    fields = (
-        'role', 'department', 'phone_number', 'employee_id',
-        'profile_picture', 'timezone', 'language', 'theme_preference'
-    )
-
-
-class UserSessionInline(admin.TabularInline):
-    model = UserSession
-    extra = 0
-    readonly_fields = ('session_key', 'started_at', 'last_activity', 'expires_at', 'ip_address')
-    fields = ('session_key', 'started_at', 'last_activity', 'is_active', 'ip_address', 'user_agent')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).order_by('-started_at')[:10]  # Show last 10 sessions
-
-
-class LoginAttemptInline(admin.TabularInline):
-    model = LoginAttempt
-    extra = 0
-    readonly_fields = ('timestamp', 'ip_address', 'user_agent', 'is_successful')
-    fields = ('timestamp', 'ip_address', 'is_successful', 'failure_reason')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).order_by('-timestamp')[:5]  # Show last 5 attempts
-
-
-class PasswordHistoryInline(admin.TabularInline):
-    model = PasswordHistory
-    extra = 0
-    readonly_fields = ('created_at', 'password_hash')
-    fields = ('created_at', 'is_current')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).order_by('-created_at')[:5]
-
-
-# ================================
-# MAIN ADMIN CLASSES
+# USER ROLE MANAGEMENT
 # ================================
 
 @admin.register(UserRole)
 class UserRoleAdmin(admin.ModelAdmin):
     list_display = (
-        'get_display_name', 'name', 'user_count', 'permission_summary',
-        'can_view_all_devices', 'can_manage_assignments', 'is_active'
+        'name', 'display_name', 'permission_summary', 
+        'user_count', 'is_active', 'created_at'
     )
     list_filter = (
-        'can_view_all_devices', 'can_manage_assignments', 'can_approve_requests',
-        'can_generate_reports', 'can_manage_users', 'can_system_admin', 'is_active'
+        'is_active', 'can_system_admin', 'can_manage_users', 
+        'can_view_all_devices', 'created_at'
     )
     search_fields = ('name', 'display_name', 'description')
     readonly_fields = ('created_at', 'updated_at')
@@ -172,385 +30,291 @@ class UserRoleAdmin(admin.ModelAdmin):
         ('Basic Information', {
             'fields': ('name', 'display_name', 'description', 'is_active')
         }),
-        ('Core Permissions', {
+        ('Device & Assignment Permissions', {
             'fields': (
-                'can_view_all_devices', 'can_manage_assignments', 'can_approve_requests',
-                'can_generate_reports', 'can_manage_users', 'can_system_admin'
+                'can_view_all_devices', 'can_manage_assignments', 
+                'can_approve_requests', 'can_manage_maintenance'
             )
         }),
-        ('Additional Permissions', {
+        ('System Permissions', {
             'fields': (
-                'can_manage_maintenance', 'can_manage_vendors', 'can_manage_categories',
-                'can_view_sensitive_data', 'can_export_data', 'can_delete_records'
-            ),
-            'classes': ('collapse',)
+                'can_system_admin', 'can_manage_users', 
+                'can_generate_reports', 'can_manage_vendors'
+            )
         }),
         ('Access Control', {
-            'fields': ('allowed_ip_ranges', 'session_timeout_minutes', 'max_concurrent_sessions'),
+            'fields': (
+                'restricted_to_own_department', 'can_view_financial_data',
+                'can_scan_qr_codes', 'can_generate_qr_codes'
+            )
+        }),
+        ('Advanced Operations', {
+            'fields': ('can_bulk_operations', 'can_export_data'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
-            'fields': ('permissions', 'created_at', 'updated_at'),
+            'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
-        }),
+        })
     )
-
-    def get_display_name(self, obj):
-        return obj.display_name
-    get_display_name.short_description = 'Role Name'
-
-    def user_count(self, obj):
-        count = obj.user_profiles.count()
-        return format_html(
-            '<a href="{}?role__id__exact={}">{} users</a>',
-            reverse('admin:authentication_userprofile_changelist'),
-            obj.id,
-            count
-        )
-    user_count.short_description = 'Users'
-
+    
     def permission_summary(self, obj):
         permissions = []
-        if obj.can_view_all_devices:
-            permissions.append('View All')
-        if obj.can_manage_assignments:
-            permissions.append('Manage Assignments')
-        if obj.can_approve_requests:
-            permissions.append('Approve Requests')
         if obj.can_system_admin:
-            permissions.append('System Admin')
-        
-        return ', '.join(permissions[:3]) + ('...' if len(permissions) > 3 else '')
+            permissions.append("System Admin")
+        if obj.can_manage_users:
+            permissions.append("User Management")
+        if obj.can_view_all_devices:
+            permissions.append("All Devices")
+        return ", ".join(permissions) if permissions else "Basic Access"
     permission_summary.short_description = 'Key Permissions'
+    
+    def user_count(self, obj):
+        count = obj.user_assignments.count()
+        if count > 0:
+            url = reverse('admin:authentication_userroleassignment_changelist')
+            return format_html(
+                '<a href="{}?role__id__exact={}">{}</a>',
+                url, obj.pk, count
+            )
+        return 0
+    user_count.short_description = 'Users'
 
+@admin.register(UserRoleAssignment)
+class UserRoleAssignmentAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'role', 'get_department', 'is_active', 'assigned_by', 'start_date', 'end_date', 'is_currently_active'
+    )
+    list_filter = (
+        'is_active', 'role', 'assigned_at', 'start_date', 'end_date'
+    )
+    search_fields = (
+        'user__username', 'user__first_name', 'user__last_name',
+        'user__email', 'role__display_name'
+    )
+    readonly_fields = ('assigned_at',)
+    
+    fieldsets = (
+        ('Assignment Details', {
+            'fields': ('user', 'role', 'department', 'is_active', 'start_date', 'end_date')
+        }),
+        ('Assignment Context', {
+            'fields': ('notes', 'assigned_by'),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('assigned_at',),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_department(self, obj):
+        """Get department from UserRoleAssignment or user's staff profile"""
+        if obj.department:
+            return obj.department.name
+        try:
+            from inventory.models import Staff
+            if hasattr(obj.user, 'staff_profile') and obj.user.staff_profile.department:
+                return obj.user.staff_profile.department.name
+        except (ImportError, AttributeError):
+            pass
+        return "No Department"
+    get_department.short_description = 'Department'
+    
+    def is_currently_active(self, obj):
+        return obj.is_currently_active
+    is_currently_active.short_description = 'Currently Active'
+    is_currently_active.boolean = True
+
+# ================================
+# INLINE ADMIN CLASSES
+# ================================
+
+class UserRoleAssignmentInline(admin.TabularInline):
+    model = UserRoleAssignment
+    extra = 0
+    readonly_fields = ('assigned_at',)
+    fk_name = 'user'
+
+# ================================
+# USER PROFILE MANAGEMENT
+# ================================
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'employee_id', 'role', 'department', 'phone_number',
-        'last_login_display', 'is_active', 'actions'
+        'user', 'get_department', 'get_phone_number', 'get_is_active', 'get_last_login'
     )
-    list_filter = ('role', 'department', 'timezone', 'language', 'theme_preference')
+    list_filter = (
+        'theme', 'language', 'email_notifications', 'created_at'
+    )
     search_fields = (
         'user__username', 'user__first_name', 'user__last_name',
-        'user__email', 'employee_id', 'phone_number'
+        'user__email'
     )
-    readonly_fields = ('created_at', 'updated_at', 'last_login_ip', 'login_count')
+    readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
-        ('User Account', {
-            'fields': ('user', 'employee_id', 'role', 'department')
+        ('User Information', {
+            'fields': ('user',)
         }),
-        ('Contact Information', {
-            'fields': ('phone_number', 'emergency_contact', 'address')
+        ('UI Preferences', {
+            'fields': ('theme', 'language', 'timezone', 'default_items_per_page')
         }),
-        ('Profile Settings', {
-            'fields': ('profile_picture', 'timezone', 'language', 'theme_preference')
+        ('Notification Settings', {
+            'fields': (
+                'email_notifications', 'sms_notifications', 'in_app_notifications',
+                'notification_frequency', 'mobile_push_notifications'
+            ),
+            'classes': ('collapse',)
         }),
         ('Security Settings', {
-            'fields': (
-                'two_factor_enabled', 'password_expires_at', 'force_password_change',
-                'account_locked_until', 'failed_login_attempts'
-            ),
+            'fields': ('require_2fa', 'session_timeout_minutes'),
             'classes': ('collapse',)
         }),
-        ('Preferences', {
-            'fields': ('notification_preferences', 'dashboard_preferences'),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at', 'last_login_ip', 'last_password_change'),
             'classes': ('collapse',)
-        }),
-        ('Activity Tracking', {
-            'fields': (
-                'last_login_ip', 'login_count', 'last_password_change',
-                'created_at', 'updated_at'
-            ),
-            'classes': ('collapse',)
-        }),
+        })
     )
-
-    def last_login_display(self, obj):
-        if obj.user.last_login:
-            return format_html(
-                '<span title="{}">{}</span>',
-                obj.user.last_login.strftime('%Y-%m-%d %H:%M:%S'),
-                obj.user.last_login.strftime('%m/%d %H:%M')
-            )
-        return format_html('<span style="color: red;">Never</span>')
-    last_login_display.short_description = 'Last Login'
-
-    def is_active(self, obj):
-        if obj.user.is_active:
-            return format_html('<span style="color: green;">✅ Active</span>')
-        else:
-            return format_html('<span style="color: red;">❌ Inactive</span>')
-    is_active.short_description = 'Status'
-
-    def action_buttons(self, obj):
-        actions_html = []
-        
-        if obj.user.is_active:
-            actions_html.append(
-                f'<a class="button" href="{reverse("admin:auth_user_change", args=[obj.user.pk])}">Edit User</a>'
-            )
-        
-        if obj.account_locked_until and obj.account_locked_until > timezone.now():
-            actions_html.append('<span style="color: red;">🔒 Locked</span>')
-        
-        return format_html(' '.join(actions_html))
-    action_buttons.short_description = 'Actions'
-
-
-# Extend the default User admin
-class UserAdmin(BaseUserAdmin):
-    inlines = (UserProfileInline, UserSessionInline, LoginAttemptInline, PasswordHistoryInline)
-    list_display = (
-   'username', 'email', 'first_name', 'last_name', 'role_display',
-   'last_login', 'is_active', 'is_staff', 'login_attempts', 'action_buttons'
-    )
-    list_filter = (UserStatusFilter, 'is_staff', 'is_superuser', 'is_active', 'date_joined')
     
-    def role_display(self, obj):
-        try:
-            profile = obj.userprofile
-            return profile.role.display_name if profile.role else 'No Role'
-        except UserProfile.DoesNotExist:
-            return 'No Profile'
-    role_display.short_description = 'Role'
-
-    def login_attempts(self, obj):
-        failed_attempts = obj.login_attempts.filter(
-            is_successful=False,
-            timestamp__gte=timezone.now() - timedelta(hours=24)
-        ).count()
-        
-        if failed_attempts > 0:
-            return format_html(
-                '<span style="color: red;">{} failed (24h)</span>',
-                failed_attempts
-            )
-        return 'No failures'
-    login_attempts.short_description = 'Recent Login Attempts'
-
-
-# Unregister the default User admin and register our custom one
-admin.site.unregister(User)
-admin.site.register(User, UserAdmin)
-
-
-@admin.register(LoginAttempt)
-class LoginAttemptAdmin(admin.ModelAdmin):
-    list_display = (
-        'user', 'timestamp', 'ip_address', 'success_status',
-        'failure_reason', 'is_suspicious', 'user_agent_short'
-    )
-    list_filter = (LoginAttemptStatusFilter, 'timestamp', 'is_suspicious')
-    search_fields = ('user__username', 'ip_address', 'failure_reason')
-    readonly_fields = ('timestamp',)
+    def get_department(self, obj):
+        """Get department from default_department field or staff profile"""
+        if obj.default_department:
+            return obj.default_department.name
+        elif hasattr(obj.user, 'staff_profile') and obj.user.staff_profile.department:
+            return obj.user.staff_profile.department.name
+        return "No Department"
+    get_department.short_description = 'Department'
     
-    fieldsets = (
-        ('Login Information', {
-            'fields': ('user', 'timestamp', 'ip_address', 'is_successful')
-        }),
-        ('Failure Details', {
-            'fields': ('failure_reason', 'is_blocked', 'is_suspicious'),
-        }),
-        ('Client Information', {
-            'fields': ('user_agent', 'session_key'),
-            'classes': ('collapse',)
-        }),
-    )
+    def get_phone_number(self, obj):
+        """Get phone number from staff profile"""
+        if hasattr(obj.user, 'staff_profile'):
+            return obj.user.staff_profile.phone_number or "Not provided"
+        return "No staff profile"
+    get_phone_number.short_description = 'Phone Number'
+    
+    def get_is_active(self, obj):
+        """Get active status from user"""
+        return obj.user.is_active
+    get_is_active.short_description = 'Is Active'
+    get_is_active.boolean = True
+    
+    def get_last_login(self, obj):
+        """Get last login from user"""
+        return obj.user.last_login
+    get_last_login.short_description = 'Last Login'
 
-    def success_status(self, obj):
-        if obj.is_successful:
-            return format_html('<span style="color: green;">✅ Success</span>')
-        elif obj.is_blocked:
-            return format_html('<span style="color: red;">🚫 Blocked</span>')
-        elif obj.is_suspicious:
-            return format_html('<span style="color: orange;">⚠️ Suspicious</span>')
-        else:
-            return format_html('<span style="color: red;">❌ Failed</span>')
-    success_status.short_description = 'Status'
-
-    def user_agent_short(self, obj):
-        if obj.user_agent:
-            return obj.user_agent[:50] + ('...' if len(obj.user_agent) > 50 else '')
-        return '-'
-    user_agent_short.short_description = 'User Agent'
-
-    def has_add_permission(self, request):
-        return False  # Login attempts are created automatically
-
+# ================================
+# USER SESSION TRACKING
+# ================================
 
 @admin.register(UserSession)
 class UserSessionAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'session_key_short', 'started_at', 'last_activity',
-        'session_status', 'ip_address', 'duration', 'actions'
+        'user', 'session_key_display', 'ip_address', 'user_agent_short',
+        'login_time', 'last_activity', 'is_active'
     )
-    list_filter = (SessionStatusFilter, 'started_at', 'is_active')
-    search_fields = ('user__username', 'session_key', 'ip_address')
-    readonly_fields = ('session_key', 'started_at', 'last_activity', 'expires_at')
+    list_filter = (
+        'is_active', 'login_time', 'last_activity', 'session_type'
+    )
+    search_fields = (
+        'user__username', 'ip_address', 'session_key'
+    )
+    readonly_fields = (
+        'session_key', 'login_time', 'last_activity', 'logout_time'
+    )
+    date_hierarchy = 'login_time'
     
     fieldsets = (
         ('Session Information', {
-            'fields': ('user', 'session_key', 'is_active')
+            'fields': ('user', 'session_key', 'session_type', 'is_active')
         }),
-        ('Timing', {
-            'fields': ('started_at', 'last_activity', 'expires_at', 'ended_at')
+        ('Login Details', {
+            'fields': ('ip_address', 'user_agent', 'login_time')
         }),
-        ('Client Information', {
-            'fields': ('ip_address', 'user_agent', 'device_info'),
-        }),
-        ('Activity Data', {
-            'fields': ('page_views', 'last_url', 'session_data'),
+        ('Activity Tracking', {
+            'fields': ('last_activity', 'logout_time'),
             'classes': ('collapse',)
         }),
+        ('Security', {
+            'fields': ('is_suspicious', 'failed_login_attempts'),
+            'classes': ('collapse',)
+        })
     )
-
-    def session_key_short(self, obj):
-        return obj.session_key[:12] + '...' if obj.session_key else '-'
-    session_key_short.short_description = 'Session Key'
-
-    def session_status(self, obj):
-        now = timezone.now()
-        if obj.is_active and obj.expires_at > now:
-            return format_html('<span style="color: green;">🟢 Active</span>')
-        elif obj.expires_at <= now:
-            return format_html('<span style="color: orange;">⏰ Expired</span>')
-        else:
-            return format_html('<span style="color: gray;">⭕ Ended</span>')
-    session_status.short_description = 'Status'
-
-    def duration(self, obj):
-        if obj.ended_at:
-            duration = obj.ended_at - obj.started_at
-        elif obj.is_active:
-            duration = timezone.now() - obj.started_at
-        else:
-            duration = obj.expires_at - obj.started_at
-        
-        hours = duration.total_seconds() / 3600
-        if hours < 1:
-            return f"{int(duration.total_seconds() / 60)}m"
-        elif hours < 24:
-            return f"{hours:.1f}h"
-        else:
-            return f"{int(hours / 24)}d {int(hours % 24)}h"
-    duration.short_description = 'Duration'
-
-    def action_buttons(self, obj):
-        if obj.is_active:
-            return format_html('<a class="button" href="#" onclick="endSession(\'{}\')">End Session</a>', obj.pk)
-        return '-'
-    action_buttons.short_description = 'Actions'
-
-
-@admin.register(PasswordHistory)
-class PasswordHistoryAdmin(admin.ModelAdmin):
-    list_display = ('user', 'created_at', 'is_current', 'password_strength', 'action_buttons')
-    list_filter = ('is_current', 'created_at')
-    search_fields = ('user__username',)
-    readonly_fields = ('created_at', 'password_hash')
-
-    def password_strength(self, obj):
-        # This would normally check password strength
-        # For security, we'll just show if it meets basic requirements
-        return 'Strong' if obj.is_current else 'Previous'
-    password_strength.short_description = 'Strength'
-
+    
+    def session_key_display(self, obj):
+        return f"{obj.session_key[:16]}..." if obj.session_key else ""
+    session_key_display.short_description = 'Session Key'
+    
+    def user_agent_short(self, obj):
+        return obj.user_agent[:50] + "..." if len(obj.user_agent) > 50 else obj.user_agent
+    user_agent_short.short_description = 'User Agent'
+    
     def has_add_permission(self, request):
         return False
 
+# ================================
+# EXTENDED USER ADMIN
+# ================================
 
-@admin.register(SecurityQuestion)
-class SecurityQuestionAdmin(admin.ModelAdmin):
-    list_display = ('user', 'question', 'is_active', 'created_at')
-    list_filter = ('is_active', 'created_at')
-    search_fields = ('user__username', 'question')
-    readonly_fields = ('created_at', 'updated_at', 'answer_hash')
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = 'Profile'
 
+class ExtendedUserAdmin(BaseUserAdmin):
+    inlines = (UserProfileInline, UserRoleAssignmentInline)
+    list_display = BaseUserAdmin.list_display + ('get_department', 'get_roles')
+    
+    def get_department(self, obj):
+        if hasattr(obj, 'user_profile') and obj.user_profile.default_department:
+            return obj.user_profile.default_department.name
+        elif hasattr(obj, 'staff_profile') and obj.staff_profile.department:
+            return obj.staff_profile.department.name
+        return 'No Department'
+    get_department.short_description = 'Department'
+    
+    def get_roles(self, obj):
+        roles = UserRoleAssignment.objects.filter(user=obj, is_active=True)
+        return ', '.join([assignment.role.display_name for assignment in roles])
+    get_roles.short_description = 'Active Roles'
 
-@admin.register(UserPreference)
-class UserPreferenceAdmin(admin.ModelAdmin):
-    list_display = ('user', 'preference_type', 'updated_at')
-    list_filter = ('preference_type', 'updated_at')
-    search_fields = ('user__username', 'preference_type')
-    readonly_fields = ('created_at', 'updated_at')
-
-
-@admin.register(UserActivity)
-class UserActivityAdmin(admin.ModelAdmin):
-    list_display = (
-        'user', 'activity_type', 'timestamp', 'description_short',
-        'ip_address', 'success_status'
-    )
-    list_filter = ('activity_type', 'is_successful', 'timestamp')
-    search_fields = ('user__username', 'description', 'ip_address')
-    readonly_fields = ('timestamp',)
-
-    def description_short(self, obj):
-        return obj.description[:50] + ('...' if len(obj.description) > 50 else '')
-    description_short.short_description = 'Description'
-
-    def success_status(self, obj):
-        if obj.is_successful:
-            return format_html('<span style="color: green;">✅</span>')
-        else:
-            return format_html('<span style="color: red;">❌</span>')
-    success_status.short_description = 'Success'
-
-    def has_add_permission(self, request):
-        return False
-
-
-@admin.register(TwoFactorAuth)
-class TwoFactorAuthAdmin(admin.ModelAdmin):
-    list_display = ('user', 'method', 'is_active', 'backup_codes_count', 'last_used')
-    list_filter = ('method', 'is_active', 'created_at')
-    search_fields = ('user__username',)
-    readonly_fields = ('secret_key', 'backup_codes', 'created_at', 'last_used')
-
-
-@admin.register(ApiKey)
-class ApiKeyAdmin(admin.ModelAdmin):
-    list_display = (
-        'name', 'user', 'key_preview', 'is_active',
-        'last_used', 'expires_at', 'usage_count'
-    )
-    list_filter = ('is_active', 'created_at', 'expires_at')
-    search_fields = ('name', 'user__username')
-    readonly_fields = ('key', 'created_at', 'last_used', 'usage_count')
-
-    def key_preview(self, obj):
-        if obj.key:
-            return obj.key[:8] + '...' + obj.key[-4:]
-        return '-'
-    key_preview.short_description = 'API Key'
-
+# Unregister the default User admin and register our extended one
+admin.site.unregister(User)
+admin.site.register(User, ExtendedUserAdmin)
 
 # ================================
 # ADMIN ACTIONS
 # ================================
 
-@admin.action(description='Activate selected users')
 def activate_users(modeladmin, request, queryset):
+    """Activate selected users"""
     updated = queryset.update(is_active=True)
-    modeladmin.message_user(request, f'{updated} users were activated.')
+    modeladmin.message_user(
+        request, 
+        f'{updated} user(s) activated.'
+    )
+activate_users.short_description = "Activate selected users"
 
-
-@admin.action(description='Deactivate selected users')
 def deactivate_users(modeladmin, request, queryset):
+    """Deactivate selected users"""
     updated = queryset.update(is_active=False)
-    modeladmin.message_user(request, f'{updated} users were deactivated.')
+    modeladmin.message_user(
+        request,
+        f'{updated} user(s) deactivated.'
+    )
+deactivate_users.short_description = "Deactivate selected users"
 
+def force_logout_sessions(modeladmin, request, queryset):
+    """Force logout selected sessions"""
+    updated = queryset.update(is_active=False, logout_time=timezone.now())
+    modeladmin.message_user(
+        request,
+        f'{updated} session(s) logged out.'
+    )
+force_logout_sessions.short_description = "Force logout selected sessions"
 
-@admin.action(description='Reset failed login attempts')
-def reset_login_attempts(modeladmin, request, queryset):
-    for profile in queryset:
-        profile.failed_login_attempts = 0
-        profile.account_locked_until = None
-        profile.save()
-    modeladmin.message_user(request, f'Login attempts reset for {queryset.count()} users.')
-
-
-# Add actions to UserProfile admin
-UserProfileAdmin.actions = [activate_users, deactivate_users, reset_login_attempts]
+# Add actions to admin classes
+UserRoleAssignmentAdmin.actions = [activate_users, deactivate_users]
+UserSessionAdmin.actions = [force_logout_sessions]

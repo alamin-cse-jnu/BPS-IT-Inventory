@@ -1169,7 +1169,7 @@ class QRScanLocation(models.Model):
     scan = models.OneToOneField(
         'QRCodeScan',
         on_delete=models.CASCADE,
-        related_name='scan_location',
+        related_name='location_details',
         primary_key=True
     )
     
