@@ -110,65 +110,6 @@
 <!-- Main Content Row -->
 <div class="row g-4">
     <!-- Recent Activities -->
-    <div class="col-lg-8">
-        <div class="card h-100">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-activity me-2"></i>Recent Activities
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Activity</th>
-                                <th>Device</th>
-                                <th>Staff</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Sample recent activities -->
-                            <tr>
-                                <td>
-                                    <i class="bi bi-tools text-danger me-2"></i>
-                                    Maintenance Started
-                                </td>
-                                <td>
-                                    <strong>Printer PR001</strong><br>
-                                    <small class="text-muted">HP LaserJet Pro</small>
-                                </td>
-                                <td>Mike Johnson</td>
-                                <td>1 day ago</td>
-                                <td><span class="badge bg-danger">In Progress</span></td>
-                            </tr>
-                            <tr>
-                                <td>
-                                    <i class="bi bi-qr-code text-primary me-2"></i>
-                                    QR Code Generated
-                                </td>
-                                <td>
-                                    <strong>Desktop DT001</strong><br>
-                                    <small class="text-muted">HP EliteDesk 800</small>
-                                </td>
-                                <td>System</td>
-                                <td>2 days ago</td>
-                                <td><span class="badge bg-primary">Generated</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-center">
-                    <a href="{% url 'reports:activity_log' %}" class="btn btn-outline-primary">
-                        View All Activities
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-    
     <!-- Quick Stats & Actions -->
     <div class="col-lg-4">
         <!-- Device Categories Chart -->
@@ -212,11 +153,6 @@
                     </div>
                 </div>
                 
-                <div class="text-center mt-3">
-                    <a href="{% url 'reports:notifications' %}" class="btn btn-outline-primary btn-sm">
-                        View All Notifications
-                    </a>
-                </div>
             </div>
         </div>
     </div>

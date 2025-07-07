@@ -590,7 +590,7 @@
                         </li>
                         
                         <!-- Organization -->
-                        <li class="sidebar-item has-submenu {% if request.resolver_match.app_name == 'inventory' and ('staff' in request.resolver_match.url_name or 'department' in request.resolver_match.url_name or 'location' in request.resolver_match.url_name) %}active{% endif %}">
+                        <li class="sidebar-item has-submenu {% if request.resolver_match.app_name == 'inventory' and 'staff' in request.resolver_match.url_name or 'department' in request.resolver_match.url_name or 'location' in request.resolver_match.url_name %}active{% endif %}">
                             <a href="#" class="sidebar-link submenu-toggle">
                                 <i class="fas fa-building sidebar-icon"></i>
                                 <span class="sidebar-text">Organization</span>

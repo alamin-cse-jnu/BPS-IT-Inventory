@@ -431,7 +431,7 @@ def device_history(request, device_id):
             'audit_logs': audit_logs,
         }
         
-        return render(request, 'inventory/device_history.html', context)
+        return render(request, 'inventory/devices/device_history.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device history: {str(e)}")
@@ -463,7 +463,7 @@ def device_list(request):
         'title': 'Device Management'
     }
     
-    return render(request, 'inventory/device_list.html', context)
+    return render(request, 'inventory/devices/device_list.html', context)
 
 @login_required
 def device_detail(request, device_id):
@@ -596,7 +596,7 @@ def device_detail(request, device_id):
             'can_assign': request.user.has_perm('inventory.add_assignment'),
         }
         
-        return render(request, 'inventory/device_detail.html', context)
+        return render(request, 'inventory/devices/device_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device details: {str(e)}")
@@ -644,7 +644,7 @@ def device_create(request):
         'title': 'Create New Device'
     }
     
-    return render(request, 'inventory/device_form.html', context)
+    return render(request, 'inventory/devices/device_form.html', context)
 
 @login_required
 @permission_required('inventory.change_device', raise_exception=True)
@@ -741,7 +741,7 @@ def device_delete(request, device_id):
             'device': device,
             'active_assignments': Assignment.objects.filter(device=device, is_active=True).count()
         }
-        return render(request, 'inventory/device_delete.html', context)
+        return render(request, 'inventory/devices/device_delete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error processing request: {str(e)}")
@@ -836,7 +836,7 @@ def device_type_detail(request, type_id):
             'title': f'Device Type: {device_type.name}'
         }
         
-        return render(request, 'inventory/device_type_detail.html', context)
+        return render(request, 'inventory/devices/device_type_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device type details: {str(e)}")
@@ -894,7 +894,7 @@ def device_type_edit(request, type_id):
             'title': f'Edit Device Type: {device_type.name}'
         }
         
-        return render(request, 'inventory/device_type_form.html', context)
+        return render(request, 'inventory/device_types/device_type_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device type: {str(e)}")
@@ -958,7 +958,7 @@ def device_type_delete(request, type_id):
             'title': f'Delete Device Type: {device_type.name}'
         }
         
-        return render(request, 'inventory/device_type_confirm_delete.html', context)
+        return render(request, 'inventory/device_types/device_type_confirm_delete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error deleting device type: {str(e)}")
@@ -1046,7 +1046,7 @@ def assignment_list(request):
         'title': 'Assignment Management'
     }
     
-    return render(request, 'inventory/assignment_list.html', context)
+    return render(request, 'inventory/assignments/assignment_list.html', context)
 
 @login_required
 @permission_required('inventory.add_assignment', raise_exception=True)
@@ -1101,7 +1101,7 @@ def assignment_create(request):
         'title': 'Create Assignment'
     }
     
-    return render(request, 'inventory/assignment_form.html', context)
+    return render(request, 'inventory/assignments/assignment_form.html', context)
 
 @login_required
 def assignment_detail(request, assignment_id):
@@ -1146,7 +1146,7 @@ def assignment_detail(request, assignment_id):
             'audit_logs': audit_logs,
         }
         
-        return render(request, 'inventory/assignment_detail.html', context)
+        return render(request, 'inventory/assignments/assignment_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1274,7 +1274,7 @@ def assignment_return(request, assignment_id):
             'title': f'Return Device from Assignment {assignment.assignment_id}',
         }
         
-        return render(request, 'inventory/assignment_return.html', context)
+        return render(request, 'inventory/assignments/assignment_return.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1340,7 +1340,7 @@ def assignment_transfer(request, assignment_id):
             'assignment': assignment,
             'title': f'Transfer Assignment {assignment.assignment_id}',
         }
-        return render(request, 'inventory/assignment_transfer.html', context)
+        return render(request, 'inventory/assignments/assignment_transfer.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1398,7 +1398,7 @@ def assignment_edit(request, assignment_id):
             'title': f'Edit Assignment {assignment.assignment_id}',
             'action': 'Update',
         }
-        return render(request, 'inventory/assignment_form.html', context)
+        return render(request, 'inventory/assignments/assignment_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1457,7 +1457,7 @@ def assignment_extend(request, assignment_id):
         context = {
             'assignment': assignment,
         }
-        return render(request, 'inventory/assignment_extend.html', context)
+        return render(request, 'inventory/assignments/assignment_extend.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1543,7 +1543,7 @@ def overdue_assignments_list(request):
             'total_overdue': overdue_assignments.count(),
         }
         
-        return render(request, 'inventory/overdue_assignments.html', context)
+        return render(request, 'inventory/assignments/overdue_assignments.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading overdue assignments: {str(e)}")
