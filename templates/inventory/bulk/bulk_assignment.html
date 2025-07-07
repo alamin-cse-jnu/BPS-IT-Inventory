@@ -1,0 +1,897 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .bulk-selection-card {
+        border: 2px solid #e3e6f0;
+        transition: all 0.3s ease;
+    }
+    
+    .bulk-selection-card:hover {
+        border-color: #4e73df;
+        box-shadow: 0 0.25rem 0.5rem rgba(78, 115, 223, 0.15);
+    }
+    
+    .device-selection-item {
+        padding: 0.75rem;
+        border: 1px solid #e3e6f0;
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .device-selection-item:hover {
+        background-color: #f8f9fc;
+    }
+    
+    .device-selection-item.selected {
+        background-color: #eef7ff;
+        border-color: #4e73df;
+    }
+    
+    .assignment-preview {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.3s ease;
+    }
+    
+    .assignment-preview.active {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
+    .progress-step {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background: #f8f9fc;
+        border-radius: 0.5rem;
+        border-left: 4px solid #e3e6f0;
+        transition: all 0.3s ease;
+    }
+    
+    .progress-step.active {
+        border-left-color: #4e73df;
+        background: #eef7ff;
+    }
+    
+    .progress-step.completed {
+        border-left-color: #1cc88a;
+        background: #f0fdf4;
+    }
+    
+    .assignee-selector {
+        display: none;
+        padding: 1rem;
+        background: #f8f9fc;
+        border-radius: 0.5rem;
+        margin-top: 1rem;
+        animation: slideDown 0.3s ease;
+    }
+    
+    .assignee-selector.active {
+        display: block;
+    }
+    
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .form-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 1rem;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-section h5 {
+        color: #5a5c69;
+        margin-bottom: 1rem;
+        font-weight: 600;
+    }
+    
+    .device-count-badge {
+        background: #4e73df;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .assignment-type-card {
+        border: 2px solid #e3e6f0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 1rem;
+    }
+    
+    .assignment-type-card:hover {
+        border-color: #4e73df;
+        background-color: #f8f9fc;
+    }
+    
+    .assignment-type-card.selected {
+        border-color: #4e73df;
+        background-color: #eef7ff;
+    }
+    
+    .assignment-type-card .icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-users-cog text-primary"></i>
+            {{ title }}
+        </h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Devices</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Bulk Assignment</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Progress Tracker -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="progress-step active" id="step1">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-mobile-alt fa-lg text-primary mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">Select Devices</h6>
+                                        <small class="text-muted">Choose devices to assign</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="progress-step" id="step2">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-tag fa-lg text-secondary mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">Assignment Type</h6>
+                                        <small class="text-muted">Choose assignment type</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="progress-step" id="step3">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-users fa-lg text-secondary mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">Select Assignee</h6>
+                                        <small class="text-muted">Choose who receives devices</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="progress-step" id="step4">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-check-circle fa-lg text-secondary mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">Confirm</h6>
+                                        <small class="text-muted">Review and submit</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" id="bulkAssignmentForm">
+        {% csrf_token %}
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Device Selection -->
+                <div class="form-section" id="deviceSelection">
+                    <h5><i class="fas fa-mobile-alt text-primary"></i> Select Devices for Assignment</h5>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="deviceSearch" 
+                                       placeholder="Search devices...">
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary" id="selectAllDevices">
+                                    <i class="fas fa-check-double"></i> Select All
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="clearSelection">
+                                    <i class="fas fa-times"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="selected-count mb-3">
+                        <span class="device-count-badge">
+                            <span id="selectedCount">0</span> devices selected
+                        </span>
+                    </div>
+
+                    <div class="device-list" id="deviceList">
+                        <!-- Device list will be populated via JavaScript -->
+                        <div class="text-center py-4">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="text-muted mt-2">Loading available devices...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Type Selection -->
+                <div class="form-section" id="assignmentTypeSelection" style="display:none;">
+                    <h5><i class="fas fa-clipboard-list text-warning"></i> Assignment Type</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="assignment-type-card" data-type="permanent">
+                                <div class="text-center">
+                                    <i class="fas fa-infinity icon text-success"></i>
+                                    <h6 class="font-weight-bold">Permanent Assignment</h6>
+                                    <p class="text-muted small mb-0">
+                                        Long-term assignment with no expected return date
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="assignment-type-card" data-type="temporary">
+                                <div class="text-center">
+                                    <i class="fas fa-clock icon text-warning"></i>
+                                    <h6 class="font-weight-bold">Temporary Assignment</h6>
+                                    <p class="text-muted small mb-0">
+                                        Short-term assignment with expected return date
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="assignment_type" id="assignmentTypeInput">
+                    
+                    <!-- Date fields for temporary assignments -->
+                    <div class="temporary-fields" id="temporaryFields" style="display:none;">
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="assignment_date" class="font-weight-bold">Assignment Date</label>
+                                <input type="date" class="form-control" name="assignment_date" 
+                                       id="assignment_date" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="expected_return_date" class="font-weight-bold">Expected Return Date</label>
+                                <input type="date" class="form-control" name="expected_return_date" 
+                                       id="expected_return_date" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignee Selection -->
+                <div class="form-section" id="assigneeSelection" style="display:none;">
+                    <h5><i class="fas fa-user-tag text-info"></i> Select Assignee</h5>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="nav nav-pills nav-justified mb-3" id="assigneeTypeTabs">
+                                <a class="nav-link active" data-toggle="pill" href="#staff-panel">
+                                    <i class="fas fa-user"></i> Staff Member
+                                </a>
+                                <a class="nav-link" data-toggle="pill" href="#department-panel">
+                                    <i class="fas fa-building"></i> Department
+                                </a>
+                                <a class="nav-link" data-toggle="pill" href="#location-panel">
+                                    <i class="fas fa-map-marker-alt"></i> Location
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-content">
+                        <!-- Staff Assignment -->
+                        <div class="tab-pane fade show active" id="staff-panel">
+                            <div class="form-group">
+                                <label for="assigned_staff" class="font-weight-bold">Select Staff Member</label>
+                                <select class="form-control" name="assigned_staff" id="assigned_staff">
+                                    <option value="">Choose Staff Member...</option>
+                                    {% for staff in staff_members %}
+                                        <option value="{{ staff.id }}" 
+                                                data-name="{{ staff.user.get_full_name }}"
+                                                data-department="{{ staff.department.name|default:'No Department' }}"
+                                                data-employee-id="{{ staff.employee_id }}">
+                                            {{ staff.user.get_full_name }} - {{ staff.employee_id }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Department Assignment -->
+                        <div class="tab-pane fade" id="department-panel">
+                            <div class="form-group">
+                                <label for="assigned_department" class="font-weight-bold">Select Department</label>
+                                <select class="form-control" name="assigned_department" id="assigned_department">
+                                    <option value="">Choose Department...</option>
+                                    {% for department in departments %}
+                                        <option value="{{ department.id }}" data-name="{{ department.name }}">
+                                            {{ department.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Location Assignment -->
+                        <div class="tab-pane fade" id="location-panel">
+                            <div class="form-group">
+                                <label for="assigned_location" class="font-weight-bold">Select Location</label>
+                                <select class="form-control" name="assigned_location" id="assigned_location">
+                                    <option value="">Choose Location...</option>
+                                    {% for location in locations %}
+                                        <option value="{{ location.id }}" data-name="{{ location.name }}">
+                                            {{ location.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="form-section" id="additionalInfo" style="display:none;">
+                    <h5><i class="fas fa-sticky-note text-secondary"></i> Additional Information</h5>
+                    
+                    <div class="form-group">
+                        <label for="assignment_notes" class="font-weight-bold">Assignment Notes</label>
+                        <textarea class="form-control" name="assignment_notes" id="assignment_notes" 
+                                  rows="3" placeholder="Enter any additional notes or instructions..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Assignment Preview -->
+                <div class="assignment-preview" id="assignmentPreview">
+                    <h6 class="font-weight-bold mb-3">
+                        <i class="fas fa-eye"></i> Assignment Preview
+                    </h6>
+                    
+                    <div class="preview-section">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-sm">Devices Selected:</span>
+                            <span class="badge badge-light" id="previewDeviceCount">0</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-sm">Assignment Type:</span>
+                            <span class="badge badge-light" id="previewAssignmentType">Not Selected</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-sm">Assigned To:</span>
+                            <span class="badge badge-light" id="previewAssignee">Not Selected</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center" id="previewReturnDate" style="display:none;">
+                            <span class="text-sm">Return Date:</span>
+                            <span class="badge badge-light" id="previewReturnDateValue">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Guidelines -->
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-info-circle"></i> Assignment Guidelines
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 class="font-weight-bold text-success">
+                                <i class="fas fa-check-circle"></i> Permanent Assignments
+                            </h6>
+                            <p class="text-sm text-muted">
+                                Long-term assignments with no expected return date. Ideal for personal devices, 
+                                office equipment, and role-specific tools.
+                            </p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6 class="font-weight-bold text-warning">
+                                <i class="fas fa-clock"></i> Temporary Assignments
+                            </h6>
+                            <p class="text-sm text-muted">
+                                Short-term assignments with a specific return date. Perfect for project work, 
+                                training sessions, or temporary replacements.
+                            </p>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-lightbulb"></i>
+                            <strong>Tip:</strong> Use the search function to quickly find specific devices 
+                            by ID, name, or model.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="card shadow mt-4">
+                    <div class="card-body">
+                        <button type="button" class="btn btn-primary btn-block btn-lg" 
+                                id="nextStepBtn" disabled>
+                            <i class="fas fa-arrow-right"></i> Next Step
+                        </button>
+                        
+                        <button type="submit" class="btn btn-success btn-block btn-lg" 
+                                id="submitAssignment" style="display:none;">
+                            <i class="fas fa-check"></i> Create Assignments
+                        </button>
+                        
+                        <button type="button" class="btn btn-secondary btn-block" 
+                                id="prevStepBtn" style="display:none;">
+                            <i class="fas fa-arrow-left"></i> Previous Step
+                        </button>
+                        
+                        <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-secondary btn-block">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Device Selection Modal -->
+<div class="modal fade" id="deviceModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Devices for Assignment</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th width="50">
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" class="custom-control-input" id="selectAllModal">
+                                        <label class="custom-control-label" for="selectAllModal"></label>
+                                    </div>
+                                </th>
+                                <th>Device ID</th>
+                                <th>Device Name</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalDeviceList">
+                            <!-- Populated via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmDeviceSelection">
+                    Select Devices
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let currentStep = 1;
+    let selectedDevices = [];
+    let availableDevices = [];
+    
+    // Initialize
+    loadAvailableDevices();
+    updateStepIndicators();
+    
+    // Load available devices
+    function loadAvailableDevices() {
+        $.ajax({
+            url: '{% url "inventory:api_available_devices" %}',
+            method: 'GET',
+            success: function(data) {
+                availableDevices = data;
+                renderDeviceList();
+            },
+            error: function() {
+                $('#deviceList').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Failed to load devices. Please refresh the page.
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    // Render device list
+    function renderDeviceList() {
+        const deviceList = $('#deviceList');
+        if (availableDevices.length === 0) {
+            deviceList.html(`
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    No available devices found for assignment.
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '';
+        availableDevices.forEach(device => {
+            const isSelected = selectedDevices.includes(device.id);
+            html += `
+                <div class="device-selection-item ${isSelected ? 'selected' : ''}" data-device-id="${device.id}">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input device-checkbox" 
+                               id="device_${device.id}" ${isSelected ? 'checked' : ''}
+                               name="device_ids" value="${device.id}">
+                        <label class="custom-control-label" for="device_${device.id}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1 font-weight-bold">${device.device_name}</h6>
+                                    <small class="text-muted">
+                                        ${device.device_id} • ${device.category} • ${device.brand} ${device.model}
+                                    </small>
+                                </div>
+                                <div class="text-right">
+                                    <span class="badge badge-success">${device.status}</span>
+                                    <br>
+                                    <small class="text-muted">${device.location || 'No Location'}</small>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            `;
+        });
+        deviceList.html(html);
+    }
+    
+    // Handle device selection
+    $(document).on('change', '.device-checkbox', function() {
+        const deviceId = parseInt($(this).val());
+        const isChecked = $(this).is(':checked');
+        
+        if (isChecked) {
+            if (!selectedDevices.includes(deviceId)) {
+                selectedDevices.push(deviceId);
+            }
+            $(this).closest('.device-selection-item').addClass('selected');
+        } else {
+            selectedDevices = selectedDevices.filter(id => id !== deviceId);
+            $(this).closest('.device-selection-item').removeClass('selected');
+        }
+        
+        updateSelectedCount();
+        updateNextButton();
+        updatePreview();
+    });
+    
+    // Select all devices
+    $('#selectAllDevices').click(function() {
+        $('.device-checkbox').prop('checked', true).trigger('change');
+    });
+    
+    // Clear selection
+    $('#clearSelection').click(function() {
+        $('.device-checkbox').prop('checked', false).trigger('change');
+    });
+    
+    // Update selected count
+    function updateSelectedCount() {
+        $('#selectedCount').text(selectedDevices.length);
+        $('#previewDeviceCount').text(selectedDevices.length);
+    }
+    
+    // Assignment type selection
+    $('.assignment-type-card').click(function() {
+        $('.assignment-type-card').removeClass('selected');
+        $(this).addClass('selected');
+        
+        const assignmentType = $(this).data('type');
+        $('#assignmentTypeInput').val(assignmentType);
+        
+        if (assignmentType === 'temporary') {
+            $('#temporaryFields').show();
+            $('#previewReturnDate').show();
+        } else {
+            $('#temporaryFields').hide();
+            $('#previewReturnDate').hide();
+        }
+        
+        updatePreview();
+        updateNextButton();
+    });
+    
+    // Assignee selection
+    $('#assigned_staff, #assigned_department, #assigned_location').change(function() {
+        updatePreview();
+        updateNextButton();
+    });
+    
+    // Date inputs
+    $('#expected_return_date').change(function() {
+        updatePreview();
+    });
+    
+    // Navigation
+    $('#nextStepBtn').click(function() {
+        if (currentStep < 4) {
+            currentStep++;
+            updateStepDisplay();
+            updateStepIndicators();
+            updateNextButton();
+        }
+    });
+    
+    $('#prevStepBtn').click(function() {
+        if (currentStep > 1) {
+            currentStep--;
+            updateStepDisplay();
+            updateStepIndicators();
+            updateNextButton();
+        }
+    });
+    
+    // Update step display
+    function updateStepDisplay() {
+        const sections = ['deviceSelection', 'assignmentTypeSelection', 'assigneeSelection', 'additionalInfo'];
+        
+        sections.forEach((section, index) => {
+            if (index + 1 === currentStep) {
+                $(`#${section}`).show();
+            } else {
+                $(`#${section}`).hide();
+            }
+        });
+        
+        // Show/hide navigation buttons
+        $('#prevStepBtn').toggle(currentStep > 1);
+        $('#nextStepBtn').toggle(currentStep < 4);
+        $('#submitAssignment').toggle(currentStep === 4);
+        
+        // Update assignment preview visibility
+        $('#assignmentPreview').toggleClass('active', currentStep > 1);
+    }
+    
+    // Update step indicators
+    function updateStepIndicators() {
+        for (let i = 1; i <= 4; i++) {
+            const step = $(`#step${i}`);
+            const icon = step.find('i');
+            
+            if (i < currentStep) {
+                step.removeClass('active').addClass('completed');
+                icon.removeClass().addClass('fas fa-check-circle fa-lg text-success');
+            } else if (i === currentStep) {
+                step.removeClass('completed').addClass('active');
+                icon.removeClass().addClass(getStepIcon(i) + ' fa-lg text-primary');
+            } else {
+                step.removeClass('active completed');
+                icon.removeClass().addClass(getStepIcon(i) + ' fa-lg text-secondary');
+            }
+        }
+    }
+    
+    // Get step icon
+    function getStepIcon(step) {
+        const icons = {
+            1: 'fas fa-mobile-alt',
+            2: 'fas fa-user-tag',
+            3: 'fas fa-users',
+            4: 'fas fa-check-circle'
+        };
+        return icons[step] || 'fas fa-circle';
+    }
+    
+    // Update next button state
+    function updateNextButton() {
+        let canProceed = false;
+        
+        switch(currentStep) {
+            case 1:
+                canProceed = selectedDevices.length > 0;
+                break;
+            case 2:
+                canProceed = $('#assignmentTypeInput').val() !== '';
+                break;
+            case 3:
+                canProceed = $('#assigned_staff').val() || $('#assigned_department').val() || $('#assigned_location').val();
+                break;
+            case 4:
+                canProceed = true;
+                break;
+        }
+        
+        $('#nextStepBtn').prop('disabled', !canProceed);
+    }
+    
+    // Update preview
+    function updatePreview() {
+        // Assignment type
+        const assignmentType = $('#assignmentTypeInput').val();
+        if (assignmentType) {
+            $('#previewAssignmentType').text(assignmentType.charAt(0).toUpperCase() + assignmentType.slice(1));
+        }
+        
+        // Assignee
+        let assignee = 'Not Selected';
+        if ($('#assigned_staff').val()) {
+            assignee = $('#assigned_staff option:selected').data('name');
+        } else if ($('#assigned_department').val()) {
+            assignee = $('#assigned_department option:selected').data('name');
+        } else if ($('#assigned_location').val()) {
+            assignee = $('#assigned_location option:selected').data('name');
+        }
+        $('#previewAssignee').text(assignee);
+        
+        // Return date
+        const returnDate = $('#expected_return_date').val();
+        if (returnDate) {
+            $('#previewReturnDateValue').text(returnDate);
+        }
+    }
+    
+    // Device search
+    $('#deviceSearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('.device-selection-item').each(function() {
+            const deviceText = $(this).text().toLowerCase();
+            $(this).toggle(deviceText.includes(searchTerm));
+        });
+    });
+    
+    // Tab switching for assignee types
+    $('#assigneeTypeTabs a').click(function(e) {
+        e.preventDefault();
+        
+        // Clear other selections when switching tabs
+        if ($(this).attr('href') === '#staff-panel') {
+            $('#assigned_department, #assigned_location').val('');
+        } else if ($(this).attr('href') === '#department-panel') {
+            $('#assigned_staff, #assigned_location').val('');
+        } else if ($(this).attr('href') === '#location-panel') {
+            $('#assigned_staff, #assigned_department').val('');
+        }
+        
+        $(this).tab('show');
+        updatePreview();
+        updateNextButton();
+    });
+    
+    // Form validation before submission
+    $('#bulkAssignmentForm').submit(function(e) {
+        if (selectedDevices.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one device for assignment.');
+            return false;
+        }
+        
+        const assignmentType = $('#assignmentTypeInput').val();
+        if (!assignmentType) {
+            e.preventDefault();
+            alert('Please select an assignment type.');
+            return false;
+        }
+        
+        const hasAssignee = $('#assigned_staff').val() || $('#assigned_department').val() || $('#assigned_location').val();
+        if (!hasAssignee) {
+            e.preventDefault();
+            alert('Please select an assignee (staff, department, or location).');
+            return false;
+        }
+        
+        if (assignmentType === 'temporary' && !$('#expected_return_date').val()) {
+            e.preventDefault();
+            alert('Please provide an expected return date for temporary assignments.');
+            return false;
+        }
+        
+        // Show loading state
+        $('#submitAssignment').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Creating Assignments...');
+        
+        return true;
+    });
+    
+    // Set default assignment date to today
+    const today = new Date().toISOString().split('T')[0];
+    $('#assignment_date').val(today);
+    
+    // Initialize first step
+    updateStepDisplay();
+    updateNextButton();
+});
+
+// API endpoint for available devices (you'll need to create this)
+// This is a placeholder - implement the actual endpoint in your views.py
+function getAvailableDevicesAPI() {
+    // This would be replaced with actual API call
+    return [
+        {
+            id: 1,
+            device_id: 'DEV001',
+            device_name: 'Dell Laptop 1',
+            category: 'IT Equipment',
+            brand: 'Dell',
+            model: 'Latitude 7420',
+            status: 'AVAILABLE',
+            location: 'Storage Room A'
+        },
+        {
+            id: 2,
+            device_id: 'DEV002',
+            device_name: 'iPhone 13',
+            category: 'Mobile Device',
+            brand: 'Apple',
+            model: 'iPhone 13',
+            status: 'AVAILABLE',
+            location: 'IT Department'
+        }
+        // Add more sample devices as needed
+    ];
+}
+</script>
+{% endblock %}

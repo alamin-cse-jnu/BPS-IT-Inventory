@@ -322,7 +322,7 @@ def qr_bulk_generate(request):
         }
     }
     
-    return render(request, 'qr_management/bulk_generate.html', context)
+    return render(request, 'qr_management/qr_bulk_generate.html', context)
 
 def create_qr_label(device, size='medium', include_text=True):
     """Create a printable QR label for a device"""

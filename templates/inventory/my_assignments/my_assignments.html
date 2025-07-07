@@ -1,0 +1,355 @@
+<!-- Location: bps_inventory/templates/inventory/my_assignments.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Assignments - BPS Inventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-user-check fa-2x text-primary mr-3"></i>
+            <div>
+                <h1 class="h3 mb-0 text-gray-800">My Assignments</h1>
+                <p class="mb-0 text-muted">View and manage your device assignments</p>
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'inventory:dashboard' %}" class="btn btn-outline-secondary mr-2">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Assignments
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_assignments }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Active Assignments
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.active_assignments }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Temporary Assignments
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.temporary_assignments }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Overdue Items
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.overdue_assignments }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Returns Alert -->
+    {% if upcoming_returns %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="alert alert-warning shadow">
+                <h6 class="alert-heading">
+                    <i class="fas fa-calendar-exclamation mr-2"></i>Upcoming Returns
+                </h6>
+                <p class="mb-2">You have temporary assignments due for return soon:</p>
+                <div class="row">
+                    {% for assignment in upcoming_returns %}
+                    <div class="col-md-6 col-lg-4 mb-2">
+                        <div class="card border-warning">
+                            <div class="card-body py-2">
+                                <small class="font-weight-bold">{{ assignment.device.device_name }}</small><br>
+                                <small class="text-muted">Due: {{ assignment.expected_return_date|date:"M d, Y" }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search and Filter -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-filter mr-2"></i>Filter & Search
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="get" class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="search" class="form-label">Search</label>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   placeholder="Device name, ID..." value="{{ search_query }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-control" id="status" name="status">
+                                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Status</option>
+                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                                <option value="returned" {% if status_filter == 'returned' %}selected{% endif %}>Returned</option>
+                                <option value="overdue" {% if status_filter == 'overdue' %}selected{% endif %}>Overdue</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="type" class="form-label">Assignment Type</label>
+                            <select class="form-control" id="type" name="type">
+                                <option value="all" {% if assignment_type_filter == 'all' %}selected{% endif %}>All Types</option>
+                                <option value="temporary" {% if assignment_type_filter == 'temporary' %}selected{% endif %}>Temporary</option>
+                                <option value="permanent" {% if assignment_type_filter == 'permanent' %}selected{% endif %}>Permanent</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary mr-2">
+                                <i class="fas fa-search"></i> Filter
+                            </button>
+                            <a href="{% url 'inventory:my_assignments' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i> Clear
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assignments List -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-list mr-2"></i>My Assignments
+                        {% if page_obj.paginator.count %}
+                            <span class="badge badge-primary ml-2">{{ page_obj.paginator.count }}</span>
+                        {% endif %}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if page_obj %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="assignmentsTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>Device</th>
+                                        <th>Assignment ID</th>
+                                        <th>Type</th>
+                                        <th>Assigned Date</th>
+                                        <th>Return Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for assignment in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="mr-3">
+                                                    {% if assignment.device.device_type %}
+                                                        <i class="fas fa-laptop text-primary fa-2x"></i>
+                                                    {% else %}
+                                                        <i class="fas fa-desktop text-secondary fa-2x"></i>
+                                                    {% endif %}
+                                                </div>
+                                                <div>
+                                                    <div class="font-weight-bold">{{ assignment.device.device_name }}</div>
+                                                    <div class="text-muted small">{{ assignment.device.device_id }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <code>{{ assignment.assignment_id }}</code>
+                                        </td>
+                                        <td>
+                                            {% if assignment.is_temporary %}
+                                                <span class="badge badge-warning">Temporary</span>
+                                            {% else %}
+                                                <span class="badge badge-success">Permanent</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ assignment.assigned_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if assignment.is_temporary %}
+                                                {% if assignment.expected_return_date %}
+                                                    {{ assignment.expected_return_date|date:"M d, Y" }}
+                                                    {% if assignment.expected_return_date < today and assignment.is_active %}
+                                                        <br><span class="badge badge-danger">Overdue</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="text-muted">Not set</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">Permanent</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if assignment.is_active %}
+                                                <span class="badge badge-success">Active</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Returned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'inventory:my_assignment_detail' assignment.assignment_id %}" 
+                                                   class="btn btn-outline-primary btn-sm" title="View Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if assignment.is_temporary and assignment.is_active %}
+                                                    <a href="{% url 'inventory:request_assignment_extension' assignment.assignment_id %}" 
+                                                       class="btn btn-outline-warning btn-sm" title="Request Extension">
+                                                        <i class="fas fa-calendar-plus"></i>
+                                                    </a>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4">
+                                            <div class="text-muted">
+                                                <i class="fas fa-inbox fa-3x mb-3"></i>
+                                                <h5>No assignments found</h5>
+                                                <p>You don't have any assignments matching the current filters.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        {% if page_obj.has_other_pages %}
+                        <nav aria-label="Assignment pagination">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if assignment_type_filter != 'all' %}&type={{ assignment_type_filter }}{% endif %}">First</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if assignment_type_filter != 'all' %}&type={{ assignment_type_filter }}{% endif %}">Previous</a>
+                                    </li>
+                                {% endif %}
+
+                                <li class="page-item active">
+                                    <span class="page-link">
+                                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                    </span>
+                                </li>
+
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if assignment_type_filter != 'all' %}&type={{ assignment_type_filter }}{% endif %}">Next</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if assignment_type_filter != 'all' %}&type={{ assignment_type_filter }}{% endif %}">Last</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-4">
+                            <div class="text-muted">
+                                <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+                                <h5>Error Loading Assignments</h5>
+                                <p>There was an error loading your assignments. Please try again later.</p>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+.card {
+    transition: transform 0.15s ease-in-out;
+}
+.card:hover {
+    transform: translateY(-2px);
+}
+.badge {
+    font-size: 0.75em;
+}
+.table td {
+    vertical-align: middle;
+}
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}

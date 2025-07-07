@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit Maintenance Schedule - BPS IT Inventory{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/custom.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:maintenance_list' %}">Maintenance</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:maintenance_detail' maintenance.id %}">{{ maintenance.device.device_id }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit</li>
+        </ol>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-bps-primary">Edit Maintenance Schedule</h1>
+            <p class="text-muted mb-0">Update maintenance details for {{ maintenance.device.device_id }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:maintenance_detail' maintenance.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Details
+            </a>
+            <a href="{% url 'inventory:maintenance_list' %}" class="btn btn-outline-primary">
+                <i class="fas fa-list me-1"></i>All Maintenance
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Form Card -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card card-bps">
+                <div class="card-header card-header-bps">
+                    <h5 class="mb-0">
+                        <i class="fas fa-wrench me-2"></i>Maintenance Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="maintenanceEditForm">
+                        {% csrf_token %}
+                        
+                        <!-- Device Information (Read-only) -->
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">Device Information</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label fw-bold">Device ID</label>
+                                        <input type="text" class="form-control bg-light" value="{{ maintenance.device.device_id }}" readonly>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label fw-bold">Device Type</label>
+                                        <input type="text" class="form-control bg-light" value="{{ maintenance.device.device_type }}" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Maintenance Details -->
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2 mb-3">Maintenance Details</h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="{{ form.maintenance_type.id_for_label }}" class="form-label fw-bold">
+                                            Maintenance Type <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.maintenance_type }}
+                                        {% if form.maintenance_type.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.maintenance_type.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="{{ form.status.id_for_label }}" class="form-label fw-bold">
+                                            Status <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.status }}
+                                        {% if form.status.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.status.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label for="{{ form.vendor.id_for_label }}" class="form-label fw-bold">
+                                            Service Provider
+                                        </label>
+                                        {{ form.vendor }}
+                                        {% if form.vendor.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.vendor.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label class="form-label fw-bold">Scheduled Date</label>
+                                        <input type="text" class="form-control bg-light" 
+                                               value="{{ maintenance.scheduled_date|date:'M d, Y' }}" readonly>
+                                        <small class="form-text text-muted">To change date, create a new schedule</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="{{ form.description.id_for_label }}" class="form-label fw-bold">
+                                    Description <span class="text-danger">*</span>
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.description.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Describe the maintenance work required</small>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                            <div class="text-muted small">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Last updated: {{ maintenance.updated_at|date:'M d, Y H:i' }}
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'inventory:maintenance_detail' maintenance.id %}" class="btn btn-secondary">
+                                    <i class="fas fa-times me-1"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-bps-primary">
+                                    <i class="fas fa-save me-1"></i>Update Maintenance
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Information -->
+        <div class="col-lg-4">
+            <!-- Current Status Card -->
+            <div class="card card-bps mb-4">
+                <div class="card-header card-header-bps">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Current Status
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3">
+                            {% if maintenance.status == 'SCHEDULED' %}
+                                <span class="badge bg-info fs-6">{{ maintenance.get_status_display }}</span>
+                            {% elif maintenance.status == 'IN_PROGRESS' %}
+                                <span class="badge bg-warning fs-6">{{ maintenance.get_status_display }}</span>
+                            {% elif maintenance.status == 'COMPLETED' %}
+                                <span class="badge bg-success fs-6">{{ maintenance.get_status_display }}</span>
+                            {% elif maintenance.status == 'CANCELLED' %}
+                                <span class="badge bg-danger fs-6">{{ maintenance.get_status_display }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary fs-6">{{ maintenance.get_status_display }}</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="fw-bold">{{ maintenance.get_maintenance_type_display }}</div>
+                            <small class="text-muted">{{ maintenance.device.device_id }}</small>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="text-muted small">Created</div>
+                            <div class="fw-bold">{{ maintenance.created_at|date:'M d' }}</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-muted small">Scheduled</div>
+                            <div class="fw-bold">{{ maintenance.scheduled_date|date:'M d' }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device Details Card -->
+            <div class="card card-bps mb-4">
+                <div class="card-header card-header-bps">
+                    <h6 class="mb-0">
+                        <i class="fas fa-desktop me-2"></i>Device Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>Model:</strong> {{ maintenance.device.model|default:'N/A' }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Serial:</strong> {{ maintenance.device.serial_number|default:'N/A' }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Location:</strong> {{ maintenance.device.location|default:'N/A' }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Condition:</strong> 
+                        <span class="badge bg-secondary">{{ maintenance.device.get_condition_display }}</span>
+                    </div>
+                    
+                    <hr>
+                    
+                    <a href="{% url 'inventory:device_detail' maintenance.device.device_id %}" 
+                       class="btn btn-outline-primary btn-sm w-100">
+                        <i class="fas fa-eye me-1"></i>View Device
+                    </a>
+                </div>
+            </div>
+
+            <!-- Quick Actions Card -->
+            <div class="card card-bps">
+                <div class="card-header card-header-bps">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% if maintenance.status == 'SCHEDULED' %}
+                            <a href="{% url 'inventory:maintenance_complete' maintenance.id %}" 
+                               class="btn btn-success btn-sm">
+                                <i class="fas fa-check me-1"></i>Mark Complete
+                            </a>
+                        {% endif %}
+                        
+                        <a href="{% url 'inventory:maintenance_create' %}?device={{ maintenance.device.device_id }}" 
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-plus me-1"></i>Schedule New
+                        </a>
+                        
+                        <a href="{% url 'inventory:maintenance_list' %}?device={{ maintenance.device.device_id }}" 
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-history me-1"></i>View History
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.getElementById('maintenanceEditForm');
+    const statusField = document.querySelector('#id_status');
+    
+    // Status change handling
+    statusField.addEventListener('change', function() {
+        const selectedStatus = this.value;
+        const submitButton = form.querySelector('button[type="submit"]');
+        
+        if (selectedStatus === 'COMPLETED') {
+            submitButton.innerHTML = '<i class="fas fa-check me-1"></i>Complete Maintenance';
+            submitButton.className = 'btn btn-success';
+        } else if (selectedStatus === 'CANCELLED') {
+            submitButton.innerHTML = '<i class="fas fa-times me-1"></i>Cancel Maintenance';
+            submitButton.className = 'btn btn-danger';
+        } else {
+            submitButton.innerHTML = '<i class="fas fa-save me-1"></i>Update Maintenance';
+            submitButton.className = 'btn btn-bps-primary';
+        }
+    });
+    
+    // Form submission confirmation for status changes
+    form.addEventListener('submit', function(e) {
+        const currentStatus = '{{ maintenance.status }}';
+        const newStatus = statusField.value;
+        
+        if (currentStatus !== newStatus) {
+            if (newStatus === 'COMPLETED') {
+                if (!confirm('Are you sure you want to mark this maintenance as completed?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            } else if (newStatus === 'CANCELLED') {
+                if (!confirm('Are you sure you want to cancel this maintenance schedule?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        }
+    });
+    
+    // Auto-save draft functionality (optional)
+    let autoSaveTimeout;
+    const formFields = form.querySelectorAll('select, textarea');
+    
+    formFields.forEach(field => {
+        field.addEventListener('change', function() {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                // Could implement auto-save functionality here
+                console.log('Form data changed, could auto-save');
+            }, 2000);
+        });
+    });
+});
+</script>
+{% endblock %}

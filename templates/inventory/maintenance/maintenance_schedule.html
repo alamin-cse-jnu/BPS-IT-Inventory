@@ -1,0 +1,677 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Maintenance Schedule - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/custom.css' %}">
+<link rel="stylesheet" href="{% static 'css/bps-theme.css' %}">
+<style>
+.calendar-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.calendar-header {
+    background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px 8px 0 0;
+}
+
+.calendar-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: #e3e6f0;
+    border: 1px solid #e3e6f0;
+}
+
+.calendar-day-header {
+    background: #f8f9fc;
+    padding: 0.75rem;
+    text-align: center;
+    font-weight: 600;
+    color: #5a5c69;
+    border-bottom: 2px solid #e3e6f0;
+}
+
+.calendar-day {
+    background: white;
+    min-height: 120px;
+    padding: 0.5rem;
+    position: relative;
+    border-right: 1px solid #e3e6f0;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+.calendar-day.other-month {
+    background: #f8f9fc;
+    color: #858796;
+}
+
+.calendar-day.today {
+    background: #e3f2fd;
+    border: 2px solid #4e73df;
+}
+
+.calendar-day-number {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.maintenance-item {
+    background: #4e73df;
+    color: white;
+    padding: 0.2rem 0.4rem;
+    margin: 0.1rem 0;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.maintenance-item:hover {
+    background: #375a7f;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.maintenance-item.overdue {
+    background: #e74a3b;
+}
+
+.maintenance-item.completed {
+    background: #1cc88a;
+}
+
+.maintenance-item.in-progress {
+    background: #f6c23e;
+    color: #333;
+}
+
+.maintenance-item.high-priority {
+    border-left: 3px solid #ff6b6b;
+}
+
+.timeline-container {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.timeline-item {
+    display: flex;
+    padding: 1rem;
+    border-bottom: 1px solid #e3e6f0;
+    transition: background-color 0.2s;
+}
+
+.timeline-item:hover {
+    background-color: #f8f9fc;
+}
+
+.timeline-date {
+    min-width: 80px;
+    font-weight: 600;
+    color: #5a5c69;
+}
+
+.timeline-content {
+    flex: 1;
+    margin-left: 1rem;
+}
+
+.view-toggle {
+    background: #f8f9fc;
+    padding: 0.5rem;
+    border-radius: 8px;
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.view-toggle .btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+    .calendar-grid {
+        font-size: 0.75rem;
+    }
+    
+    .calendar-day {
+        min-height: 80px;
+        padding: 0.25rem;
+    }
+    
+    .maintenance-item {
+        font-size: 0.6rem;
+        padding: 0.1rem 0.2rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-gray-800">
+                <i class="fas fa-calendar-alt text-primary me-2"></i>
+                Maintenance Schedule
+            </h1>
+            <p class="text-muted mb-0">Calendar view of all scheduled maintenance activities</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:maintenance_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-list me-1"></i>
+                List View
+            </a>
+            <a href="{% url 'inventory:maintenance_add' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>
+                Schedule Maintenance
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Schedules
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_schedules }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Overdue
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.overdue_count }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Upcoming (30 days)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.upcoming_count }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Completed This Month
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.completed_this_month }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Toggle and Filters -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="view-toggle">
+                <button class="btn btn-primary active" id="calendarViewBtn">
+                    <i class="fas fa-calendar me-1"></i>
+                    Calendar
+                </button>
+                <button class="btn btn-outline-primary" id="timelineViewBtn">
+                    <i class="fas fa-list me-1"></i>
+                    Timeline
+                </button>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" id="statusFilter">
+                    <option value="">All Statuses</option>
+                    {% for status_value, status_label in status_choices %}
+                    <option value="{{ status_value }}">{{ status_label }}</option>
+                    {% endfor %}
+                </select>
+                <button class="btn btn-outline-primary btn-sm" id="todayBtn">
+                    <i class="fas fa-calendar-day me-1"></i>
+                    Today
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar View -->
+    <div id="calendarView" class="calendar-container">
+        <div class="calendar-header">
+            <div class="calendar-nav">
+                <button class="btn btn-outline-light btn-sm" id="prevMonth">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <h4 class="mb-0" id="currentMonth">{{ current_month|date:"F Y" }}</h4>
+                <button class="btn btn-outline-light btn-sm" id="nextMonth">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="calendar-grid">
+            <!-- Day Headers -->
+            <div class="calendar-day-header">Sun</div>
+            <div class="calendar-day-header">Mon</div>
+            <div class="calendar-day-header">Tue</div>
+            <div class="calendar-day-header">Wed</div>
+            <div class="calendar-day-header">Thu</div>
+            <div class="calendar-day-header">Fri</div>
+            <div class="calendar-day-header">Sat</div>
+            
+            <!-- Calendar Days will be populated by JavaScript -->
+            <div id="calendarDays"></div>
+        </div>
+    </div>
+
+    <!-- Timeline View -->
+    <div id="timelineView" class="card shadow" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-clock me-1"></i>
+                Maintenance Timeline
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="timeline-container">
+                {% for schedule in upcoming_schedules %}
+                <div class="timeline-item" data-maintenance-id="{{ schedule.id }}">
+                    <div class="timeline-date">
+                        <div class="fw-bold">{{ schedule.next_due_date|date:"M d" }}</div>
+                        <small class="text-muted">{{ schedule.next_due_date|date:"Y" }}</small>
+                    </div>
+                    <div class="timeline-content">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">
+                                    <a href="{% url 'inventory:maintenance_detail' schedule.id %}" class="text-decoration-none">
+                                        {{ schedule.device.device_id }}
+                                    </a>
+                                </h6>
+                                <p class="text-muted small mb-1">{{ schedule.get_maintenance_type_display }}</p>
+                                <p class="mb-1">{{ schedule.description|truncatechars:80 }}</p>
+                                <div class="d-flex gap-2">
+                                    {% if schedule.status == 'SCHEDULED' %}
+                                        <span class="badge bg-warning">{{ schedule.get_status_display }}</span>
+                                    {% elif schedule.status == 'IN_PROGRESS' %}
+                                        <span class="badge bg-primary">{{ schedule.get_status_display }}</span>
+                                    {% elif schedule.status == 'COMPLETED' %}
+                                        <span class="badge bg-success">{{ schedule.get_status_display }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ schedule.get_status_display }}</span>
+                                    {% endif %}
+                                    
+                                    {% if schedule.priority == 'HIGH' or schedule.priority == 'URGENT' %}
+                                        <span class="badge bg-danger">{{ schedule.get_priority_display }}</span>
+                                    {% elif schedule.priority == 'MEDIUM' %}
+                                        <span class="badge bg-warning">{{ schedule.get_priority_display }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                {% if schedule.vendor %}
+                                    <small class="text-muted d-block">{{ schedule.vendor.name }}</small>
+                                {% endif %}
+                                {% if schedule.estimated_cost %}
+                                    <small class="text-success d-block">${{ schedule.estimated_cost }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-check fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Upcoming Maintenance</h5>
+                    <p class="text-muted">All maintenance is up to date!</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Overdue Alerts -->
+    {% if overdue_schedules %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-left-danger shadow">
+                <div class="card-header bg-danger text-white py-3">
+                    <h6 class="m-0 font-weight-bold">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        Overdue Maintenance ({{ overdue_schedules.count }})
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for overdue in overdue_schedules|slice:":6" %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="border border-danger rounded p-3">
+                                <h6 class="text-danger mb-1">
+                                    <a href="{% url 'inventory:maintenance_detail' overdue.id %}" class="text-decoration-none text-danger">
+                                        {{ overdue.device.device_id }}
+                                    </a>
+                                </h6>
+                                <p class="small mb-1">{{ overdue.get_maintenance_type_display }}</p>
+                                <p class="small text-muted mb-2">Due: {{ overdue.next_due_date|date:"M d, Y" }}</p>
+                                <div class="d-flex justify-content-between">
+                                    <span class="badge bg-danger">{{ overdue.days_overdue }} days overdue</span>
+                                    <a href="{% url 'inventory:maintenance_edit' overdue.id %}" class="btn btn-sm btn-outline-danger">
+                                        Reschedule
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if overdue_schedules.count > 6 %}
+                    <div class="text-center">
+                        <a href="{% url 'inventory:maintenance_list' %}?status=overdue" class="btn btn-danger">
+                            View All {{ overdue_schedules.count }} Overdue Items
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Maintenance Detail Modal -->
+<div class="modal fade" id="maintenanceModal" tabindex="-1" aria-labelledby="maintenanceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="maintenanceModalLabel">
+                    <i class="fas fa-tools me-2"></i>
+                    Maintenance Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="maintenanceModalContent">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="#" id="viewFullDetailsBtn" class="btn btn-primary">
+                    <i class="fas fa-external-link-alt me-1"></i>
+                    View Full Details
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sample maintenance data (replace with actual data from backend)
+    const maintenanceData = [
+        {% for schedule in schedules %}
+        {
+            id: '{{ schedule.id }}',
+            deviceId: '{{ schedule.device.device_id }}',
+            type: '{{ schedule.get_maintenance_type_display }}',
+            status: '{{ schedule.status }}',
+            priority: '{{ schedule.priority }}',
+            date: '{{ schedule.next_due_date|date:"Y-m-d" }}',
+            description: '{{ schedule.description|truncatechars:50|escapejs }}',
+            vendor: '{{ schedule.vendor.name|default:"Internal"|escapejs }}',
+            cost: {{ schedule.estimated_cost|default:0 }}
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    // Calendar functionality
+    let currentDate = new Date();
+    const calendarDays = document.getElementById('calendarDays');
+    const currentMonthEl = document.getElementById('currentMonth');
+    const prevMonthBtn = document.getElementById('prevMonth');
+    const nextMonthBtn = document.getElementById('nextMonth');
+
+    function renderCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const today = new Date();
+        
+        // Update month display
+        currentMonthEl.textContent = new Date(year, month).toLocaleDateString('en-US', { 
+            month: 'long', 
+            year: 'numeric' 
+        });
+
+        // Get first day of month and number of days
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+        calendarDays.innerHTML = '';
+
+        // Add previous month's trailing days
+        for (let i = firstDay - 1; i >= 0; i--) {
+            const dayNum = daysInPrevMonth - i;
+            const dayEl = createDayElement(dayNum, true, new Date(year, month - 1, dayNum));
+            calendarDays.appendChild(dayEl);
+        }
+
+        // Add current month's days
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day);
+            const isToday = date.toDateString() === today.toDateString();
+            const dayEl = createDayElement(day, false, date, isToday);
+            calendarDays.appendChild(dayEl);
+        }
+
+        // Add next month's leading days
+        const totalCells = calendarDays.children.length;
+        const remainingCells = 42 - totalCells; // 6 weeks * 7 days
+        for (let day = 1; day <= remainingCells; day++) {
+            const dayEl = createDayElement(day, true, new Date(year, month + 1, day));
+            calendarDays.appendChild(dayEl);
+        }
+    }
+
+    function createDayElement(dayNum, isOtherMonth, date, isToday = false) {
+        const dayEl = document.createElement('div');
+        dayEl.className = 'calendar-day';
+        if (isOtherMonth) dayEl.classList.add('other-month');
+        if (isToday) dayEl.classList.add('today');
+
+        const dayNumber = document.createElement('div');
+        dayNumber.className = 'calendar-day-number';
+        dayNumber.textContent = dayNum;
+        dayEl.appendChild(dayNumber);
+
+        // Add maintenance items for this date
+        const dateStr = date.toISOString().split('T')[0];
+        const dayMaintenance = maintenanceData.filter(m => m.date === dateStr);
+        
+        dayMaintenance.forEach(maintenance => {
+            const maintenanceEl = document.createElement('div');
+            maintenanceEl.className = 'maintenance-item';
+            maintenanceEl.textContent = `${maintenance.deviceId}: ${maintenance.type}`;
+            maintenanceEl.title = `${maintenance.deviceId} - ${maintenance.description}`;
+            
+            // Add status classes
+            if (maintenance.status === 'COMPLETED') {
+                maintenanceEl.classList.add('completed');
+            } else if (maintenance.status === 'IN_PROGRESS') {
+                maintenanceEl.classList.add('in-progress');
+            } else if (new Date(maintenance.date) < new Date()) {
+                maintenanceEl.classList.add('overdue');
+            }
+            
+            if (maintenance.priority === 'HIGH' || maintenance.priority === 'URGENT') {
+                maintenanceEl.classList.add('high-priority');
+            }
+
+            maintenanceEl.addEventListener('click', () => showMaintenanceDetail(maintenance));
+            dayEl.appendChild(maintenanceEl);
+        });
+
+        return dayEl;
+    }
+
+    function showMaintenanceDetail(maintenance) {
+        const modal = new bootstrap.Modal(document.getElementById('maintenanceModal'));
+        const content = document.getElementById('maintenanceModalContent');
+        const viewBtn = document.getElementById('viewFullDetailsBtn');
+        
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-sm">
+                        <tr><th>Device:</th><td>${maintenance.deviceId}</td></tr>
+                        <tr><th>Type:</th><td>${maintenance.type}</td></tr>
+                        <tr><th>Status:</th><td><span class="badge bg-${getStatusColor(maintenance.status)}">${maintenance.status}</span></td></tr>
+                        <tr><th>Priority:</th><td><span class="badge bg-${getPriorityColor(maintenance.priority)}">${maintenance.priority}</span></td></tr>
+                        <tr><th>Date:</th><td>${new Date(maintenance.date).toLocaleDateString()}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-sm">
+                        <tr><th>Vendor:</th><td>${maintenance.vendor}</td></tr>
+                        <tr><th>Cost:</th><td>$${maintenance.cost}</td></tr>
+                        <tr><th>Description:</th><td>${maintenance.description}</td></tr>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        viewBtn.href = `/inventory/maintenance/${maintenance.id}/`;
+        modal.show();
+    }
+
+    function getStatusColor(status) {
+        const colors = {
+            'SCHEDULED': 'warning',
+            'IN_PROGRESS': 'primary',
+            'COMPLETED': 'success',
+            'CANCELLED': 'secondary'
+        };
+        return colors[status] || 'secondary';
+    }
+
+    function getPriorityColor(priority) {
+        const colors = {
+            'LOW': 'secondary',
+            'MEDIUM': 'warning',
+            'HIGH': 'danger',
+            'URGENT': 'danger'
+        };
+        return colors[priority] || 'secondary';
+    }
+
+    // Event listeners
+    prevMonthBtn.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+    });
+
+    nextMonthBtn.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+    });
+
+    document.getElementById('todayBtn').addEventListener('click', () => {
+        currentDate = new Date();
+        renderCalendar();
+    });
+
+    // View toggle
+    const calendarViewBtn = document.getElementById('calendarViewBtn');
+    const timelineViewBtn = document.getElementById('timelineViewBtn');
+    const calendarView = document.getElementById('calendarView');
+    const timelineView = document.getElementById('timelineView');
+
+    calendarViewBtn.addEventListener('click', () => {
+        calendarViewBtn.classList.add('active');
+        timelineViewBtn.classList.remove('active');
+        calendarView.style.display = 'block';
+        timelineView.style.display = 'none';
+    });
+
+    timelineViewBtn.addEventListener('click', () => {
+        timelineViewBtn.classList.add('active');
+        calendarViewBtn.classList.remove('active');
+        timelineView.style.display = 'block';
+        calendarView.style.display = 'none';
+    });
+
+    // Status filter
+    document.getElementById('statusFilter').addEventListener('change', function() {
+        const status = this.value;
+        // Filter logic would go here
+        console.log('Filter by status:', status);
+    });
+
+    // Initialize calendar
+    renderCalendar();
+
+    // Auto-refresh every 5 minutes
+    setInterval(() => {
+        // Refresh data logic would go here
+        console.log('Refreshing maintenance data...');
+    }, 300000);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,391 @@
+<!-- Location: bps_inventory/templates/inventory/my_assignment_detail.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Assignment #{{ assignment.assignment_id }} - BPS Inventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-clipboard-check fa-2x text-primary mr-3"></i>
+            <div>
+                <h1 class="h3 mb-0 text-gray-800">Assignment #{{ assignment.assignment_id }}</h1>
+                <p class="mb-0 text-muted">{{ assignment.device.device_name }}</p>
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'inventory:my_assignments' %}" class="btn btn-outline-secondary mr-2">
+                <i class="fas fa-arrow-left"></i> Back to My Assignments
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Alert -->
+    {% if is_overdue %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="alert alert-danger shadow">
+                <h6 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Assignment Overdue
+                </h6>
+                <p class="mb-1">This temporary assignment is overdue by <strong>{{ days_overdue }} day{{ days_overdue|pluralize }}</strong>.</p>
+                <p class="mb-0">Please return the device as soon as possible or request an extension.</p>
+            </div>
+        </div>
+    </div>
+    {% elif assignment.is_temporary and assignment.expected_return_date %}
+        {% now "Y-m-d" as today %}
+        {% if assignment.expected_return_date|date:"Y-m-d" == today %}
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-warning shadow">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-calendar-day mr-2"></i>Return Due Today
+                    </h6>
+                    <p class="mb-0">This assignment is due for return today. Please return the device or request an extension if needed.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Device Information -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-laptop mr-2"></i>Device Information
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="info-label">Device Name</label>
+                                <div class="info-value">{{ assignment.device.device_name }}</div>
+                            </div>
+                            <div class="info-group mb-3">
+                                <label class="info-label">Device ID</label>
+                                <div class="info-value">
+                                    <code>{{ assignment.device.device_id }}</code>
+                                </div>
+                            </div>
+                            <div class="info-group mb-3">
+                                <label class="info-label">Device Type</label>
+                                <div class="info-value">
+                                    {% if assignment.device.device_type %}
+                                        {{ assignment.device.device_type.name }}
+                                    {% else %}
+                                        <span class="text-muted">Not specified</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="info-label">Brand</label>
+                                <div class="info-value">{{ assignment.device.brand|default:"Not specified" }}</div>
+                            </div>
+                            <div class="info-group mb-3">
+                                <label class="info-label">Model</label>
+                                <div class="info-value">{{ assignment.device.model|default:"Not specified" }}</div>
+                            </div>
+                            <div class="info-group mb-3">
+                                <label class="info-label">Serial Number</label>
+                                <div class="info-value">
+                                    {% if assignment.device.serial_number %}
+                                        <code>{{ assignment.device.serial_number }}</code>
+                                    {% else %}
+                                        <span class="text-muted">Not specified</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if assignment.device.description %}
+                    <div class="info-group">
+                        <label class="info-label">Description</label>
+                        <div class="info-value">{{ assignment.device.description }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Assignment Timeline -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-timeline mr-2"></i>Assignment Timeline
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success">
+                                <i class="fas fa-check text-white"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <h6 class="timeline-title">Assignment Created</h6>
+                                <p class="timeline-description">
+                                    Device assigned by {{ assignment.assigned_by.get_full_name|default:assignment.assigned_by.username }}
+                                </p>
+                                <small class="text-muted">{{ assignment.assigned_date|date:"M d, Y g:i A" }}</small>
+                            </div>
+                        </div>
+
+                        {% if assignment.is_temporary and assignment.expected_return_date %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker {% if is_overdue %}bg-danger{% elif assignment.expected_return_date == today %}bg-warning{% else %}bg-info{% endif %}">
+                                <i class="fas fa-calendar text-white"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <h6 class="timeline-title">Expected Return</h6>
+                                <p class="timeline-description">Device should be returned by this date</p>
+                                <small class="text-muted">{{ assignment.expected_return_date|date:"M d, Y" }}</small>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if assignment.returned_date %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-secondary">
+                                <i class="fas fa-undo text-white"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <h6 class="timeline-title">Device Returned</h6>
+                                <p class="timeline-description">
+                                    Device returned to {{ assignment.returned_by.get_full_name|default:assignment.returned_by.username }}
+                                </p>
+                                <small class="text-muted">{{ assignment.returned_date|date:"M d, Y g:i A" }}</small>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment Details Sidebar -->
+        <div class="col-lg-4">
+            <!-- Assignment Status -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-info-circle mr-2"></i>Assignment Status
+                    </h6>
+                </div>
+                <div class="card-body text-center">
+                    {% if assignment.is_active %}
+                        <div class="mb-3">
+                            <i class="fas fa-check-circle fa-3x text-success"></i>
+                        </div>
+                        <h5 class="font-weight-bold text-success">Active Assignment</h5>
+                        <p class="text-muted">Device is currently assigned to you</p>
+                    {% else %}
+                        <div class="mb-3">
+                            <i class="fas fa-check-circle fa-3x text-secondary"></i>
+                        </div>
+                        <h5 class="font-weight-bold text-secondary">Returned</h5>
+                        <p class="text-muted">Device has been returned</p>
+                    {% endif %}
+
+                    <div class="row text-center mt-3">
+                        <div class="col-6">
+                            <div class="border-right">
+                                <div class="h6 font-weight-bold">
+                                    {% if assignment.is_temporary %}
+                                        <span class="badge badge-warning">Temporary</span>
+                                    {% else %}
+                                        <span class="badge badge-success">Permanent</span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">Type</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="h6 font-weight-bold">
+                                {% if assignment_duration %}
+                                    {{ assignment_duration }} day{{ assignment_duration|pluralize }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Duration</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            {% if assignment.is_active %}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-bolt mr-2"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if assignment.is_temporary %}
+                        <a href="{% url 'inventory:request_assignment_extension' assignment.assignment_id %}" 
+                           class="btn btn-warning btn-block mb-2">
+                            <i class="fas fa-calendar-plus mr-2"></i>Request Extension
+                        </a>
+                    {% endif %}
+                    
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            Need to report an issue? Contact your IT administrator.
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Assignment Details -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-clipboard-list mr-2"></i>Assignment Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="info-group mb-3">
+                        <label class="info-label">Assignment ID</label>
+                        <div class="info-value">
+                            <code>{{ assignment.assignment_id }}</code>
+                        </div>
+                    </div>
+
+                    <div class="info-group mb-3">
+                        <label class="info-label">Assigned Date</label>
+                        <div class="info-value">{{ assignment.assigned_date|date:"M d, Y" }}</div>
+                    </div>
+
+                    {% if assignment.is_temporary and assignment.expected_return_date %}
+                    <div class="info-group mb-3">
+                        <label class="info-label">Expected Return</label>
+                        <div class="info-value">
+                            {{ assignment.expected_return_date|date:"M d, Y" }}
+                            {% if is_overdue %}
+                                <br><span class="badge badge-danger">Overdue</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if assignment.returned_date %}
+                    <div class="info-group mb-3">
+                        <label class="info-label">Actual Return</label>
+                        <div class="info-value">{{ assignment.returned_date|date:"M d, Y" }}</div>
+                    </div>
+                    {% endif %}
+
+                    <div class="info-group mb-3">
+                        <label class="info-label">Assigned By</label>
+                        <div class="info-value">{{ assignment.assigned_by.get_full_name|default:assignment.assigned_by.username }}</div>
+                    </div>
+
+                    {% if assignment.notes %}
+                    <div class="info-group">
+                        <label class="info-label">Notes</label>
+                        <div class="info-value">{{ assignment.notes }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.info-group {
+    margin-bottom: 1rem;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #5a5c69;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+.info-value {
+    color: #3a3b45;
+    font-size: 0.95rem;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 3rem;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 1.5rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e3e6f0;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -3rem;
+    top: 0;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 3px #e3e6f0;
+}
+
+.timeline-content {
+    background: #f8f9fc;
+    padding: 1rem;
+    border-radius: 0.35rem;
+    border-left: 3px solid #4e73df;
+}
+
+.timeline-title {
+    margin-bottom: 0.5rem;
+    color: #3a3b45;
+    font-weight: 600;
+}
+
+.timeline-description {
+    margin-bottom: 0.5rem;
+    color: #5a5c69;
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.card {
+    transition: transform 0.15s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.badge {
+    font-size: 0.75em;
+}
+</style>
+{% endblock %}
