@@ -103,7 +103,7 @@ class Command(BaseCommand):
         
         # Main Parliament Building - Fixed code length
         main_building, created = Building.objects.get_or_create(
-            code='BPS-MAIN-BLDG',  # Fixed: shortened from 'BPS-MAIN-BUILDING' to fit max_length=50
+            code='BPS-MAIN-BLDG',
             defaults={
                 'name': 'Bangladesh Parliament Secretariat - Main Building',
                 'address': 'Sher-e-Bangla Nagar, Dhaka 1207, Bangladesh',
@@ -146,6 +146,42 @@ class Command(BaseCommand):
                 'contact_email': 'it@parliament.gov.bd',
                 'contact_phone': '+880-2-9559022'
             },
+            # Administration Department (Floor 2)
+            {
+                'floor_number': 2,
+                'name': 'Administration Department',
+                'code': 'BPS-ADMIN-DEPT',
+                'head_of_department': 'Deputy Secretary (Administration)',
+                'contact_email': 'admin@parliament.gov.bd',
+                'contact_phone': '+880-2-9559011'
+            },
+            # Finance Department (Floor 2)
+            {
+                'floor_number': 2,
+                'name': 'Finance Department',
+                'code': 'BPS-FIN-DEPT',
+                'head_of_department': 'Deputy Secretary (Finance)',
+                'contact_email': 'finance@parliament.gov.bd',
+                'contact_phone': '+880-2-9559012'
+            },
+            # Security Department (Floor 1)
+            {
+                'floor_number': 1,
+                'name': 'Security Department',
+                'code': 'BPS-SEC-DEPT',
+                'head_of_department': 'Security Officer',
+                'contact_email': 'security@parliament.gov.bd',
+                'contact_phone': '+880-2-9559013'
+            },
+            # Legal Affairs Department (Floor 4)
+            {
+                'floor_number': 4,
+                'name': 'Legal Affairs Department',
+                'code': 'BPS-LEGAL-DEPT',
+                'head_of_department': 'Legal Adviser',
+                'contact_email': 'legal@parliament.gov.bd',
+                'contact_phone': '+880-2-9559014'
+            },
         ]
 
         for dept_data in departments_data:
@@ -158,7 +194,6 @@ class Command(BaseCommand):
                 code=dept_data['code'],
                 defaults={
                     'floor': floor,
-                    'building': main_building,  # Set building reference
                     'name': dept_data['name'],
                     'head_of_department': dept_data['head_of_department'],
                     'contact_email': dept_data['contact_email'],
@@ -220,7 +255,7 @@ class Command(BaseCommand):
                 if created:
                     # Create location for each room
                     location, loc_created = Location.objects.get_or_create(
-                        building=department.building,
+                        building=department.floor.building,
                         floor=department.floor,
                         department=department,
                         room=room,
@@ -267,7 +302,7 @@ class Command(BaseCommand):
                     'can_manage_assignments': True,
                     'can_approve_requests': True,
                     'can_generate_reports': True,
-                    'can_manage_users': True,
+                    'can_manage_users': False,
                     'can_system_admin': False,
                     'can_manage_maintenance': True,
                     'can_manage_vendors': True,
@@ -295,7 +330,7 @@ class Command(BaseCommand):
                     'can_bulk_operations': False,
                     'can_export_data': True,
                     'restricted_to_own_department': True,
-                    'can_view_financial_data': True,
+                    'can_view_financial_data': False,
                     'can_scan_qr_codes': True,
                     'can_generate_qr_codes': False,
                 }
@@ -303,10 +338,10 @@ class Command(BaseCommand):
             {
                 'name': 'MANAGER',
                 'display_name': 'Manager',
-                'description': 'Departmental management and reporting access',
+                'description': 'Mid-level management with departmental device access',
                 'permissions': {
                     'can_view_all_devices': False,
-                    'can_manage_assignments': False,
+                    'can_manage_assignments': True,
                     'can_approve_requests': True,
                     'can_generate_reports': True,
                     'can_manage_users': False,
@@ -324,7 +359,7 @@ class Command(BaseCommand):
             {
                 'name': 'GENERAL_STAFF',
                 'display_name': 'General Staff',
-                'description': 'Basic device viewing and request capabilities',
+                'description': 'Basic staff access to assigned devices',
                 'permissions': {
                     'can_view_all_devices': False,
                     'can_manage_assignments': False,
@@ -345,7 +380,7 @@ class Command(BaseCommand):
             {
                 'name': 'AUDITOR',
                 'display_name': 'Auditor',
-                'description': 'Audit and compliance review access',
+                'description': 'Audit and inspection access across all departments',
                 'permissions': {
                     'can_view_all_devices': True,
                     'can_manage_assignments': False,
@@ -364,11 +399,32 @@ class Command(BaseCommand):
                 }
             },
             {
-                'name': 'READONLY',
-                'display_name': 'Read Only User',
-                'description': 'View-only access for reporting and monitoring',
+                'name': 'VENDOR',
+                'display_name': 'Vendor/External',
+                'description': 'External vendor access for maintenance and support',
                 'permissions': {
                     'can_view_all_devices': False,
+                    'can_manage_assignments': False,
+                    'can_approve_requests': False,
+                    'can_generate_reports': False,
+                    'can_manage_users': False,
+                    'can_system_admin': False,
+                    'can_manage_maintenance': True,
+                    'can_manage_vendors': False,
+                    'can_bulk_operations': False,
+                    'can_export_data': False,
+                    'restricted_to_own_department': True,
+                    'can_view_financial_data': False,
+                    'can_scan_qr_codes': True,
+                    'can_generate_qr_codes': False,
+                }
+            },
+            {
+                'name': 'READONLY',
+                'display_name': 'Read Only User',
+                'description': 'Read-only access for reporting and monitoring',
+                'permissions': {
+                    'can_view_all_devices': True,
                     'can_manage_assignments': False,
                     'can_approve_requests': False,
                     'can_generate_reports': True,
@@ -377,10 +433,10 @@ class Command(BaseCommand):
                     'can_manage_maintenance': False,
                     'can_manage_vendors': False,
                     'can_bulk_operations': False,
-                    'can_export_data': False,
-                    'restricted_to_own_department': True,
+                    'can_export_data': True,
+                    'restricted_to_own_department': False,
                     'can_view_financial_data': False,
-                    'can_scan_qr_codes': False,
+                    'can_scan_qr_codes': True,
                     'can_generate_qr_codes': False,
                 }
             },
@@ -388,23 +444,23 @@ class Command(BaseCommand):
 
         for role_data in roles_data:
             permissions = role_data.pop('permissions')
-            
-            # Create or update the role
             role, created = UserRole.objects.get_or_create(
                 name=role_data['name'],
                 defaults={
-                    **role_data,
-                    **permissions,
+                    'display_name': role_data['display_name'],
+                    'description': role_data['description'],
+                    'permissions': permissions,
+                    **permissions,  # Unpack permissions to individual fields
                     'is_active': True
                 }
             )
-            
             if not created:
-                # Update existing role with new permissions
-                for key, value in {**role_data, **permissions}.items():
-                    setattr(role, key, value)
+                # Update existing role permissions
+                for field, value in permissions.items():
+                    setattr(role, field, value)
+                role.permissions = permissions
                 role.save()
-                
+              
             self.stdout.write(f'  {"Created" if created else "Updated"} role: {role.display_name}')
 
     def create_device_categories(self):
@@ -436,6 +492,15 @@ class Command(BaseCommand):
                             {'name': 'Convertible Laptop', 'description': '2-in-1 convertible laptop'},
                         ]
                     },
+                    {
+                        'name': 'Tablets',
+                        'description': 'Tablet computers and mobile devices',
+                        'types': [
+                            {'name': 'Android Tablet', 'description': 'Android-based tablet'},
+                            {'name': 'iPad', 'description': 'Apple iPad tablet'},
+                            {'name': 'Windows Tablet', 'description': 'Windows-based tablet'},
+                        ]
+                    },
                 ]
             },
             {
@@ -455,107 +520,93 @@ class Command(BaseCommand):
                         'name': 'Routers',
                         'description': 'Network routers and gateways',
                         'types': [
+                            {'name': 'Wireless Router', 'description': 'Wi-Fi enabled router'},
                             {'name': 'Enterprise Router', 'description': 'Enterprise-grade router'},
-                            {'name': 'Wireless Router', 'description': 'Wireless router/access point'},
-                            {'name': 'VPN Router', 'description': 'VPN-enabled router'},
+                            {'name': 'Firewall Router', 'description': 'Router with firewall features'},
                         ]
                     },
                     {
                         'name': 'Access Points',
-                        'description': 'Wireless access points',
+                        'description': 'Wireless access points and controllers',
                         'types': [
                             {'name': 'Indoor Access Point', 'description': 'Indoor wireless access point'},
                             {'name': 'Outdoor Access Point', 'description': 'Outdoor wireless access point'},
+                            {'name': 'Mesh Access Point', 'description': 'Mesh network access point'},
                         ]
                     },
                 ]
             },
             {
                 'name': 'Peripherals',
-                'description': 'Computer peripherals and accessories',
+                'description': 'Input/output devices and peripherals',
                 'subcategories': [
+                    {
+                        'name': 'Monitors',
+                        'description': 'Display monitors and screens',
+                        'types': [
+                            {'name': 'LED Monitor', 'description': 'LED display monitor'},
+                            {'name': 'LCD Monitor', 'description': 'LCD display monitor'},
+                            {'name': 'Curved Monitor', 'description': 'Curved display monitor'},
+                            {'name': '4K Monitor', 'description': '4K resolution monitor'},
+                        ]
+                    },
+                    {
+                        'name': 'Printers',
+                        'description': 'Printing devices',
+                        'types': [
+                            {'name': 'Laser Printer', 'description': 'Laser printing technology'},
+                            {'name': 'Inkjet Printer', 'description': 'Inkjet printing technology'},
+                            {'name': 'Multifunction Printer', 'description': 'Print, scan, copy device'},
+                            {'name': 'Dot Matrix Printer', 'description': 'Impact dot matrix printer'},
+                        ]
+                    },
                     {
                         'name': 'Input Devices',
                         'description': 'Keyboards, mice, and input devices',
                         'types': [
                             {'name': 'Keyboard', 'description': 'Computer keyboard'},
                             {'name': 'Mouse', 'description': 'Computer mouse'},
-                            {'name': 'Headphone', 'description': 'Computer headphones'},
-                            {'name': 'WebCam', 'description': 'Computer webcam'},
-                            {'name': 'Microphone', 'description': 'Computer microphone'},
-                        ]
-                    },
-                    {
-                        'name': 'Display Devices',
-                        'description': 'Monitors and display equipment',
-                        'types': [
-                            {'name': 'Smart Display', 'description': 'Smart display monitor'},
-                            {'name': 'LCD Monitor', 'description': 'LCD display monitor'},
-                            {'name': 'LED Monitor', 'description': 'LED display monitor'},
-                            {'name': 'Projector', 'description': 'Digital projector'},
-                            {'name': 'Interactive Whiteboard', 'description': 'Interactive digital whiteboard'},
+                            {'name': 'Webcam', 'description': 'Web camera'},
+                            {'name': 'Microphone', 'description': 'Audio input device'},
                         ]
                     },
                 ]
             },
             {
-                'name': 'Servers',
-                'description': 'Server hardware and infrastructure',
+                'name': 'Server Equipment',
+                'description': 'Server hardware and data center equipment',
                 'subcategories': [
                     {
-                        'name': 'Physical Servers',
-                        'description': 'Physical server hardware',
+                        'name': 'Servers',
+                        'description': 'Server systems',
                         'types': [
                             {'name': 'Rack Server', 'description': 'Rack-mounted server'},
-                            {'name': 'Tower Server', 'description': 'Tower server'},
-                            {'name': 'Blade Server', 'description': 'Blade server'},
+                            {'name': 'Tower Server', 'description': 'Tower form factor server'},
+                            {'name': 'Blade Server', 'description': 'Blade server system'},
                         ]
                     },
                     {
-                        'name': 'Storage Devices',
-                        'description': 'Network storage devices',
+                        'name': 'Storage',
+                        'description': 'Storage systems and arrays',
                         'types': [
-                            {'name': 'NAS Device', 'description': 'Network Attached Storage'},
-                            {'name': 'SAN Device', 'description': 'Storage Area Network device'},
-                        ]
-                    },
-                ]
-            },
-            {
-                'name': 'Office Equipment',
-                'description': 'Office and business equipment',
-                'subcategories': [
-                    {
-                        'name': 'Printers',
-                        'description': 'Printing devices',
-                        'types': [
-                            {'name': 'Network Printer', 'description': 'Network printer'},
-                            {'name': 'Laser Printer', 'description': 'Laser printer'},
-                            {'name': 'Inkjet Printer', 'description': 'Inkjet printer'},
-                            {'name': 'Multifunction Printer', 'description': 'Multifunction printer/scanner'},
-                            {'name': '3D Printer', 'description': '3D printer'},
-                        ]
-                    },
-                    {
-                        'name': 'Scanners',
-                        'description': 'Document scanning devices',
-                        'types': [
-                            {'name': 'Flatbed Scanner', 'description': 'Flatbed document scanner'},
-                            {'name': 'Sheet-fed Scanner', 'description': 'Sheet-fed document scanner'},
+                            {'name': 'NAS Storage', 'description': 'Network Attached Storage'},
+                            {'name': 'SAN Storage', 'description': 'Storage Area Network'},
+                            {'name': 'External HDD', 'description': 'External hard drive'},
                         ]
                     },
                 ]
             },
             {
                 'name': 'Security Equipment',
-                'description': 'Security and surveillance equipment',
+                'description': 'Security and surveillance devices',
                 'subcategories': [
                     {
                         'name': 'Surveillance',
-                        'description': 'Surveillance equipment',
+                        'description': 'Camera and monitoring systems',
                         'types': [
                             {'name': 'IP Camera', 'description': 'Network IP camera'},
                             {'name': 'NVR System', 'description': 'Network Video Recorder'},
+                            {'name': 'DVR System', 'description': 'Digital Video Recorder'},
                         ]
                     },
                     {
@@ -564,6 +615,7 @@ class Command(BaseCommand):
                         'types': [
                             {'name': 'Card Reader', 'description': 'Access control card reader'},
                             {'name': 'Biometric Scanner', 'description': 'Biometric access scanner'},
+                            {'name': 'Access Controller', 'description': 'Access controller'},
                         ]
                     },
                 ]
@@ -615,46 +667,35 @@ class Command(BaseCommand):
         
         vendors_data = [
             {
-                'name': 'Dell Technologies Bangladesh Ltd.',
+                'name': 'Dell Technologies Bangladesh',
                 'vendor_type': 'HARDWARE_SUPPLIER',
                 'contact_person': 'Sales Manager',
                 'email': 'sales@dell.com.bd',
                 'phone': '+880-2-9876543',
-                'address': 'Gulshan, Dhaka-1212, Bangladesh',
+                'address': 'Gulshan, Dhaka, Bangladesh',
                 'website': 'https://www.dell.com.bd',
                 'tax_id': 'TIN-DELL-BD-001',
             },
             {
                 'name': 'Microsoft Bangladesh',
                 'vendor_type': 'SOFTWARE_VENDOR',
-                'contact_person': 'Enterprise Sales Team',
+                'contact_person': 'Enterprise Sales',
                 'email': 'enterprise@microsoft.com.bd',
                 'phone': '+880-2-8765432',
-                'address': 'Dhanmondi, Dhaka-1205, Bangladesh',
+                'address': 'Dhanmondi, Dhaka, Bangladesh',
                 'website': 'https://www.microsoft.com.bd',
                 'tax_id': 'TIN-MSFT-BD-001',
             },
             {
                 'name': 'Cisco Systems Bangladesh',
                 'vendor_type': 'HARDWARE_SUPPLIER',
-                'contact_person': 'Channel Partner Manager',
+                'contact_person': 'Channel Partner',
                 'email': 'sales@cisco.com.bd',
                 'phone': '+880-2-7654321',
-                'address': 'Banani, Dhaka-1213, Bangladesh',
+                'address': 'Banani, Dhaka, Bangladesh',
                 'website': 'https://www.cisco.com.bd',
                 'tax_id': 'TIN-CISCO-BD-001',
             },
-            {
-                'name': 'HP Bangladesh Ltd.',
-                'vendor_type': 'HARDWARE_SUPPLIER',
-                'contact_person': 'Business Development Manager',
-                'email': 'business@hp.com.bd',
-                'phone': '+880-2-6543210',
-                'address': 'Uttara, Dhaka-1230, Bangladesh',
-                'website': 'https://www.hp.com.bd',
-                'tax_id': 'TIN-HP-BD-001',
-            },
-
         ]
 
         for vendor_data in vendors_data:
@@ -669,89 +710,156 @@ class Command(BaseCommand):
                 self.stdout.write(f'  Created vendor: {vendor.name}')
 
     def create_superuser(self, username, password):
-        """Create superuser with IT Administrator role"""
-        self.stdout.write(f'👤 Creating superuser: {username}...')
+        """Create superuser account"""
+        self.stdout.write('👤 Creating superuser account...')
         
         try:
-            # Create or get the user
-            user, created = User.objects.get_or_create(
-                username=username,
+            # Check if user already exists
+            if User.objects.filter(username=username).exists():
+                user = User.objects.get(username=username)
+                self.stdout.write(f'  User "{username}" already exists, updating...')
+                
+                # Update user details
+                user.email = 'admin@parliament.gov.bd'
+                user.first_name = 'Alamin'
+                user.last_name = 'Hossain'
+                user.is_superuser = True
+                user.is_staff = True
+                user.is_active = True
+                user.set_password(password)
+                user.save()
+            else:
+                # Create new superuser
+                user = User.objects.create_superuser(
+                    username=username,
+                    email='admin@parliament.gov.bd',
+                    password=password,
+                    first_name='Al-Amin',
+                    last_name='Hossain'
+                )
+                self.stdout.write(f'  Created superuser: {username}')
+
+            # Create or update Staff profile
+            it_department = Department.objects.get(code='BPS-IT-DEPT')
+            staff, staff_created = Staff.objects.get_or_create(
+                user=user,
                 defaults={
-                    'email': 'alamin@parliament.gov.bd',
-                    'first_name': 'Al-Amin',
-                    'last_name': 'Hossain',
-                    'is_staff': True,
-                    'is_superuser': True,
+                    'employee_id': '110100091',
+                    'designation': 'Computer Programmer',
+                    'department': it_department,
+                    'phone_number': '+880-2-9559022',
+                    'joining_date': timezone.now().date(),
                     'is_active': True,
                 }
             )
             
-            if created:
-                user.set_password(password)
-                user.save()
-                self.stdout.write(f'  Created superuser: {username}')
-            else:
-                # Update existing user
-                user.set_password(password)
-                user.is_staff = True
-                user.is_superuser = True
-                user.is_active = True
-                user.save()
-                self.stdout.write(f'  Updated existing user: {username}')
+            if staff_created:
+                self.stdout.write(f'  Created staff profile for: {user.get_full_name()}')
 
-            # Create staff profile
-            IT_department = Department.objects.filter(code='BPS-IT-DEPT').first()
-            if IT_department:
-                staff, staff_created = Staff.objects.get_or_create(
-                    user=user,
-                    defaults={
-                        'employee_id': '110100091',
-                        'department': IT_department,
-                        'designation': 'Computer Programmer',
-                        'employment_type': 'PERMANENT',
-                        'phone_number': '+880-1914219285',
-                        'is_active': True,
-                        'joining_date': timezone.now().date(),
-                    }
-                )
-                
-                if staff_created:
-                    self.stdout.write(f'  Created staff profile for: {username}')
-
-                # Assign IT Administrator role
-                try:
-                    it_admin_role = UserRole.objects.get(name='IT_ADMINISTRATOR')
-                    
-                    # Deactivate any existing role assignments
-                    UserRoleAssignment.objects.filter(
-                        user=user, 
-                        is_active=True
-                    ).update(is_active=False, deactivated_at=timezone.now())
-                    
-                    # Create new role assignment
-                    role_assignment, role_created = UserRoleAssignment.objects.get_or_create(
-                        user=user,
-                        role=it_admin_role,
-                        defaults={
-                            'department': IT_department,
-                            'assigned_by': user,  # Self-assigned for setup
-                            'is_active': True,
-                            'assigned_at': timezone.now(),
-                        }
-                    )
-                    
-                    if role_created:
-                        self.stdout.write(f'  Assigned IT Administrator role to: {username}')
-                except UserRole.DoesNotExist:
-                    self.stdout.write(f'  Warning: IT Administrator role not found')
-            else:
-                self.stdout.write(f'  Warning: IT Department not found')
+            # Assign IT Administrator role
+            it_admin_role = UserRole.objects.get(name='IT_ADMINISTRATOR')
+            role_assignment, role_created = UserRoleAssignment.objects.get_or_create(
+                user=user,
+                role=it_admin_role,
+                defaults={
+                    'department': it_department,
+                    'assigned_by': user,
+                    'assigned_at': timezone.now(),
+                    'is_active': True,
+                    'notes': 'Initial system setup - IT Administrator role'
+                }
+            )
             
-            return user
+            if role_created:
+                self.stdout.write(f'  Assigned IT Administrator role to: {username}')
+                
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'Failed to create superuser: {str(e)}'))
+            raise
+
+    def display_setup_summary(self):
+        """Display setup summary statistics"""
+        self.stdout.write('\n' + '='*60)
+        self.stdout.write(self.style.SUCCESS('📊 SETUP SUMMARY'))
+        self.stdout.write('='*60)
+        
+        # Count created objects
+        buildings_count = Building.objects.count()
+        floors_count = Floor.objects.count()
+        departments_count = Department.objects.count()
+        rooms_count = Room.objects.count()
+        locations_count = Location.objects.count()
+        categories_count = DeviceCategory.objects.count()
+        subcategories_count = DeviceSubCategory.objects.count()
+        device_types_count = DeviceType.objects.count()
+        vendors_count = Vendor.objects.count()
+        roles_count = UserRole.objects.count()
+        users_count = User.objects.count()
+        
+        self.stdout.write(f'🏢 Buildings Created: {buildings_count}')
+        self.stdout.write(f'🏬 Floors Created: {floors_count}')
+        self.stdout.write(f'🏛️ Departments Created: {departments_count}')
+        self.stdout.write(f'🚪 Rooms Created: {rooms_count}')
+        self.stdout.write(f'📍 Locations Created: {locations_count}')
+        self.stdout.write(f'📂 Device Categories: {categories_count}')
+        self.stdout.write(f'📁 Device Subcategories: {subcategories_count}')
+        self.stdout.write(f'🔧 Device Types: {device_types_count}')
+        self.stdout.write(f'🏪 Vendors Created: {vendors_count}')
+        self.stdout.write(f'👥 User Roles: {roles_count}')
+        self.stdout.write(f'👤 Users: {users_count}')
+        
+        self.stdout.write('\n' + '='*60)
+        self.stdout.write(self.style.SUCCESS('🎯 NEXT STEPS'))
+        self.stdout.write('='*60)
+        self.stdout.write('1. 🌐 Access the system at: http://localhost:8000')
+        self.stdout.write('2. 🔑 Login with the admin credentials provided above')
+        self.stdout.write('3. 📱 Start adding devices through the web interface')
+        self.stdout.write('4. 👥 Create additional user accounts and assign roles')
+        self.stdout.write('5. 🏷️ Generate QR codes for existing devices')
+        self.stdout.write('6. 📊 Begin device assignments and tracking')
+        self.stdout.write('\n' + '='*60)
+
+    def handle(self, *args, **options):
+        self.stdout.write(
+            self.style.SUCCESS('🏛️ Setting up BPS IT Inventory Management System...')
+        )
+
+        try:
+            with transaction.atomic():
+                # Reset data if requested
+                if options['reset_data']:
+                    self.reset_data()
+                
+                # Create organizational structure
+                self.create_organization_structure()
+                
+                # Create user roles
+                self.create_user_roles()
+                
+                # Create device categories and types
+                self.create_device_categories()
+                
+                # Create sample vendors
+                self.create_sample_vendors()
+                
+                # Create superuser (IT Administrator)
+                self.create_superuser(
+                    options['admin_username'], 
+                    options['admin_password']
+                )
+
+            # Display setup summary
+            self.display_setup_summary()
+            
+            self.stdout.write(
+                self.style.SUCCESS('✅ BPS IT Inventory System setup completed successfully!')
+            )
+            self.stdout.write(
+                self.style.WARNING(f'🔑 Admin Login: {options["admin_username"]} / {options["admin_password"]}')
+            )
             
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f'  Failed to create superuser: {str(e)}')
+                self.style.ERROR(f'❌ Setup failed: {str(e)}')
             )
             raise
-            
