@@ -50,6 +50,13 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    
+    # Custom Authentication Middleware (added after AuthenticationMiddleware)
+    'authentication.middleware.AuthenticationManagementMiddleware',
+    'authentication.middleware.SessionSecurityMiddleware',
+    'authentication.middleware.RoleBasedAccessMiddleware',
+    'authentication.middleware.DeviceAccessControlMiddleware',
+    
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -140,9 +147,15 @@ CACHES = {
 
 # Session Configuration
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# Custom session timeout (in minutes)
+SESSION_TIMEOUT_MINUTES = 60
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -294,7 +307,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-# Logging Configuration
+# Logging configuration for authentication
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -303,53 +316,36 @@ LOGGING = {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
-    'filters': {
-        'require_debug_true': {
-            '()': 'django.utils.log.RequireDebugTrue',
-        },
     },
     'handlers': {
-        'console': {
-            'level': 'INFO',
-            'filters': ['require_debug_true'],
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple'
-        },
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'bps_inventory.log',
+            'filename': 'logs/bps_inventory.log',
+            'formatter': 'verbose',
+        },
+        'auth_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/authentication.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
     },
-    'root': {
-        'handlers': ['console'],
-    },
     'loggers': {
-        'django': {
-            'handlers': ['console', 'file'] if not DEBUG else ['console'],
+        'authentication': {
+            'handlers': ['auth_file', 'console'],
             'level': 'INFO',
             'propagate': False,
         },
-        'inventory': {
-            'handlers': ['console', 'file'] if not DEBUG else ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
-        },
-        'qr_management': {
-            'handlers': ['console', 'file'] if not DEBUG else ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
-        },
-        'reports': {
-            'handlers': ['console', 'file'] if not DEBUG else ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
         },
     },
 }
@@ -436,6 +432,14 @@ elif ENVIRONMENT == 'testing':
     EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
     CELERY_TASK_ALWAYS_EAGER = True
 
+
+# Role-based access control settings
+RBAC_SETTINGS = {
+    'DEPARTMENT_ISOLATION': True,  # Enforce department-based access restrictions
+    'STRICT_ROLE_CHECKING': True,  # Require explicit role assignments
+    'AUTO_LOGOUT_INACTIVE': True,  # Auto-logout inactive users
+    'SESSION_SECURITY': True,      # Enable session security checks
+}
 # Admin Site Configuration
 ADMIN_SITE_HEADER = "BPS IT Inventory Management"
 ADMIN_SITE_TITLE = "BPS Inventory Admin"
