@@ -12,7 +12,7 @@ import uuid
 class Building(models.Model):
     """Building information for asset location tracking"""
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=10, unique=True)
+    code = models.CharField(max_length=50, unique=True)
     address = models.TextField()
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -45,11 +45,11 @@ class Floor(models.Model):
 class Department(models.Model):
     """Department information"""
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name='departments')
-    name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20)
-    head_of_department = models.CharField(max_length=100, blank=True)
+    name = models.CharField(max_length=200)
+    code = models.CharField(max_length=30)
+    head_of_department = models.CharField(max_length=200, blank=True)
     contact_email = models.EmailField(blank=True)
-    contact_phone = models.CharField(max_length=20, blank=True)
+    contact_phone = models.CharField(max_length=30, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -64,8 +64,8 @@ class Department(models.Model):
 class Room(models.Model):
     """Room information within departments"""
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='rooms')
-    room_number = models.CharField(max_length=20)
-    room_name = models.CharField(max_length=100, blank=True)
+    room_number = models.CharField(max_length=30)
+    room_name = models.CharField(max_length=200, blank=True)
     capacity = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -84,7 +84,7 @@ class Location(models.Model):
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name='locations')
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='locations')
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='locations', null=True, blank=True)
-    description = models.CharField(max_length=200, blank=True)
+    description = models.CharField(max_length=400, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -116,7 +116,7 @@ class Staff(models.Model):
     employee_id = models.CharField(max_length=20, unique=True)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     designation = models.CharField(max_length=100)
-    employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPES, default='PERMANENT')
+    employment_type = models.CharField(max_length=30, choices=EMPLOYMENT_TYPES, default='PERMANENT')
     phone_number = models.CharField(max_length=20, blank=True)
     office_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_members')
     is_active = models.BooleanField(default=True)
@@ -147,8 +147,8 @@ class Vendor(models.Model):
     ]
 
     name = models.CharField(max_length=200)
-    vendor_type = models.CharField(max_length=30, choices=VENDOR_TYPES)
-    contact_person = models.CharField(max_length=100, blank=True)
+    vendor_type = models.CharField(max_length=40, choices=VENDOR_TYPES)
+    contact_person = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
@@ -236,16 +236,16 @@ class Device(models.Model):
     # Primary identification
     device_id = models.CharField(max_length=50, unique=True, primary_key=True)
     device_name = models.CharField(max_length=200)
-    asset_tag = models.CharField(max_length=50, unique=True, blank=True)
+    asset_tag = models.CharField(max_length=100, unique=True, blank=True)
     serial_number = models.CharField(max_length=100, blank=True)
     
     # Classification
     device_type = models.ForeignKey(DeviceType, on_delete=models.PROTECT, related_name='devices')
     brand = models.CharField(max_length=100, blank=True)
-    model = models.CharField(max_length=100, blank=True)
+    model = models.CharField(max_length=200, blank=True)
     
     # Status and location
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
+    status = models.CharField(max_length=40, choices=STATUS_CHOICES, default='AVAILABLE')
     #current_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='devices')
     
     # Financial information
@@ -256,7 +256,7 @@ class Device(models.Model):
     # Warranty information
     warranty_start_date = models.DateField(null=True, blank=True)
     warranty_end_date = models.DateField(null=True, blank=True)
-    warranty_provider = models.CharField(max_length=200, blank=True)
+    warranty_provider = models.CharField(max_length=300, blank=True)
     
     # Technical specifications
     #specifications = models.JSONField(default=dict, blank=True, help_text="Device technical specifications")
@@ -296,7 +296,7 @@ class Device(models.Model):
     ]
     
     device_condition = models.CharField(
-        max_length=20, 
+        max_length=30, 
         choices=CONDITION_CHOICES, 
         default='GOOD',
         db_column='condition'  
@@ -387,13 +387,13 @@ class Assignment(models.Model):
     assigned_to_location = models.ForeignKey(Location, on_delete=models.SET_NULL, null=True, blank=True, related_name='device_assignments')
     
     # Assignment details
-    assignment_type = models.CharField(max_length=20, choices=ASSIGNMENT_TYPES, default='PERMANENT')
+    assignment_type = models.CharField(max_length=30, choices=ASSIGNMENT_TYPES, default='PERMANENT')
     start_date = models.DateField(default=timezone.now)
     expected_return_date = models.DateField(null=True, blank=True)
     actual_return_date = models.DateField(null=True, blank=True)
     
     # Assignment metadata
-    purpose = models.CharField(max_length=500, blank=True)
+    purpose = models.CharField(max_length=800, blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     
@@ -470,7 +470,7 @@ class MaintenanceSchedule(models.Model):
     ]
 
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='maintenance_schedules')
-    maintenance_type = models.CharField(max_length=20, choices=MAINTENANCE_TYPES)
+    maintenance_type = models.CharField(max_length=40, choices=MAINTENANCE_TYPES)
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
     description = models.TextField()
     next_due_date = models.DateField()
@@ -479,7 +479,7 @@ class MaintenanceSchedule(models.Model):
     estimated_duration = models.DurationField(null=True, blank=True)
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_schedules')
     cost_estimate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='SCHEDULED')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -510,13 +510,13 @@ class MaintenanceRecord(models.Model):
 
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='maintenance_records')
     maintenance_schedule = models.ForeignKey(MaintenanceSchedule, on_delete=models.SET_NULL, null=True, blank=True, related_name='records')
-    maintenance_type = models.CharField(max_length=20, choices=MaintenanceSchedule.MAINTENANCE_TYPES)
+    maintenance_type = models.CharField(max_length=30, choices=MaintenanceSchedule.MAINTENANCE_TYPES)
     description = models.TextField()
     scheduled_date = models.DateField()
     completed_date = models.DateField(null=True, blank=True)
     technician = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintenance_records')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='SCHEDULED')
     work_performed = models.TextField(blank=True)
     parts_used = models.TextField(blank=True)
     cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
