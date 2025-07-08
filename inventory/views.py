@@ -431,7 +431,7 @@ def device_history(request, device_id):
             'audit_logs': audit_logs,
         }
         
-        return render(request, 'inventory/device_history.html', context)
+        return render(request, 'inventory/devices/device_history.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device history: {str(e)}")
@@ -463,7 +463,7 @@ def device_list(request):
         'title': 'Device Management'
     }
     
-    return render(request, 'inventory/device_list.html', context)
+    return render(request, 'inventory/devices/device_list.html', context)
 
 @login_required
 def device_detail(request, device_id):
@@ -596,7 +596,7 @@ def device_detail(request, device_id):
             'can_assign': request.user.has_perm('inventory.add_assignment'),
         }
         
-        return render(request, 'inventory/device_detail.html', context)
+        return render(request, 'inventory/devices/device_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device details: {str(e)}")
@@ -644,7 +644,7 @@ def device_create(request):
         'title': 'Create New Device'
     }
     
-    return render(request, 'inventory/device_form.html', context)
+    return render(request, 'inventory/devices/device_form.html', context)
 
 @login_required
 @permission_required('inventory.change_device', raise_exception=True)
@@ -741,7 +741,7 @@ def device_delete(request, device_id):
             'device': device,
             'active_assignments': Assignment.objects.filter(device=device, is_active=True).count()
         }
-        return render(request, 'inventory/device_delete.html', context)
+        return render(request, 'inventory/devices/device_delete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error processing request: {str(e)}")
@@ -836,7 +836,7 @@ def device_type_detail(request, type_id):
             'title': f'Device Type: {device_type.name}'
         }
         
-        return render(request, 'inventory/device_type_detail.html', context)
+        return render(request, 'inventory/devices/device_type_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device type details: {str(e)}")
@@ -894,7 +894,7 @@ def device_type_edit(request, type_id):
             'title': f'Edit Device Type: {device_type.name}'
         }
         
-        return render(request, 'inventory/device_type_form.html', context)
+        return render(request, 'inventory/device_types/device_type_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device type: {str(e)}")
@@ -958,7 +958,7 @@ def device_type_delete(request, type_id):
             'title': f'Delete Device Type: {device_type.name}'
         }
         
-        return render(request, 'inventory/device_type_confirm_delete.html', context)
+        return render(request, 'inventory/device_types/device_type_confirm_delete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error deleting device type: {str(e)}")
@@ -1046,7 +1046,7 @@ def assignment_list(request):
         'title': 'Assignment Management'
     }
     
-    return render(request, 'inventory/assignment_list.html', context)
+    return render(request, 'inventory/assignments/assignment_list.html', context)
 
 @login_required
 @permission_required('inventory.add_assignment', raise_exception=True)
@@ -1101,7 +1101,7 @@ def assignment_create(request):
         'title': 'Create Assignment'
     }
     
-    return render(request, 'inventory/assignment_form.html', context)
+    return render(request, 'inventory/assignments/assignment_form.html', context)
 
 @login_required
 def assignment_detail(request, assignment_id):
@@ -1146,7 +1146,7 @@ def assignment_detail(request, assignment_id):
             'audit_logs': audit_logs,
         }
         
-        return render(request, 'inventory/assignment_detail.html', context)
+        return render(request, 'inventory/assignments/assignment_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1274,7 +1274,7 @@ def assignment_return(request, assignment_id):
             'title': f'Return Device from Assignment {assignment.assignment_id}',
         }
         
-        return render(request, 'inventory/assignment_return.html', context)
+        return render(request, 'inventory/assignments/assignment_return.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1340,7 +1340,7 @@ def assignment_transfer(request, assignment_id):
             'assignment': assignment,
             'title': f'Transfer Assignment {assignment.assignment_id}',
         }
-        return render(request, 'inventory/assignment_transfer.html', context)
+        return render(request, 'inventory/assignments/assignment_transfer.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1398,7 +1398,7 @@ def assignment_edit(request, assignment_id):
             'title': f'Edit Assignment {assignment.assignment_id}',
             'action': 'Update',
         }
-        return render(request, 'inventory/assignment_form.html', context)
+        return render(request, 'inventory/assignments/assignment_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1457,7 +1457,7 @@ def assignment_extend(request, assignment_id):
         context = {
             'assignment': assignment,
         }
-        return render(request, 'inventory/assignment_extend.html', context)
+        return render(request, 'inventory/assignments/assignment_extend.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading assignment: {str(e)}")
@@ -1516,7 +1516,7 @@ def bulk_assignment_create(request):
         'form': form,
         'title': 'Bulk Assignment Creation',
     }
-    return render(request, 'inventory/bulk_assignment.html', context)
+    return render(request, 'inventory/bulk/bulk_assignment.html', context)
 
 @login_required
 def overdue_assignments_list(request):
@@ -1543,7 +1543,7 @@ def overdue_assignments_list(request):
             'total_overdue': overdue_assignments.count(),
         }
         
-        return render(request, 'inventory/overdue_assignments.html', context)
+        return render(request, 'inventory/assignments/overdue_assignments.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading overdue assignments: {str(e)}")
@@ -2620,11 +2620,11 @@ def maintenance_list(request):
             }
         }
         
-        return render(request, 'inventory/maintenance/maintenance_list.html', context)
+        return render(request, 'inventory/maintenance/list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance list: {str(e)}")
-        return render(request, 'inventory/maintenance/maintenance_list.html', {})
+        return render(request, 'inventory/maintenance/list.html', {})
 
 @login_required
 def maintenance_create(request):
@@ -2665,7 +2665,7 @@ def maintenance_create(request):
             'vendors': Vendor.objects.filter(is_active=True),
         }
         
-        return render(request, 'inventory/maintenance/maintenance_create.html', context)
+        return render(request, 'inventory/maintenance/create.html', context)
         
     except Exception as e:
         messages.error(request, f"Error creating maintenance schedule: {str(e)}")
@@ -2693,7 +2693,7 @@ def maintenance_detail(request, maintenance_id):
             'can_edit': request.user.has_perm('inventory.change_maintenanceschedule'),
         }
         
-        return render(request, 'inventory/maintenance/maintenance_detail.html', context)
+        return render(request, 'inventory/maintenance/detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance details: {str(e)}")
@@ -2752,7 +2752,7 @@ def maintenance_edit(request, maintenance_id):
             'title': 'Edit Maintenance Schedule',
         }
         
-        return render(request, 'inventory/maintenance/maintenance_edit.html', context)
+        return render(request, 'inventory/maintenance/edit.html', context)
         
     except Exception as e:
         messages.error(request, f"Error editing maintenance schedule: {str(e)}")
@@ -2868,11 +2868,11 @@ def maintenance_schedule(request):
             'status_choices': MaintenanceSchedule.STATUS_CHOICES,
         }
         
-        return render(request, 'inventory/maintenance/maintenance_schedule.html', context)
+        return render(request, 'inventory/maintenance/schedule.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance schedule: {str(e)}")
-        return render(request, 'inventory/maintenance/maintenance_schedule.html', {})
+        return render(request, 'inventory/maintenance/schedule.html', {})
 
 # ================================
 # DEVICE TYPE MANAGEMENT VIEWS
@@ -3522,7 +3522,7 @@ def bulk_qr_generate(request):
                 'has_qr': has_qr,
             }
         }
-        return render(request, 'inventory/bulk_qr_generate.html', context)
+        return render(request, 'inventory/bulk/bulk_qr_generate.html', context)
     
     elif request.method == 'POST':
         device_ids = request.POST.getlist('device_ids')
@@ -3711,7 +3711,7 @@ def bulk_actions(request):
                 ('export_selected', 'Export Selected Items'),
             ]
         }
-        return render(request, 'inventory/bulk_actions_dispatcher.html', context)
+        return render(request, 'inventory/bulk_actions.html', context)
     
     elif request.method == 'POST':
         action = request.POST.get('action')
@@ -3832,14 +3832,14 @@ def handle_bulk_device_assignment(request):
 @login_required
 def bulk_import(request):
     """Main bulk import page"""
-    return render(request, 'inventory/bulk_import.html', {
+    return render(request, 'inventory/bulk/bulk_import.html', {
         'title': 'Bulk Import Data'
     })
 
 @login_required
 def bulk_export(request):
     """Main bulk export page"""
-    return render(request, 'inventory/bulk_export.html', {
+    return render(request, 'inventory/bulk/bulk_export.html', {
         'title': 'Bulk Export Data'
     })
 
@@ -4740,7 +4740,7 @@ def device_qr_code(request, device_id):
             'qr_code': device.qr_code,
         }
         
-        return render(request, 'inventory/device_qr_code.html', context)
+        return render(request, 'inventory/devices/device_qr_code.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device QR code: {str(e)}")
@@ -6494,3 +6494,172 @@ def global_search(request):
             'results': {},
             'error': str(e)
         })
+
+
+# ================================
+# User's My Assignment VIEW 
+# ================================
+
+@login_required
+def my_assignments(request):
+    """Personal assignments view for users to see their own assignments"""
+    try:
+        # Get current user's staff profile
+        staff_profile = None
+        try:
+            staff_profile = Staff.objects.get(user=request.user)
+        except Staff.DoesNotExist:
+            messages.warning(request, 'No staff profile found. Please contact administrator.')
+            return redirect('inventory:dashboard')
+        
+        # Get user's assignments
+        assignments = Assignment.objects.filter(
+            assigned_to_staff=staff_profile
+        ).select_related(
+            'device', 'device__device_type', 'assigned_by', 'returned_by'
+        ).order_by('-assigned_date')
+        
+        # Apply filters
+        status_filter = request.GET.get('status', 'all')
+        assignment_type_filter = request.GET.get('type', 'all')
+        search_query = request.GET.get('search', '')
+        
+        # Filter by status
+        if status_filter == 'active':
+            assignments = assignments.filter(is_active=True)
+        elif status_filter == 'returned':
+            assignments = assignments.filter(is_active=False)
+        elif status_filter == 'overdue':
+            assignments = assignments.filter(
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            )
+        
+        # Filter by assignment type
+        if assignment_type_filter == 'temporary':
+            assignments = assignments.filter(is_temporary=True)
+        elif assignment_type_filter == 'permanent':
+            assignments = assignments.filter(is_temporary=False)
+        
+        # Search functionality
+        if search_query:
+            assignments = assignments.filter(
+                Q(device__device_name__icontains=search_query) |
+                Q(device__device_id__icontains=search_query) |
+                Q(assignment_id__icontains=search_query)
+            )
+        
+        # Calculate statistics
+        stats = {
+            'total_assignments': Assignment.objects.filter(assigned_to_staff=staff_profile).count(),
+            'active_assignments': Assignment.objects.filter(
+                assigned_to_staff=staff_profile, 
+                is_active=True
+            ).count(),
+            'temporary_assignments': Assignment.objects.filter(
+                assigned_to_staff=staff_profile, 
+                is_temporary=True, 
+                is_active=True
+            ).count(),
+            'overdue_assignments': Assignment.objects.filter(
+                assigned_to_staff=staff_profile,
+                is_temporary=True,
+                is_active=True,
+                expected_return_date__lt=timezone.now().date()
+            ).count(),
+        }
+        
+        # Calculate total value of active assignments
+        active_assignments_value = Assignment.objects.filter(
+            assigned_to_staff=staff_profile,
+            is_active=True
+        ).aggregate(
+            total_value=Sum('device__purchase_price')
+        )['total_value'] or 0
+        
+        stats['total_value'] = active_assignments_value
+        
+        # Pagination
+        paginator = Paginator(assignments, 10)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Get upcoming returns (next 30 days)
+        upcoming_returns = Assignment.objects.filter(
+            assigned_to_staff=staff_profile,
+            is_temporary=True,
+            is_active=True,
+            expected_return_date__gte=timezone.now().date(),
+            expected_return_date__lte=timezone.now().date() + timedelta(days=30)
+        ).order_by('expected_return_date')[:5]
+        
+        context = {
+            'staff_profile': staff_profile,
+            'page_obj': page_obj,
+            'stats': stats,
+            'upcoming_returns': upcoming_returns,
+            'status_filter': status_filter,
+            'assignment_type_filter': assignment_type_filter,
+            'search_query': search_query,
+            'title': 'My Assignments'
+        }
+        
+        return render(request, 'inventory/my_assignments/my_assignments.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error loading your assignments: {str(e)}')
+        return redirect('inventory:dashboard')
+
+@login_required
+def my_assignment_detail(request, assignment_id):
+    """Personal assignment detail view - users can only view their own assignments"""
+    try:
+        # Get current user's staff profile
+        staff_profile = Staff.objects.get(user=request.user)
+        
+        # Get assignment - ensure it belongs to the current user
+        assignment = get_object_or_404(
+            Assignment.objects.select_related(
+                'device', 'device__device_type', 'assigned_by', 'returned_by'
+            ),
+            assignment_id=assignment_id,
+            assigned_to_staff=staff_profile
+        )
+        
+        # Calculate assignment duration
+        assignment_duration = None
+        if assignment.assigned_date:
+            start_date = assignment.assigned_date
+            end_date = assignment.returned_date or timezone.now().date()
+            assignment_duration = (end_date - start_date).days
+        
+        # Check if overdue
+        is_overdue = False
+        days_overdue = 0
+        if (assignment.is_temporary and assignment.is_active and 
+            assignment.expected_return_date):
+            today = timezone.now().date()
+            if assignment.expected_return_date < today:
+                is_overdue = True
+                days_overdue = (today - assignment.expected_return_date).days
+        
+        context = {
+            'assignment': assignment,
+            'assignment_duration': assignment_duration,
+            'is_overdue': is_overdue,
+            'days_overdue': days_overdue,
+            'title': f'Assignment #{assignment.assignment_id}'
+        }
+        
+        return render(request, 'inventory/my_assignments/my_assignment_detail.html', context)
+        
+    except Staff.DoesNotExist:
+        messages.error(request, 'Staff profile not found. Please contact administrator.')
+        return redirect('inventory:dashboard')
+    except Assignment.DoesNotExist:
+        messages.error(request, 'Assignment not found or you do not have permission to view it.')
+        return redirect('inventory:my_assignments')
+    except Exception as e:
+        messages.error(request, f'Error loading assignment details: {str(e)}')
+        return redirect('inventory:my_assignments')

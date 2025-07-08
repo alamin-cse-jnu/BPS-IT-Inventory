@@ -1,5 +1,3 @@
-
-
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm as DjangoPasswordChangeForm
 from django.contrib.auth.models import User
@@ -21,23 +19,28 @@ class CustomLoginForm(AuthenticationForm):
             'class': 'form-control form-control-lg',
             'placeholder': 'Username or Employee ID',
             'autocomplete': 'username',
-            'autofocus': True
-        })
+            'autofocus': True,
+            'id': 'id_username'
+        }),
+        label="Username or Employee ID"
     )
     
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'form-control form-control-lg',
             'placeholder': 'Password',
-            'autocomplete': 'current-password'
-        })
+            'autocomplete': 'current-password',
+            'id': 'id_password'
+        }),
+        label="Password"
     )
     
     remember_me = forms.BooleanField(
         required=False,
         initial=False,
         widget=forms.CheckboxInput(attrs={
-            'class': 'form-check-input'
+            'class': 'form-check-input',
+            'id': 'id_remember_me'
         }),
         label="Remember me for 30 days"
     )
@@ -70,7 +73,7 @@ class CustomLoginForm(AuthenticationForm):
         if hasattr(user, 'staff_profile') and not user.staff_profile.is_active:
             raise ValidationError(
                 "Your account has been deactivated. Please contact administrator.",
-                code='inactive_staff'
+                code='account_deactivated'
             )
 
 
@@ -79,81 +82,212 @@ class CustomLoginForm(AuthenticationForm):
 # ================================
 
 class UserProfileForm(forms.ModelForm):
-    """Form for updating user profile information"""
+    """Form for editing user profile information"""
+    
+    first_name = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label="First Name"
+    )
+    
+    last_name = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        label="Last Name"
+    )
+    
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={'class': 'form-control'}),
+        label="Email Address"
+    )
     
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'email']
-        
-        widgets = {
-            'first_name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'First Name'
-            }),
-            'last_name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Last Name'
-            }),
-            'email': forms.EmailInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Email Address'
-            })
-        }
     
-    # Additional profile fields
-    phone_number = forms.CharField(
-        max_length=20,
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        
+        # Check if email is already taken by another user
+        if email and User.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
+            raise ValidationError("This email address is already in use.")
+        
+        return email
+
+# ================================
+# USER ROLE AND PERMISSION FORMS
+# ================================
+
+class UserRoleForm(forms.Form):
+    """Form for managing user roles and permissions"""
+    
+    ROLE_CHOICES = [
+        ('IT_ADMIN', 'IT Administrator'),
+        ('INVENTORY_MANAGER', 'Inventory Manager'),
+        ('DEPARTMENT_HEAD', 'Department Head'),
+        ('STAFF_MEMBER', 'Staff Member'),
+        ('VIEWER', 'Viewer Only'),
+    ]
+    
+    role = forms.ChoiceField(
+        choices=ROLE_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="User Role"
+    )
+    
+    permissions = forms.MultipleChoiceField(
         required=False,
-        widget=forms.TextInput(attrs={
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        label="Additional Permissions"
+    )
+    
+    access_start_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Phone Number'
-        })
+            'type': 'date'
+        }),
+        label="Access Start Date"
+    )
+    
+    access_end_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        label="Access End Date"
     )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Make all fields required except phone
-        self.fields['first_name'].required = True
-        self.fields['last_name'].required = True
-        self.fields['email'].required = True
+        # Set permission choices dynamically
+        from django.contrib.auth.models import Permission
+        permission_choices = []
         
-        # Populate phone number from staff profile if available
-        if self.instance and hasattr(self.instance, 'staff_profile'):
-            self.fields['phone_number'].initial = self.instance.staff_profile.phone_number
+        for perm in Permission.objects.filter(content_type__app_label__in=['inventory', 'authentication', 'reports']):
+            permission_choices.append((perm.id, f"{perm.name} ({perm.codename})"))
+        
+        self.fields['permissions'].choices = permission_choices
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        access_start_date = cleaned_data.get('access_start_date')
+        access_end_date = cleaned_data.get('access_end_date')
+        
+        if access_start_date and access_end_date and access_start_date >= access_end_date:
+            raise ValidationError("Access end date must be after start date.")
+        
+        if access_end_date and access_end_date <= timezone.now().date():
+            raise ValidationError("Access end date must be in the future.")
+        
+        return cleaned_data
+
+# ================================
+# USER CREATION AND MANAGEMENT FORMS
+# ================================
+
+class StaffUserCreationForm(forms.ModelForm):
+    """Form for creating staff user accounts"""
+    
+    username = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Username'
+        }),
+        help_text="Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only."
+    )
+    
+    first_name = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'First Name'
+        }),
+        label="First Name"
+    )
+    
+    last_name = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Last Name'
+        }),
+        label="Last Name"
+    )
+    
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'email@example.com'
+        }),
+        label="Email Address"
+    )
+    
+    password1 = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Password'
+        }),
+        label="Password"
+    )
+    
+    password2 = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Confirm Password'
+        }),
+        label="Confirm Password"
+    )
+    
+    is_staff = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Staff Status",
+        help_text="Designates whether the user can log into the admin site."
+    )
+    
+    is_active = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Active",
+        help_text="Designates whether this user should be treated as active."
+    )
+    
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email', 'is_staff', 'is_active']
+    
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if username and User.objects.filter(username__iexact=username).exists():
+            raise ValidationError("A user with this username already exists.")
+        return username.lower() if username else username
     
     def clean_email(self):
         email = self.cleaned_data.get('email')
-        if email:
-            # Check for duplicate emails
-            existing = User.objects.filter(email=email)
-            if self.instance.pk:
-                existing = existing.exclude(pk=self.instance.pk)
-            
-            if existing.exists():
-                raise ValidationError("This email address is already in use.")
-        
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise ValidationError("A user with this email already exists.")
         return email
     
-    def clean_phone_number(self):
-        phone = self.cleaned_data.get('phone_number')
-        if phone:
-            # Basic phone number validation
-            phone_pattern = re.compile(r'^[\+]?[1-9][\d]{0,15}$')
-            if not phone_pattern.match(phone.replace('-', '').replace(' ', '')):
-                raise ValidationError("Please enter a valid phone number.")
+    def clean_password2(self):
+        password1 = self.cleaned_data.get('password1')
+        password2 = self.cleaned_data.get('password2')
         
-        return phone
+        if password1 and password2 and password1 != password2:
+            raise ValidationError("The two password fields didn't match.")
+        
+        return password2
     
     def save(self, commit=True):
-        user = super().save(commit)
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data['password1'])
         
-        # Update staff profile phone number if exists
-        if commit and hasattr(user, 'staff_profile'):
-            phone_number = self.cleaned_data.get('phone_number')
-            if phone_number is not None:
-                user.staff_profile.phone_number = phone_number
-                user.staff_profile.save()
+        if commit:
+            user.save()
         
         return user
 
@@ -220,54 +354,49 @@ class StaffProfileDetailsForm(forms.Form):
 # PASSWORD MANAGEMENT FORMS
 # ================================
 
-class CustomPasswordChangeForm(DjangoPasswordChangeForm):
-    """Enhanced password change form"""
+class PasswordChangeForm(DjangoPasswordChangeForm):
+    """Enhanced password change form with custom styling"""
     
     old_password = forms.CharField(
-        label="Current Password",
-        strip=False,
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Current Password',
+            'placeholder': 'Current password',
             'autocomplete': 'current-password'
-        })
+        }),
+        label="Current Password"
     )
     
     new_password1 = forms.CharField(
-        label="New Password",
-        strip=False,
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': 'New Password',
+            'placeholder': 'New password',
             'autocomplete': 'new-password'
         }),
-        help_text="Password must be at least 8 characters long and contain letters and numbers."
+        label="New Password",
+        help_text="Password must be at least 8 characters long and include letters and numbers."
     )
     
     new_password2 = forms.CharField(
-        label="Confirm New Password",
-        strip=False,
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': 'Confirm New Password',
+            'placeholder': 'Confirm new password',
             'autocomplete': 'new-password'
-        })
+        }),
+        label="Confirm New Password"
     )
     
     def clean_new_password1(self):
         password = self.cleaned_data.get('new_password1')
+        
         if password:
             # Custom password validation
             if len(password) < 8:
                 raise ValidationError("Password must be at least 8 characters long.")
             
-            if password.isdigit():
-                raise ValidationError("Password cannot be entirely numeric.")
-            
             if not re.search(r'[A-Za-z]', password):
                 raise ValidationError("Password must contain at least one letter.")
             
-            if not re.search(r'[0-9]', password):
+            if not re.search(r'\d', password):
                 raise ValidationError("Password must contain at least one number.")
         
         return password
@@ -429,7 +558,7 @@ class SessionManagementForm(forms.Form):
 # ================================
 
 class SecuritySettingsForm(forms.Form):
-    """Form for security-related settings"""
+    """Form for user security-related settings"""
     
     two_factor_enabled = forms.BooleanField(
         initial=False,
@@ -470,6 +599,7 @@ class SecuritySettingsForm(forms.Form):
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
         label="Maximum failed login attempts"
     )
+
 
 
 # ================================

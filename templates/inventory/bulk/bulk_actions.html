@@ -1,0 +1,785 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk Actions{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/bulk-actions.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-tasks me-2 text-primary"></i>Bulk Actions
+            </h1>
+            <p class="text-muted mb-0">Perform actions on multiple items at once</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Devices
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:bulk_import' %}" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="fas fa-upload fa-2x mb-2"></i>
+                                <span class="fw-semibold">Import Data</span>
+                                <small class="text-muted">Upload CSV/Excel files</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:bulk_export' %}" class="btn btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="fas fa-download fa-2x mb-2"></i>
+                                <span class="fw-semibold">Export Data</span>
+                                <small class="text-muted">Download reports</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:bulk_assignment' %}" class="btn btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="fas fa-user-check fa-2x mb-2"></i>
+                                <span class="fw-semibold">Assign Devices</span>
+                                <small class="text-muted">Bulk assignments</small>
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'inventory:bulk_qr_generate' %}" class="btn btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center py-3">
+                                <i class="fas fa-qrcode fa-2x mb-2"></i>
+                                <span class="fw-semibold">QR Codes</span>
+                                <small class="text-muted">Generate labels</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Operations -->
+    <div class="row">
+        <!-- Device Operations -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-laptop me-2 text-primary"></i>Device Operations
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="deviceBulkForm" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="device_update">
+                        
+                        <!-- Select Devices -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Select Devices</label>
+                            <div class="input-group">
+                                <input type="text" id="deviceSearch" class="form-control" placeholder="Search devices by ID, name, or asset tag...">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#deviceSelectionModal">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <div id="selectedDevices" class="mt-2">
+                                <small class="text-muted">No devices selected</small>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Action Type -->
+                        <div class="mb-3">
+                            <label for="deviceActionType" class="form-label fw-semibold">Action Type</label>
+                            <select id="deviceActionType" name="device_action_type" class="form-select" required>
+                                <option value="">Select action...</option>
+                                <option value="update_status">Update Status</option>
+                                <option value="update_condition">Update Condition</option>
+                                <option value="update_location">Update Location</option>
+                                <option value="update_category">Update Category</option>
+                                <option value="add_maintenance">Schedule Maintenance</option>
+                                <option value="retire">Retire Devices</option>
+                            </select>
+                        </div>
+
+                        <!-- Dynamic Fields Based on Action -->
+                        <div id="deviceActionFields" class="mb-3" style="display: none;">
+                            <!-- Status Update -->
+                            <div id="statusFields" class="action-fields" style="display: none;">
+                                <label for="newStatus" class="form-label">New Status</label>
+                                <select id="newStatus" name="new_status" class="form-select">
+                                    <option value="ACTIVE">Active</option>
+                                    <option value="INACTIVE">Inactive</option>
+                                    <option value="MAINTENANCE">Under Maintenance</option>
+                                    <option value="RETIRED">Retired</option>
+                                </select>
+                            </div>
+
+                            <!-- Condition Update -->
+                            <div id="conditionFields" class="action-fields" style="display: none;">
+                                <label for="newCondition" class="form-label">New Condition</label>
+                                <select id="newCondition" name="new_condition" class="form-select">
+                                    <option value="EXCELLENT">Excellent</option>
+                                    <option value="GOOD">Good</option>
+                                    <option value="FAIR">Fair</option>
+                                    <option value="POOR">Poor</option>
+                                    <option value="DAMAGED">Damaged</option>
+                                </select>
+                            </div>
+
+                            <!-- Location Update -->
+                            <div id="locationFields" class="action-fields" style="display: none;">
+                                <label for="newLocation" class="form-label">New Location</label>
+                                <input type="text" id="newLocation" name="new_location" class="form-control" placeholder="Enter location">
+                            </div>
+
+                            <!-- Category Update -->
+                            <div id="categoryFields" class="action-fields" style="display: none;">
+                                <label for="newCategory" class="form-label">New Category</label>
+                                <select id="newCategory" name="new_category" class="form-select">
+                                    <option value="">Select category...</option>
+                                    <option value="IT Equipment">IT Equipment</option>
+                                    <option value="Furniture">Furniture</option>
+                                    <option value="Vehicles">Vehicles</option>
+                                    <option value="Office Supplies">Office Supplies</option>
+                                </select>
+                            </div>
+
+                            <!-- Maintenance Scheduling -->
+                            <div id="maintenanceFields" class="action-fields" style="display: none;">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="maintenanceDate" class="form-label">Maintenance Date</label>
+                                        <input type="date" id="maintenanceDate" name="maintenance_date" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="maintenanceType" class="form-label">Maintenance Type</label>
+                                        <select id="maintenanceType" name="maintenance_type" class="form-select">
+                                            <option value="preventive">Preventive</option>
+                                            <option value="corrective">Corrective</option>
+                                            <option value="emergency">Emergency</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label for="maintenanceNotes" class="form-label">Notes</label>
+                                    <textarea id="maintenanceNotes" name="maintenance_notes" class="form-control" rows="2" placeholder="Maintenance notes..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Retirement -->
+                            <div id="retirementFields" class="action-fields" style="display: none;">
+                                <label for="retirementReason" class="form-label">Retirement Reason</label>
+                                <select id="retirementReason" name="retirement_reason" class="form-select">
+                                    <option value="end_of_life">End of Life</option>
+                                    <option value="damaged">Damaged Beyond Repair</option>
+                                    <option value="obsolete">Obsolete</option>
+                                    <option value="lost">Lost</option>
+                                    <option value="sold">Sold</option>
+                                </select>
+                                <div class="mt-2">
+                                    <label for="retirementNotes" class="form-label">Notes</label>
+                                    <textarea id="retirementNotes" name="retirement_notes" class="form-control" rows="2" placeholder="Retirement notes..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-play me-1"></i>Execute Action
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetForm('deviceBulkForm')">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assignment Operations -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-user-check me-2 text-success"></i>Assignment Operations
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="assignmentBulkForm" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="assignment_update">
+                        
+                        <!-- Assignment Action Type -->
+                        <div class="mb-3">
+                            <label for="assignmentActionType" class="form-label fw-semibold">Action Type</label>
+                            <select id="assignmentActionType" name="assignment_action_type" class="form-select" required>
+                                <option value="">Select action...</option>
+                                <option value="bulk_assign">Bulk Assign Devices</option>
+                                <option value="bulk_return">Return Assignments</option>
+                                <option value="transfer_assignments">Transfer Assignments</option>
+                                <option value="update_assignment_type">Update Assignment Type</option>
+                            </select>
+                        </div>
+
+                        <!-- Dynamic Assignment Fields -->
+                        <div id="assignmentActionFields" style="display: none;">
+                            <!-- Bulk Assignment -->
+                            <div id="bulkAssignFields" class="action-fields" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="assignToStaff" class="form-label">Assign to Staff</label>
+                                    <select id="assignToStaff" name="assign_to_staff" class="form-select">
+                                        <option value="">Select staff member...</option>
+                                        <!-- Staff options will be populated here -->
+                                    </select>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="assignmentType" class="form-label">Assignment Type</label>
+                                        <select id="assignmentType" name="assignment_type" class="form-select">
+                                            <option value="temporary">Temporary</option>
+                                            <option value="permanent">Permanent</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="assignmentDate" class="form-label">Assignment Date</label>
+                                        <input type="date" id="assignmentDate" name="assignment_date" class="form-control">
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label for="assignmentNotes" class="form-label">Notes</label>
+                                    <textarea id="assignmentNotes" name="assignment_notes" class="form-control" rows="2" placeholder="Assignment notes..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Bulk Return -->
+                            <div id="bulkReturnFields" class="action-fields" style="display: none;">
+                                <div class="mb-3">
+                                    <label class="form-label">Select Assignments to Return</label>
+                                    <div class="input-group">
+                                        <input type="text" id="assignmentSearch" class="form-control" placeholder="Search assignments...">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#assignmentSelectionModal">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="returnDate" class="form-label">Return Date</label>
+                                        <input type="date" id="returnDate" name="return_date" class="form-control">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="returnCondition" class="form-label">Return Condition</label>
+                                        <select id="returnCondition" name="return_condition" class="form-select">
+                                            <option value="EXCELLENT">Excellent</option>
+                                            <option value="GOOD">Good</option>
+                                            <option value="FAIR">Fair</option>
+                                            <option value="POOR">Poor</option>
+                                            <option value="DAMAGED">Damaged</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label for="returnNotes" class="form-label">Return Notes</label>
+                                    <textarea id="returnNotes" name="return_notes" class="form-control" rows="2" placeholder="Return notes..."></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Transfer Assignments -->
+                            <div id="transferFields" class="action-fields" style="display: none;">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="transferFrom" class="form-label">Transfer From</label>
+                                        <select id="transferFrom" name="transfer_from" class="form-select">
+                                            <option value="">Select current assignee...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="transferTo" class="form-label">Transfer To</label>
+                                        <select id="transferTo" name="transfer_to" class="form-select">
+                                            <option value="">Select new assignee...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <label for="transferNotes" class="form-label">Transfer Notes</label>
+                                    <textarea id="transferNotes" name="transfer_notes" class="form-control" rows="2" placeholder="Transfer notes..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-play me-1"></i>Execute Action
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetForm('assignmentBulkForm')">
+                                <i class="fas fa-undo me-1"></i>Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Processing -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-layer-group me-2 text-info"></i>Batch Processing
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center p-3 bg-light rounded">
+                                <div class="me-3">
+                                    <i class="fas fa-file-csv fa-2x text-success"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">CSV Import</h6>
+                                    <small class="text-muted">Import devices, staff, or assignments from CSV files</small>
+                                    <div class="mt-2">
+                                        <a href="{% url 'inventory:bulk_import' %}" class="btn btn-sm btn-outline-success">Import</a>
+                                        <a href="#" class="btn btn-sm btn-link">Download Template</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center p-3 bg-light rounded">
+                                <div class="me-3">
+                                    <i class="fas fa-file-excel fa-2x text-primary"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Excel Export</h6>
+                                    <small class="text-muted">Export reports and data to Excel format</small>
+                                    <div class="mt-2">
+                                        <a href="{% url 'inventory:bulk_export' %}" class="btn btn-sm btn-outline-primary">Export</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center p-3 bg-light rounded">
+                                <div class="me-3">
+                                    <i class="fas fa-tags fa-2x text-warning"></i>
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">Label Generation</h6>
+                                    <small class="text-muted">Generate QR codes and asset labels</small>
+                                    <div class="mt-2">
+                                        <a href="{% url 'inventory:bulk_qr_generate' %}" class="btn btn-sm btn-outline-warning">Generate</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Selection Modal -->
+<div class="modal fade" id="deviceSelectionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Devices</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" id="modalDeviceSearch" class="form-control" placeholder="Search devices...">
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllDevices"></th>
+                                <th>Device ID</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviceListBody">
+                            <!-- Device list will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmDeviceSelection()">Select Devices</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignment Selection Modal -->
+<div class="modal fade" id="assignmentSelectionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Assignments</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" id="modalAssignmentSearch" class="form-control" placeholder="Search assignments...">
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllAssignments"></th>
+                                <th>Device</th>
+                                <th>Assigned To</th>
+                                <th>Assignment Date</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignmentListBody">
+                            <!-- Assignment list will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmAssignmentSelection()">Select Assignments</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize form validation
+    initializeFormValidation();
+    
+    // Setup dynamic field switching
+    setupDynamicFields();
+    
+    // Setup search functionality
+    setupSearchFunctionality();
+    
+    // Setup modal functionality
+    setupModalFunctionality();
+});
+
+function initializeFormValidation() {
+    // Bootstrap validation
+    const forms = document.querySelectorAll('.needs-validation');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+    });
+}
+
+function setupDynamicFields() {
+    // Device action type change
+    document.getElementById('deviceActionType').addEventListener('change', function() {
+        const actionType = this.value;
+        const actionFields = document.getElementById('deviceActionFields');
+        const allFields = document.querySelectorAll('.action-fields');
+        
+        // Hide all fields first
+        allFields.forEach(field => {
+            field.style.display = 'none';
+        });
+        
+        if (actionType) {
+            actionFields.style.display = 'block';
+            
+            // Show specific fields based on action type
+            switch(actionType) {
+                case 'update_status':
+                    document.getElementById('statusFields').style.display = 'block';
+                    break;
+                case 'update_condition':
+                    document.getElementById('conditionFields').style.display = 'block';
+                    break;
+                case 'update_location':
+                    document.getElementById('locationFields').style.display = 'block';
+                    break;
+                case 'update_category':
+                    document.getElementById('categoryFields').style.display = 'block';
+                    break;
+                case 'add_maintenance':
+                    document.getElementById('maintenanceFields').style.display = 'block';
+                    break;
+                case 'retire':
+                    document.getElementById('retirementFields').style.display = 'block';
+                    break;
+            }
+        } else {
+            actionFields.style.display = 'none';
+        }
+    });
+
+    // Assignment action type change
+    document.getElementById('assignmentActionType').addEventListener('change', function() {
+        const actionType = this.value;
+        const actionFields = document.getElementById('assignmentActionFields');
+        const allFields = document.querySelectorAll('#assignmentActionFields .action-fields');
+        
+        // Hide all fields first
+        allFields.forEach(field => {
+            field.style.display = 'none';
+        });
+        
+        if (actionType) {
+            actionFields.style.display = 'block';
+            
+            // Show specific fields based on action type
+            switch(actionType) {
+                case 'bulk_assign':
+                    document.getElementById('bulkAssignFields').style.display = 'block';
+                    break;
+                case 'bulk_return':
+                    document.getElementById('bulkReturnFields').style.display = 'block';
+                    break;
+                case 'transfer_assignments':
+                    document.getElementById('transferFields').style.display = 'block';
+                    break;
+            }
+        } else {
+            actionFields.style.display = 'none';
+        }
+    });
+}
+
+function setupSearchFunctionality() {
+    // Device search
+    const deviceSearch = document.getElementById('deviceSearch');
+    if (deviceSearch) {
+        deviceSearch.addEventListener('input', function() {
+            // Implement live search functionality
+            debounceSearch(this.value, 'devices');
+        });
+    }
+
+    // Assignment search
+    const assignmentSearch = document.getElementById('assignmentSearch');
+    if (assignmentSearch) {
+        assignmentSearch.addEventListener('input', function() {
+            // Implement live search functionality
+            debounceSearch(this.value, 'assignments');
+        });
+    }
+}
+
+function setupModalFunctionality() {
+    // Setup device selection modal
+    const deviceModal = document.getElementById('deviceSelectionModal');
+    if (deviceModal) {
+        deviceModal.addEventListener('shown.bs.modal', function() {
+            loadDeviceList();
+        });
+    }
+
+    // Setup assignment selection modal
+    const assignmentModal = document.getElementById('assignmentSelectionModal');
+    if (assignmentModal) {
+        assignmentModal.addEventListener('shown.bs.modal', function() {
+            loadAssignmentList();
+        });
+    }
+}
+
+function debounceSearch(searchTerm, type) {
+    clearTimeout(window.searchTimeout);
+    window.searchTimeout = setTimeout(() => {
+        performSearch(searchTerm, type);
+    }, 300);
+}
+
+function performSearch(searchTerm, type) {
+    // Implement search functionality
+    console.log(`Searching for ${searchTerm} in ${type}`);
+}
+
+function loadDeviceList() {
+    // Load devices for selection modal
+    const tbody = document.getElementById('deviceListBody');
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading devices...</td></tr>';
+    
+    // Simulate loading devices
+    setTimeout(() => {
+        tbody.innerHTML = `
+            <tr>
+                <td><input type="checkbox" class="device-select" value="1"></td>
+                <td>DEV001</td>
+                <td>Laptop Dell Latitude</td>
+                <td><span class="badge bg-info">Temporary</span></td>
+            </tr>
+        `;
+    }, 500);
+}
+
+function confirmDeviceSelection() {
+    const selectedDevices = Array.from(document.querySelectorAll('.device-select:checked'));
+    const selectedDevicesDiv = document.getElementById('selectedDevices');
+    
+    if (selectedDevices.length > 0) {
+        const deviceInfo = selectedDevices.map(checkbox => {
+            const row = checkbox.closest('tr');
+            const deviceId = row.cells[1].textContent;
+            const deviceName = row.cells[2].textContent;
+            return `${deviceId} - ${deviceName}`;
+        });
+        
+        selectedDevicesDiv.innerHTML = `
+            <div class="d-flex flex-wrap gap-1">
+                ${deviceInfo.map(info => `
+                    <span class="badge bg-primary">${info}
+                        <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.7em;"></button>
+                    </span>
+                `).join('')}
+            </div>
+            <small class="text-success">${selectedDevices.length} device(s) selected</small>
+        `;
+    } else {
+        selectedDevicesDiv.innerHTML = '<small class="text-muted">No devices selected</small>';
+    }
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('deviceSelectionModal'));
+    modal.hide();
+}
+
+function confirmAssignmentSelection() {
+    const selectedAssignments = Array.from(document.querySelectorAll('.assignment-select:checked'));
+    
+    if (selectedAssignments.length > 0) {
+        console.log(`Selected ${selectedAssignments.length} assignments`);
+        // Update UI to show selected assignments
+    }
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('assignmentSelectionModal'));
+    modal.hide();
+}
+
+function resetForm(formId) {
+    const form = document.getElementById(formId);
+    form.reset();
+    form.classList.remove('was-validated');
+    
+    // Hide dynamic fields
+    const actionFields = form.querySelector('[id$="ActionFields"]');
+    if (actionFields) {
+        actionFields.style.display = 'none';
+    }
+    
+    // Reset selected items display
+    if (formId === 'deviceBulkForm') {
+        document.getElementById('selectedDevices').innerHTML = '<small class="text-muted">No devices selected</small>';
+    }
+}
+
+// Select all functionality for modals
+document.addEventListener('change', function(e) {
+    if (e.target.id === 'selectAllDevices') {
+        const checkboxes = document.querySelectorAll('.device-select');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = e.target.checked;
+        });
+    }
+    
+    if (e.target.id === 'selectAllAssignments') {
+        const checkboxes = document.querySelectorAll('.assignment-select');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = e.target.checked;
+        });
+    }
+});
+
+// Form submission handling
+document.getElementById('deviceBulkForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const selectedDevices = Array.from(document.querySelectorAll('.device-select:checked')).map(cb => cb.value);
+    
+    if (selectedDevices.length === 0) {
+        alert('Please select at least one device.');
+        return;
+    }
+    
+    // Add selected devices to form data
+    selectedDevices.forEach(deviceId => {
+        formData.append('device_ids', deviceId);
+    });
+    
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+    submitBtn.disabled = true;
+    
+    // Simulate form submission
+    setTimeout(() => {
+        alert('Bulk action completed successfully!');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        resetForm('deviceBulkForm');
+    }, 2000);
+});
+
+document.getElementById('assignmentBulkForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const actionType = formData.get('assignment_action_type');
+    
+    if (!actionType) {
+        alert('Please select an action type.');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Processing...';
+    submitBtn.disabled = true;
+    
+    // Simulate form submission
+    setTimeout(() => {
+        alert('Assignment action completed successfully!');
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+        resetForm('assignmentBulkForm');
+    }, 2000);
+});
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>

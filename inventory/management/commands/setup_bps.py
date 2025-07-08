@@ -1,10 +1,11 @@
 # inventory/management/commands/setup_bps.py
+# Location: bps_inventory/apps/inventory/management/commands/setup_bps.py
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
 from inventory.models import (
-    Organization, Building, Floor, Department, Room, Location,
+    Building, Floor, Department, Room, Location,
     DeviceCategory, DeviceSubCategory, DeviceType, Vendor, Staff
 )
 from authentication.models import UserRole
@@ -27,8 +28,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--admin-password',
             type=str,
-            default='admin123',
-            help='Admin password (default: admin123)',
+            default='123',
+            help='Admin password (default: 123)',
         )
 
     def handle(self, *args, **options):
@@ -63,34 +64,23 @@ class Command(BaseCommand):
     def create_organization_structure(self):
         self.stdout.write('Creating organization structure...')
         
-        # Create organization
-        org, created = Organization.objects.get_or_create(
-            code='BPS',
-            defaults={
-                'name': 'Bangladesh Parliament Secretariat',
-                'address': 'Sher-e-Bangla Nagar, Dhaka-1207, Bangladesh',
-                'contact_phone': '+880-2-9123456',
-                'contact_email': 'info@parliament.gov.bd'
-            }
-        )
-        
-        # Create main building
+        # Create main building (no organization model based on current structure)
         building, created = Building.objects.get_or_create(
-            organization=org,
             code='MAIN',
             defaults={
                 'name': 'Main Building',
                 'address': 'Sher-e-Bangla Nagar, Dhaka-1207, Bangladesh',
-                'contact_person': 'IT Administrator'
+                'description': 'Bangladesh Parliament Secretariat Main Building',
+                'is_active': True
             }
         )
         
         # Create floors
         floors_data = [
-            ('G', 'Ground Floor'),
-            ('1', 'First Floor'),
-            ('2', 'Second Floor'),
-            ('3', 'Third Floor'),
+            (0, 'Ground Floor'),
+            (1, 'First Floor'),
+            (2, 'Second Floor'),
+            (3, 'Third Floor'),
         ]
         
         floors = {}
@@ -98,17 +88,21 @@ class Command(BaseCommand):
             floor, created = Floor.objects.get_or_create(
                 building=building,
                 floor_number=floor_num,
-                defaults={'name': floor_name}
+                defaults={
+                    'name': floor_name,
+                    'description': f'{floor_name} of {building.name}',
+                    'is_active': True
+                }
             )
             floors[floor_num] = floor
         
         # Create departments
         departments_data = [
-            ('IT', 'Information Technology Department', '2'),
-            ('ADMIN', 'Administration Department', '1'),
-            ('FINANCE', 'Finance Department', '1'),
-            ('HR', 'Human Resources Department', '2'),
-            ('SECURITY', 'Security Department', 'G'),
+            ('IT', 'Information Technology Department', 2),
+            ('ADMIN', 'Administration Department', 1),
+            ('FINANCE', 'Finance Department', 1),
+            ('HR', 'Human Resources Department', 2),
+            ('SECURITY', 'Security Department', 0),
         ]
         
         departments = {}
@@ -118,7 +112,10 @@ class Command(BaseCommand):
                 code=dept_code,
                 defaults={
                     'name': dept_name,
-                    'contact_email': f'{dept_code.lower()}@parliament.gov.bd'
+                    'head_of_department': f'{dept_name} Head',
+                    'contact_email': f'{dept_code.lower()}@parliament.gov.bd',
+                    'contact_phone': '+880-2-9123456',
+                    'is_active': True
                 }
             )
             departments[dept_code] = dept
@@ -130,77 +127,75 @@ class Command(BaseCommand):
                 department=dept,
                 room_number='001',
                 defaults={
-                    'name': f'{dept.name} Main Office',
-                    'room_type': 'OFFICE',
-                    'capacity': 20
+                    'room_name': f'{dept.name} Main Office',
+                    'capacity': 20,
+                    'is_active': True
                 }
             )
             
-            # Create sample locations in the room
-            for i in range(1, 6):
-                Location.objects.get_or_create(
-                    room=room,
-                    location_code=f'DESK-{i:02d}',
-                    defaults={
-                        'name': f'Desk {i}',
-                        'location_type': 'DESK',
-                        'capacity': 1
-                    }
-                )
+            # Create main location for each department (without specific desk assignments)
+            location, created = Location.objects.get_or_create(
+                building=building,
+                floor=dept.floor,
+                department=dept,
+                room=room,
+                defaults={
+                    'description': f'Main office location for {dept.name}',
+                    'is_active': True
+                }
+            )
 
     def create_device_categories(self):
         self.stdout.write('Creating device categories...')
         
         categories_data = [
-            ('DATA_CENTER', 'Data Centre Equipment', [
-                ('SERVERS', 'Servers', ['PHYSICAL_SERVER', 'VIRTUAL_SERVER', 'BLADE_SERVER']),
-                ('STORAGE', 'Storage Systems', ['NAS', 'SAN', 'BACKUP_SYSTEM']),
-                ('NETWORK_INFRA', 'Network Infrastructure', ['CORE_SWITCH', 'ROUTER', 'FIREWALL']),
+            ('Data Centre Equipment', [
+                ('Servers', ['Physical Server', 'Virtual Server', 'Blade Server']),
+                ('Storage Systems', ['NAS', 'SAN', 'Backup System']),
+                ('Network Infrastructure', ['Core Switch', 'Router', 'Firewall']),
             ]),
-            ('NETWORK', 'Network Equipment', [
-                ('ACCESS_POINTS', 'Access Points', ['INDOOR_AP', 'OUTDOOR_AP', 'MESH_NODE']),
-                ('SWITCHES', 'Switches', ['ACCESS_SWITCH', 'POE_SWITCH', 'MANAGED_SWITCH']),
-                ('ROUTERS', 'Routers', ['EDGE_ROUTER', 'BRANCH_ROUTER', 'CORE_ROUTER']),
+            ('Network Equipment', [
+                ('Access Points', ['Indoor AP', 'Outdoor AP', 'Mesh Node']),
+                ('Switches', ['Access Switch', 'PoE Switch', 'Managed Switch']),
+                ('Routers', ['Edge Router', 'Branch Router', 'Core Router']),
             ]),
-            ('COMPUTING', 'End-User Computing Devices', [
-                ('COMPUTERS', 'Computers', ['DESKTOP', 'LAPTOP', 'WORKSTATION', 'TABLET']),
-                ('PERIPHERALS', 'Peripherals', ['MONITOR', 'KEYBOARD', 'MOUSE', 'WEBCAM']),
-                ('PRINTERS', 'Printing Equipment', ['LASER_PRINTER', 'INKJET_PRINTER', 'SCANNER']),
+            ('End-User Computing Devices', [
+                ('Computers', ['Desktop', 'Laptop', 'Tablet']),
+                ('Peripherals', ['Monitor', 'Keyboard', 'Mouse', 'Webcam']),
+                ('Printing Equipment', ['Laser Printer', 'Inkjet Printer', 'Scanner']),
             ]),
-            ('DISPLAY', 'Projectors and Displays', [
-                ('PROJECTORS', 'Projectors', ['DLP_PROJECTOR', 'LCD_PROJECTOR', 'LED_PROJECTOR']),
-                ('DISPLAYS', 'Digital Displays', ['LED_DISPLAY', 'LCD_DISPLAY', 'SMART_TV']),
+            ('Projectors and Displays', [
+                ('Projectors', ['LCD Projector', 'LED Projector']),
+                ('Digital Displays', ['LED Display', 'LCD Display', 'Smart TV']),
             ]),
         ]
         
-        for cat_type, cat_name, subcategories in categories_data:
+        for cat_name, subcategories in categories_data:
             category, created = DeviceCategory.objects.get_or_create(
-                category_type=cat_type,
+                name=cat_name,
                 defaults={
-                    'name': cat_name,
                     'description': f'{cat_name} for BPS IT Infrastructure',
                     'is_active': True
                 }
             )
             
-            for subcat_code, subcat_name, device_types in subcategories:
+            for subcat_name, device_types in subcategories:
                 subcategory, created = DeviceSubCategory.objects.get_or_create(
                     category=category,
-                    code=subcat_code,
+                    name=subcat_name,
                     defaults={
-                        'name': subcat_name,
                         'description': f'{subcat_name} subcategory',
                         'is_active': True
                     }
                 )
                 
-                for dtype_code in device_types:
+                for dtype_name in device_types:
                     DeviceType.objects.get_or_create(
                         subcategory=subcategory,
-                        code=dtype_code,
+                        name=dtype_name,
                         defaults={
-                            'name': dtype_code.replace('_', ' ').title(),
-                            'description': f'{dtype_code.replace("_", " ").title()} device type',
+                            'description': f'{dtype_name} device type',
+                            'specifications_template': {},
                             'is_active': True
                         }
                     )
@@ -216,7 +211,14 @@ class Command(BaseCommand):
                 'can_generate_reports': True,
                 'can_manage_users': True,
                 'can_system_admin': True,
-                'restricted_to_own_department': False
+                'can_manage_maintenance': True,
+                'can_manage_vendors': True,
+                'can_bulk_operations': True,
+                'can_export_data': True,
+                'restricted_to_own_department': False,
+                'can_view_financial_data': True,
+                'can_scan_qr_codes': True,
+                'can_generate_qr_codes': True
             }),
             ('IT_OFFICER', 'IT Officer', 'Device and assignment management', {
                 'can_view_all_devices': True,
@@ -225,7 +227,14 @@ class Command(BaseCommand):
                 'can_generate_reports': True,
                 'can_manage_users': False,
                 'can_system_admin': False,
-                'restricted_to_own_department': False
+                'can_manage_maintenance': True,
+                'can_manage_vendors': False,
+                'can_bulk_operations': True,
+                'can_export_data': True,
+                'restricted_to_own_department': False,
+                'can_view_financial_data': False,
+                'can_scan_qr_codes': True,
+                'can_generate_qr_codes': True
             }),
             ('DEPARTMENT_HEAD', 'Department Head', 'Department-level oversight', {
                 'can_view_all_devices': False,
@@ -234,16 +243,30 @@ class Command(BaseCommand):
                 'can_generate_reports': True,
                 'can_manage_users': False,
                 'can_system_admin': False,
-                'restricted_to_own_department': True
+                'can_manage_maintenance': False,
+                'can_manage_vendors': False,
+                'can_bulk_operations': False,
+                'can_export_data': True,
+                'restricted_to_own_department': True,
+                'can_view_financial_data': False,
+                'can_scan_qr_codes': True,
+                'can_generate_qr_codes': False
             }),
             ('GENERAL_STAFF', 'General Staff', 'View personal assignments only', {
                 'can_view_all_devices': False,
                 'can_manage_assignments': False,
                 'can_approve_requests': False,
-                'can_generate_reports': True,
+                'can_generate_reports': False,
                 'can_manage_users': False,
                 'can_system_admin': False,
-                'restricted_to_own_department': True
+                'can_manage_maintenance': False,
+                'can_manage_vendors': False,
+                'can_bulk_operations': False,
+                'can_export_data': False,
+                'restricted_to_own_department': True,
+                'can_view_financial_data': False,
+                'can_scan_qr_codes': True,
+                'can_generate_qr_codes': False
             }),
         ]
         
@@ -253,6 +276,8 @@ class Command(BaseCommand):
                 defaults={
                     'display_name': display_name,
                     'description': description,
+                    'permissions': {},  # Using the JSONField for additional permissions
+                    'is_active': True,
                     **permissions
                 }
             )
@@ -261,17 +286,16 @@ class Command(BaseCommand):
         self.stdout.write('Creating sample vendor...')
         
         Vendor.objects.get_or_create(
-            vendor_code='DELL001',
+            name='Dell Technologies Bangladesh',
             defaults={
-                'name': 'Dell Technologies Bangladesh',
-                'vendor_type': 'MANUFACTURER',
+                'vendor_type': 'HARDWARE_SUPPLIER',
                 'contact_person': 'Sales Manager',
                 'phone': '+880-2-9876543',
                 'email': 'sales@dell.com.bd',
-                'address': 'Dhaka, Bangladesh',
+                'address': 'Gulshan, Dhaka, Bangladesh',
                 'website': 'https://www.dell.com',
-                'is_active': True,
-                'performance_rating': 4.5
+                'tax_id': 'BIN-123456789',
+                'is_active': True
             }
         )
 
@@ -288,24 +312,23 @@ class Command(BaseCommand):
             username=username,
             email='admin@parliament.gov.bd',
             password=password,
-            first_name='System',
-            last_name='Administrator'
+            first_name='Al-Amin',
+            last_name='Hossain'
         )
         
-        # Create staff profile
+        # Create staff profile using correct field names
         it_dept = Department.objects.filter(code='IT').first()
         if it_dept:
             Staff.objects.get_or_create(
                 user=user,
                 defaults={
                     'employee_id': '110100091',
-                    'full_name': f'{user.first_name} {user.last_name}',
-                    'designation': 'Computer Programmer',
                     'department': it_dept,
-                    'email': user.email,
-                    'security_clearance': 'TOP_SECRET',
-                    'date_joined': '2025-01-01',
-                    'is_active': True
+                    'designation': 'Computer Programmer',
+                    'employment_type': 'PERMANENT',
+                    'phone_number': '+880-1712345678',
+                    'is_active': True,
+                    'joining_date': '2025-01-01'
                 }
             )
         

@@ -5,9 +5,63 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
+from django import forms 
 from .models import UserRole, UserRoleAssignment, UserProfile, UserSession
 from django.urls import reverse
 from django.utils import timezone
+
+# ================================
+# CUSTOM FORMS
+# ================================
+
+class UserRoleAssignmentForm(forms.ModelForm):
+    """Custom form for UserRoleAssignment to make department optional"""
+    
+    class Meta:
+        model = UserRoleAssignment
+        fields = '__all__'
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Make department field explicitly optional
+        self.fields['department'].required = False
+        self.fields['department'].empty_label = "No Department (System-wide access)"
+        
+        # Add help text
+        self.fields['department'].help_text = (
+            "Select department for Department Head and General Staff roles. "
+            "Leave empty for IT Administrator and IT Officer (system-wide access)."
+        )
+        
+        # Style the form fields
+        self.fields['role'].widget.attrs.update({'class': 'form-control'})
+        self.fields['department'].widget.attrs.update({'class': 'form-control'})
+        self.fields['user'].widget.attrs.update({'class': 'form-control'})
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        role = cleaned_data.get('role')
+        department = cleaned_data.get('department')
+        
+        if role:
+            # Check if this role typically requires a department
+            department_required_roles = ['DEPARTMENT_HEAD', 'GENERAL_STAFF', 'MANAGER']
+            system_wide_roles = ['IT_ADMINISTRATOR', 'IT_OFFICER', 'AUDITOR']
+            
+            # Warning for department-required roles without department
+            if role.name in department_required_roles and not department:
+                self.add_error('department', 
+                    f'{role.display_name} role typically requires a department assignment. '
+                    f'Are you sure you want system-wide access?'
+                )
+            
+            # Info message for system-wide roles with department
+            if role.name in system_wide_roles and department:
+                # Don't error, just note it's unusual
+                pass
+        
+        return cleaned_data
 
 # ================================
 # USER ROLE MANAGEMENT
@@ -82,8 +136,10 @@ class UserRoleAdmin(admin.ModelAdmin):
 
 @admin.register(UserRoleAssignment)
 class UserRoleAssignmentAdmin(admin.ModelAdmin):
+    form = UserRoleAssignmentForm  # <-- ADD THIS LINE TO USE CUSTOM FORM
+    
     list_display = (
-        'user', 'role', 'get_department', 'is_active', 'assigned_by', 'start_date', 'end_date', 'is_currently_active'
+        'user', 'role', 'get_department_scope', 'is_active', 'assigned_by', 'start_date', 'end_date', 'is_currently_active'
     )
     list_filter = (
         'is_active', 'role', 'assigned_at', 'start_date', 'end_date'
@@ -96,7 +152,14 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Assignment Details', {
-            'fields': ('user', 'role', 'department', 'is_active', 'start_date', 'end_date')
+            'fields': ('user', 'role', 'department', 'is_active', 'start_date', 'end_date'),
+            'description': (
+                '<div style="background: #e8f4fd; padding: 12px; border-left: 4px solid #2196F3; margin-bottom: 20px; border-radius: 4px;">'
+                '<h4 style="margin: 0 0 8px 0; color: #1976D2;">Department Assignment Guidelines</h4>'
+                '<p style="margin: 0;"><strong>IT Administrator & IT Officer:</strong> Leave department empty for system-wide access</p>'
+                '<p style="margin: 4px 0 0 0;"><strong>Department Head & General Staff:</strong> Select specific department</p>'
+                '</div>'
+            )
         }),
         ('Assignment Context', {
             'fields': ('notes', 'assigned_by'),
@@ -107,6 +170,28 @@ class UserRoleAssignmentAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+    
+    def get_department_scope(self, obj):
+        """Show department name or system-wide access indicator"""
+        if obj.department:
+            return format_html(
+                '<span style="background: #4CAF50; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px;">'
+                '{}</span>',
+                obj.department.name
+            )
+        else:
+            # Check if role should have system-wide access
+            if obj.role and not obj.role.restricted_to_own_department:
+                return format_html(
+                    '<span style="background: #2196F3; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px;">'
+                    '🌐 System-wide</span>'
+                )
+            else:
+                return format_html(
+                    '<span style="background: #FF9800; color: white; padding: 3px 8px; border-radius: 12px; font-size: 11px;">'
+                    '⚠️ No Department</span>'
+                )
+    get_department_scope.short_description = 'Access Scope'
     
     def get_department(self, obj):
         """Get department from UserRoleAssignment or user's staff profile"""

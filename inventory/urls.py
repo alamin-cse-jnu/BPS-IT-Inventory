@@ -1,5 +1,3 @@
-
-
 from django.urls import path
 from . import views
 
@@ -15,7 +13,7 @@ urlpatterns = [
     # DEVICE MANAGEMENT - CONFIRMED EXISTS
     # ================================
     path('devices/', views.device_list, name='device_list'),
-    path('devices/add/', views.device_create, name='device_add'),
+    path('devices/add/', views.device_create, name='device_create'),
     path('devices/<str:device_id>/', views.device_detail, name='device_detail'),
     path('devices/<str:device_id>/edit/', views.device_edit, name='device_edit'),
     path('devices/<str:device_id>/delete/', views.device_delete, name='device_delete'),
@@ -26,7 +24,7 @@ urlpatterns = [
     # ASSIGNMENT MANAGEMENT - CONFIRMED EXISTS
     # ================================
     path('assignments/', views.assignment_list, name='assignment_list'),
-    path('assignments/add/', views.assignment_create, name='assignment_add'),
+    path('assignments/add/', views.assignment_create, name='assignment_create'),
     path('assignments/<str:assignment_id>/', views.assignment_detail, name='assignment_detail'),
     path('assignments/<str:assignment_id>/edit/', views.assignment_edit, name='assignment_edit'),
     path('assignments/<str:assignment_id>/return/', views.assignment_return, name='assignment_return'),
@@ -36,10 +34,17 @@ urlpatterns = [
     path('assignments/overdue/', views.overdue_assignments_list, name='overdue_assignments_list'),
     
     # ================================
+    # PERSONAL ASSIGNMENT VIEWS
+    # ================================
+    path('my-assignments/', views.my_assignments, name='my_assignments'),
+    path('my-assignments/<str:assignment_id>/', views.my_assignment_detail, name='my_assignment_detail'),
+
+
+    # ================================
     # STAFF MANAGEMENT - CONFIRMED EXISTS
     # ================================
     path('staff/', views.staff_list, name='staff_list'),
-    path('staff/add/', views.staff_create, name='staff_add'),
+    path('staff/add/', views.staff_create, name='staff_create'),
     path('staff/<str:staff_id>/', views.staff_detail, name='staff_detail'),
     path('staff/<str:staff_id>/edit/', views.staff_edit, name='staff_edit'),
     path('staff/<str:staff_id>/delete/', views.staff_delete, name='staff_delete'),

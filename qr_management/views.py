@@ -222,7 +222,7 @@ def qr_generate(request, device_id):
             )
         }
         
-        return render(request, 'qr_management/generate.html', context)
+        return render(request, 'qr_management/generation/qr_single_generate.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating QR code: {str(e)}")
@@ -322,7 +322,7 @@ def qr_bulk_generate(request):
         }
     }
     
-    return render(request, 'qr_management/bulk_generate.html', context)
+    return render(request, 'qr_management/generation/qr_bulk_generate.html', context)
 
 def create_qr_label(device, size='medium', include_text=True):
     """Create a printable QR label for a device"""
