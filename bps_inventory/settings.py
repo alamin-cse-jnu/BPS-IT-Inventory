@@ -1,3 +1,4 @@
+# bps_inventory/settings.py
 """
 Django settings for BPS IT Inventory Management System.
 Enhanced with Phase 3 functionality and all necessary configurations.
@@ -68,10 +69,11 @@ if DEBUG:
         INSTALLED_APPS.append('debug_toolbar')
         MIDDLEWARE.insert(1, 'debug_toolbar.middleware.DebugToolbarMiddleware')
         
-        # Debug toolbar settings
+        # Debug toolbar settings - FIXED
         import socket
         hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
-        INTERNAL_IPS = [ip[: ip.rfind(".") + ".1"] for ip in ips] + ["127.0.0.1", "10.0.2.2"]
+        # FIX: Properly handle string slicing and concatenation
+        INTERNAL_IPS = [ip[:ip.rfind(".")] + ".1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
         
         DEBUG_TOOLBAR_PANELS = [
             'debug_toolbar.panels.versions.VersionsPanel',
@@ -193,7 +195,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 25,
+    'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
@@ -202,13 +204,12 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# Spectacular settings for API documentation
+# DRF Spectacular Settings
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'BPS IT Inventory Management API',
-    'DESCRIPTION': 'API documentation for BPS IT Inventory Management System',
+    'TITLE': 'BPS IT Inventory API',
+    'DESCRIPTION': 'API for Bangladesh Parliament Secretariat IT Inventory Management System',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 # Crispy Forms Configuration
@@ -216,13 +217,14 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 # CORS Configuration
-CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # Logging Configuration
 LOGGING = {
@@ -242,7 +244,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'bps_inventory.log',
+            'filename': BASE_DIR / 'logs' / 'django.log',
             'formatter': 'verbose',
         },
         'console': {
