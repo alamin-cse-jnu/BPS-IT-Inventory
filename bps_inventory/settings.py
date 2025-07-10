@@ -51,14 +51,14 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
     
-    # Custom Authentication Middleware (added after AuthenticationMiddleware)
+    # Custom Authentication Middleware (moved after MessageMiddleware)
     'authentication.middleware.AuthenticationManagementMiddleware',
     'authentication.middleware.SessionSecurityMiddleware',
     'authentication.middleware.RoleBasedAccessMiddleware',
     'authentication.middleware.DeviceAccessControlMiddleware',
     
-    'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 

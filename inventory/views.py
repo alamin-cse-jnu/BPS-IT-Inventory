@@ -1598,11 +1598,11 @@ def staff_list(request):
             'selected_department': department_id,
         }
         
-        return render(request, 'inventory/staff_list.html', context)
+        return render(request, 'inventory/staff/staff_list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading staff list: {str(e)}")
-        return render(request, 'inventory/staff_list.html', {'page_obj': None})
+        return render(request, 'inventory/staff/staff_list.html', {'page_obj': None})
 
 @login_required
 def staff_detail(request, staff_id):
@@ -1645,7 +1645,7 @@ def staff_detail(request, staff_id):
             'recent_activities': recent_activities,
         }
         
-        return render(request, 'inventory/staff_detail.html', context)
+        return render(request, 'inventory/staff/staff_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading staff details: {str(e)}")
@@ -1683,7 +1683,7 @@ def staff_create(request):
         'title': 'Add New Staff Member',
         'action': 'Create',
     }
-    return render(request, 'inventory/staff_form.html', context)
+    return render(request, 'inventory/staff/staff_form.html', context)
 
 @login_required
 @permission_required('inventory.change_staff', raise_exception=True)
@@ -1723,7 +1723,7 @@ def staff_edit(request, staff_id):
             'title': f'Edit Staff: {staff.get_full_name()}',
             'action': 'Update',
         }
-        return render(request, 'inventory/staff_form.html', context)
+        return render(request, 'inventory/staff/staff_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading staff for edit: {str(e)}")
@@ -1777,7 +1777,7 @@ def staff_delete(request, staff_id):
             'active_assignments': active_assignments,
             'title': f'Delete Staff: {staff.get_full_name()}',
         }
-        return render(request, 'inventory/staff_delete.html', context)
+        return render(request, 'inventory/staff/staff_delete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading staff for deletion: {str(e)}")
@@ -1831,7 +1831,7 @@ def staff_assignments(request, staff_id):
             'stats': stats,
         }
         
-        return render(request, 'inventory/staff_assignments.html', context)
+        return render(request, 'inventory/staff/staff_assignments.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading staff assignments: {str(e)}")
@@ -1933,7 +1933,7 @@ def department_detail(request, department_id):
             'recent_assignments': recent_assignments,
         }
         
-        return render(request, 'inventory/department_detail.html', context)
+        return render(request, 'inventory/staff/department_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading department details: {str(e)}")
