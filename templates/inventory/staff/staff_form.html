@@ -6,698 +6,680 @@
 {% endblock %}
 
 {% block extra_css %}
-<style>
-    .form-container {
-        background: white;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        padding: 2rem;
-        margin-bottom: 2rem;
-    }
-    
-    .form-header {
-        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
-        color: white;
-        margin: -2rem -2rem 2rem -2rem;
-        padding: 1.5rem 2rem;
-        border-radius: 0.5rem 0.5rem 0 0;
-    }
-    
-    .form-header h2 {
-        margin: 0;
-        font-weight: 600;
-    }
-    
-    .form-header .text-muted {
-        opacity: 0.9;
-        margin-top: 0.25rem;
-    }
-    
-    .form-section {
-        margin-bottom: 2rem;
-        padding-bottom: 1.5rem;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .form-section:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-    }
-    
-    .section-title {
-        color: #495057;
-        font-weight: 600;
-        font-size: 1.1rem;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-    }
-    
-    .section-title i {
-        margin-right: 0.5rem;
-        color: #0066cc;
-    }
-    
-    .form-group {
-        margin-bottom: 1.25rem;
-    }
-    
-    .form-label {
-        font-weight: 600;
-        color: #495057;
-        margin-bottom: 0.5rem;
-    }
-    
-    .form-control, .form-select {
-        border-radius: 0.375rem;
-        border: 1px solid #ced4da;
-        padding: 0.75rem;
-        transition: all 0.2s ease;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #0066cc;
-        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
-    }
-    
-    .form-text {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-top: 0.25rem;
-    }
-    
-    .required-field::after {
-        content: " *";
-        color: #dc3545;
-        font-weight: bold;
-    }
-    
-    .error-message {
-        background-color: #f8d7da;
-        color: #721c24;
-        padding: 0.75rem;
-        border-radius: 0.375rem;
-        margin-bottom: 1rem;
-        border: 1px solid #f5c6cb;
-    }
-    
-    .error-message ul {
-        margin: 0;
-        padding-left: 1.5rem;
-    }
-    
-    .form-actions {
-        background-color: #f8f9fa;
-        margin: 2rem -2rem -2rem -2rem;
-        padding: 1.5rem 2rem;
-        border-radius: 0 0 0.5rem 0.5rem;
-        border-top: 1px solid #e9ecef;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .btn-primary {
-        background: linear-gradient(135deg, #0066cc 0%, #0056b3 100%);
-        border: none;
-        padding: 0.75rem 1.5rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-    
-    .btn-primary:hover {
-        background: linear-gradient(135deg, #0056b3 0%, #004499 100%);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
-    }
-    
-    .btn-secondary {
-        padding: 0.75rem 1.5rem;
-        font-weight: 500;
-    }
-    
-    .form-check {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem;
-        background-color: #f8f9fa;
-        border-radius: 0.375rem;
-        border: 1px solid #e9ecef;
-    }
-    
-    .form-check-input {
-        margin-right: 0.75rem;
-    }
-    
-    .form-check-label {
-        margin: 0;
-        font-weight: 500;
-        color: #495057;
-    }
-    
-    .avatar-preview {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-    
-    .password-help {
-        background-color: #e3f2fd;
-        border: 1px solid #bbdefb;
-        border-radius: 0.375rem;
-        padding: 1rem;
-        margin-top: 1rem;
-    }
-    
-    .password-help h6 {
-        color: #1976d2;
-        margin-bottom: 0.5rem;
-    }
-    
-    .password-help ul {
-        margin: 0;
-        padding-left: 1.5rem;
-        color: #1976d2;
-    }
-    
-    @media (max-width: 768px) {
-        .form-container {
-            padding: 1rem;
+    <style>
+        .location-selection-options {
+            margin-bottom: 1rem;
         }
-        
-        .form-header {
-            margin: -1rem -1rem 2rem -1rem;
-            padding: 1rem;
+
+        .location-hierarchy-selector {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
         }
-        
-        .form-actions {
-            margin: 2rem -1rem -1rem -1rem;
-            padding: 1rem;
-            flex-direction: column;
-            gap: 1rem;
+
+        .cascade-parent, .cascade-child {
+            transition: all 0.3s ease;
         }
-        
-        .btn {
-            width: 100%;
+
+        .cascade-child:disabled {
+            background-color: #f8f9fa;
+            opacity: 0.7;
         }
-        
-        .btn-group {
-            width: 100%;
-            display: flex;
-            gap: 0.5rem;
+
+        .office-location-preview {
+            animation: fadeIn 0.3s ease-in;
         }
-        
-        .btn-group .btn {
-            flex: 1;
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-    }
-</style>
+
+        .office-location-badges .badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
+
+        .btn-group .btn-check:checked + .btn {
+            background-color: var(--bs-primary);
+            border-color: var(--bs-primary);
+            color: white;
+        }
+
+        .form-label i {
+            width: 16px;
+            text-align: center;
+            margin-right: 0.5rem;
+        }
+
+        .alert i {
+            margin-right: 0.5rem;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-3">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'inventory:staff_list' %}">Staff</a></li>
-            <li class="breadcrumb-item active">
-                {% if form.instance.pk %}Edit{% else %}Add{% endif %} Staff
-            </li>
-        </ol>
-    </nav>
+    <div class="container-fluid">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'staff_list' %}">Staff</a></li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    {% if form.instance.pk %}Edit{% else %}Add{% endif %} Staff
+                </li>
+            </ol>
+        </nav>
 
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="form-container">
-                <div class="form-header">
-                    <h2>
-                        {% if form.instance.pk %}
-                            <i class="fas fa-user-edit"></i> Edit Staff Member
-                        {% else %}
-                            <i class="fas fa-user-plus"></i> Add New Staff Member
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    {% if form.instance.pk %}
+                        Edit Staff Member
+                    {% else %}
+                        Add New Staff Member
+                    {% endif %}
+                </h3>
+                <p class="card-subtitle">
+                    {% if form.instance.pk %}
+                        Update information for {{ form.instance.get_full_name|default:form.instance.user.username }}
+                    {% else %}
+                        Add a new staff member to the system
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="card-body">
+                {% if form.errors or form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        <strong>Please correct the following errors:</strong>
+                        {% if form.non_field_errors %}
+                            <ul>
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
                         {% endif %}
-                    </h2>
-                    <div class="text-muted">
-                        {% if form.instance.pk %}
-                            Update information for {{ form.instance.get_full_name|default:form.instance.user.username }}
-                        {% else %}
-                            Add a new staff member to the system
+                        {% if form.errors %}
+                            <ul>
+                                {% for field, errors in form.errors.items %}
+                                    {% for error in errors %}
+                                        <li>{{ field|title }}: {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            </ul>
                         {% endif %}
                     </div>
-                </div>
-
-                <!-- Form Errors -->
-                {% if form.errors or form.non_field_errors %}
-                <div class="error-message">
-                    <strong><i class="fas fa-exclamation-triangle"></i> Please correct the following errors:</strong>
-                    {% if form.non_field_errors %}
-                        <ul>
-                            {% for error in form.non_field_errors %}
-                                <li>{{ error }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                    {% if form.errors %}
-                        <ul>
-                            {% for field, errors in form.errors.items %}
-                                {% for error in errors %}
-                                    <li><strong>{{ field|title }}:</strong> {{ error }}</li>
-                                {% endfor %}
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
                 {% endif %}
 
-                <form method="post" id="staffForm" novalidate>
+                <form method="post">
                     {% csrf_token %}
-                    
-                    <!-- User Account Information -->
-                    <div class="form-section">
-                        <h4 class="section-title">
-                            <i class="fas fa-user-circle"></i> User Account Information
-                        </h4>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.first_name.id_for_label }}" class="form-label required-field">
-                                        First Name
-                                    </label>
-                                    {{ form.first_name }}
-                                    {% if form.first_name.errors %}
-                                        <div class="text-danger">{{ form.first_name.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.last_name.id_for_label }}" class="form-label required-field">
-                                        Last Name
-                                    </label>
-                                    {{ form.last_name }}
-                                    {% if form.last_name.errors %}
-                                        <div class="text-danger">{{ form.last_name.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.username.id_for_label }}" class="form-label required-field">
-                                        Username
-                                    </label>
-                                    {{ form.username }}
-                                    <div class="form-text">
-                                        Used for system login. Must be unique.
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h4>User Account Information</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                                        {{ form.first_name }}
+                                        {% if form.first_name.errors %}
+                                            <div class="text-danger">{{ form.first_name.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    {% if form.username.errors %}
-                                        <div class="text-danger">{{ form.username.errors.0 }}</div>
-                                    {% endif %}
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.email.id_for_label }}" class="form-label required-field">
-                                        Email Address
-                                    </label>
-                                    {{ form.email }}
-                                    {% if form.email.errors %}
-                                        <div class="text-danger">{{ form.email.errors.0 }}</div>
-                                    {% endif %}
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                                        {{ form.last_name }}
+                                        {% if form.last_name.errors %}
+                                            <div class="text-danger">{{ form.last_name.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.username.id_for_label }}" class="form-label">Username</label>
+                                        {{ form.username }}
+                                        <small class="form-text text-muted">Used for system login. Must be unique.</small>
+                                        {% if form.username.errors %}
+                                            <div class="text-danger">{{ form.username.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.email.id_for_label }}" class="form-label">Email Address</label>
+                                        {{ form.email }}
+                                        {% if form.email.errors %}
+                                            <div class="text-danger">{{ form.email.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         {% if not form.instance.pk %}
-                        <div class="password-help">
-                            <h6><i class="fas fa-info-circle"></i> Password Information</h6>
-                            <ul>
-                                <li>A temporary password will be generated automatically</li>
-                                <li>The staff member will be prompted to change it on first login</li>
-                                <li>Password must contain at least 8 characters</li>
-                                <li>Include uppercase, lowercase, numbers, and special characters</li>
-                            </ul>
-                        </div>
+                            <div class="col-md-12">
+                                <h4>Password Information</h4>
+                                <div class="alert alert-info">
+                                    <p>A temporary password will be generated automatically</p>
+                                    <p>The staff member will be prompted to change it on first login</p>
+                                    <p>Password must contain at least 8 characters</p>
+                                    <p>Include uppercase, lowercase, numbers, and special characters</p>
+                                </div>
+                            </div>
                         {% endif %}
-                    </div>
 
-                    <!-- Staff Information -->
-                    <div class="form-section">
-                        <h4 class="section-title">
-                            <i class="fas fa-id-badge"></i> Staff Information
-                        </h4>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.employee_id.id_for_label }}" class="form-label">
-                                        Employee ID
-                                    </label>
-                                    {{ form.employee_id }}
-                                    <div class="form-text">
-                                        Official employee identification number
+                        <div class="col-md-12">
+                            <h4>Staff Information</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.employee_id.id_for_label }}" class="form-label">Employee ID</label>
+                                        {{ form.employee_id }}
+                                        <small class="form-text text-muted">Official employee identification number</small>
+                                        {% if form.employee_id.errors %}
+                                            <div class="text-danger">{{ form.employee_id.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    {% if form.employee_id.errors %}
-                                        <div class="text-danger">{{ form.employee_id.errors.0 }}</div>
-                                    {% endif %}
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.designation.id_for_label }}" class="form-label">
-                                        Designation
-                                    </label>
-                                    {{ form.designation }}
-                                    <div class="form-text">
-                                        Job title or position
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.designation.id_for_label }}" class="form-label">Designation</label>
+                                        {{ form.designation }}
+                                        <small class="form-text text-muted">Job title or position</small>
+                                        {% if form.designation.errors %}
+                                            <div class="text-danger">{{ form.designation.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    {% if form.designation.errors %}
-                                        <div class="text-danger">{{ form.designation.errors.0 }}</div>
-                                    {% endif %}
                                 </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.department.id_for_label }}" class="form-label required-field">
-                                        Department
-                                    </label>
-                                    {{ form.department }}
-                                    {% if form.department.errors %}
-                                        <div class="text-danger">{{ form.department.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.employment_type.id_for_label }}" class="form-label">
-                                        Employment Type
-                                    </label>
-                                    {{ form.employment_type }}
-                                    {% if form.employment_type.errors %}
-                                        <div class="text-danger">{{ form.employment_type.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Contact Information -->
-                    <div class="form-section">
-                        <h4 class="section-title">
-                            <i class="fas fa-address-book"></i> Contact Information
-                        </h4>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.phone_number.id_for_label }}" class="form-label">
-                                        Phone Number
-                                    </label>
-                                    {{ form.phone_number }}
-                                    <div class="form-text">
-                                        Primary contact number
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.department.id_for_label }}" class="form-label">Department</label>
+                                        {{ form.department }}
+                                        {% if form.department.errors %}
+                                            <div class="text-danger">{{ form.department.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    {% if form.phone_number.errors %}
-                                        <div class="text-danger">{{ form.phone_number.errors.0 }}</div>
-                                    {% endif %}
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.office_location.id_for_label }}" class="form-label">
-                                        Office Location
-                                    </label>
-                                    {{ form.office_location }}
-                                    {% if form.office_location.errors %}
-                                        <div class="text-danger">{{ form.office_location.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Employment Details -->
-                    <div class="form-section">
-                        <h4 class="section-title">
-                            <i class="fas fa-calendar-alt"></i> Employment Details
-                        </h4>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.joining_date.id_for_label }}" class="form-label">
-                                        Joining Date
-                                    </label>
-                                    {{ form.joining_date }}
-                                    {% if form.joining_date.errors %}
-                                        <div class="text-danger">{{ form.joining_date.errors.0 }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.leaving_date.id_for_label }}" class="form-label">
-                                        Leaving Date
-                                    </label>
-                                    {{ form.leaving_date }}
-                                    <div class="form-text">
-                                        Leave empty if currently employed
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.employment_type.id_for_label }}" class="form-label">Employment Type</label>
+                                        {{ form.employment_type }}
+                                        {% if form.employment_type.errors %}
+                                            <div class="text-danger">{{ form.employment_type.errors.0 }}</div>
+                                        {% endif %}
                                     </div>
-                                    {% if form.leaving_date.errors %}
-                                        <div class="text-danger">{{ form.leaving_date.errors.0 }}</div>
-                                    {% endif %}
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Status Settings -->
-                    <div class="form-section">
-                        <h4 class="section-title">
-                            <i class="fas fa-toggle-on"></i> Status Settings
-                        </h4>
-                        
-                        <div class="form-check">
-                            {{ form.is_active }}
-                            <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
-                                Active Staff Member
-                            </label>
-                            <div class="form-text ms-auto">
-                                Inactive staff cannot be assigned devices
+                        <div class="col-md-12">
+                            <h4>Contact Information</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number</label>
+                                        {{ form.phone_number }}
+                                        <small class="form-text text-muted">Primary contact number</small>
+                                        {% if form.phone_number.errors %}
+                                            <div class="text-danger">{{ form.phone_number.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="fas fa-map-marker-alt"></i> Office Location
+                                        </label>
+                                        
+                                        <!-- Location Selection Options -->
+                                        <div class="location-selection-options mb-3">
+                                            <div class="btn-group" role="group" aria-label="Location selection method">
+                                                <input type="radio" class="btn-check" name="location_method" id="location_method_hierarchy" value="hierarchy" checked>
+                                                <label class="btn btn-outline-primary" for="location_method_hierarchy">
+                                                    <i class="fas fa-sitemap"></i> Select by Hierarchy
+                                                </label>
+                                                
+                                                <input type="radio" class="btn-check" name="location_method" id="location_method_direct" value="direct">
+                                                <label class="btn btn-outline-secondary" for="location_method_direct">
+                                                    <i class="fas fa-list"></i> Select from List
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <!-- Hierarchy Selection Method -->
+                                        <div class="location-hierarchy-selector" id="location_hierarchy_selector">
+                                            <div class="alert alert-info">
+                                                <i class="fas fa-info-circle"></i>
+                                                Navigate through the organizational hierarchy to select office location
+                                            </div>
+                                            
+                                            <div class="row">
+                                                <!-- Building Selection -->
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="office_building" class="form-label">
+                                                        <i class="fas fa-building"></i> Building
+                                                    </label>
+                                                    <select class="form-control cascade-parent" 
+                                                            id="office_building" 
+                                                            name="office_building"
+                                                            data-cascade-target="office_block">
+                                                        <option value="">Select Building...</option>
+                                                        {% for building in buildings %}
+                                                            <option value="{{ building.id }}">{{ building.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+
+                                                <!-- Block Selection -->
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="office_block" class="form-label">
+                                                        <i class="fas fa-th-large"></i> Block
+                                                    </label>
+                                                    <select class="form-control cascade-child" 
+                                                            id="office_block" 
+                                                            name="office_block"
+                                                            data-cascade-parent="office_building"
+                                                            data-cascade-target="office_floor"
+                                                            disabled>
+                                                        <option value="">Select Block...</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">Choose a building first</small>
+                                                </div>
+
+                                                <!-- Floor Selection -->
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="office_floor" class="form-label">
+                                                        <i class="fas fa-layer-group"></i> Floor
+                                                    </label>
+                                                    <select class="form-control cascade-child" 
+                                                            id="office_floor" 
+                                                            name="office_floor"
+                                                            data-cascade-parent="office_block"
+                                                            data-cascade-target="office_department"
+                                                            disabled>
+                                                        <option value="">Select Floor...</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">Choose a block first</small>
+                                                </div>
+
+                                                <!-- Department Selection -->
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="office_department" class="form-label">
+                                                        <i class="fas fa-users"></i> Department
+                                                    </label>
+                                                    <select class="form-control cascade-child" 
+                                                            id="office_department" 
+                                                            name="office_department"
+                                                            data-cascade-parent="office_floor"
+                                                            data-cascade-target="office_room"
+                                                            disabled>
+                                                        <option value="">Select Department...</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">Choose a floor first</small>
+                                                </div>
+
+                                                <!-- Room Selection -->
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="office_room" class="form-label">
+                                                        <i class="fas fa-door-open"></i> Room <span class="text-muted">(Optional)</span>
+                                                    </label>
+                                                    <select class="form-control cascade-child" 
+                                                            id="office_room" 
+                                                            name="office_room"
+                                                            data-cascade-parent="office_department"
+                                                            disabled>
+                                                        <option value="">Select Room...</option>
+                                                    </select>
+                                                    <small class="form-text text-muted">Choose a department first</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Direct Selection Method -->
+                                        <div class="location-direct-selector" id="location_direct_selector" style="display: none;">
+                                            <div class="form-group">
+                                                <label for="{{ form.office_location.id_for_label }}" class="form-label">
+                                                    Select Office Location
+                                                </label>
+                                                {{ form.office_location }}
+                                                <div class="form-text">
+                                                    Choose from all available locations in the system
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Location Preview -->
+                                        <div class="office-location-preview" id="office_location_preview" style="display: none;">
+                                            <div class="alert alert-success">
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-check-circle fa-2x text-success mr-3"></i>
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1 font-weight-bold">Selected Office Location:</h6>
+                                                        <p class="mb-1" id="office_location_breadcrumb"></p>
+                                                        <div class="office-location-badges" id="office_location_badges">
+                                                            <!-- Dynamic badges will be inserted here -->
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {% if form.office_location.errors %}
+                                            <div class="text-danger">{{ form.office_location.errors.0 }}</div>
+                                        {% endif %}
+                                        
+                                        <div class="form-text">
+                                            <i class="fas fa-lightbulb"></i>
+                                            Select the staff member's primary office location. This helps in device assignment and tracking.
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            {% if form.is_active.errors %}
-                                <div class="text-danger">{{ form.is_active.errors.0 }}</div>
-                            {% endif %}
                         </div>
-                    </div>
 
-                    <!-- Form Actions -->
-                    <div class="form-actions">
-                        <div>
-                            <a href="{% url 'inventory:staff_list' %}" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left"></i> Cancel
-                            </a>
+                        <div class="col-md-12">
+                            <h4>Employment Details</h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.joining_date.id_for_label }}" class="form-label">Joining Date</label>
+                                        {{ form.joining_date }}
+                                        {% if form.joining_date.errors %}
+                                            <div class="text-danger">{{ form.joining_date.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="{{ form.leaving_date.id_for_label }}" class="form-label">Leaving Date</label>
+                                        {{ form.leaving_date }}
+                                        <small class="form-text text-muted">Leave empty if currently employed</small>
+                                        {% if form.leaving_date.errors %}
+                                            <div class="text-danger">{{ form.leaving_date.errors.0 }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="btn-group">
-                            {% if form.instance.pk %}
-                                <button type="submit" name="action" value="save" class="btn btn-primary">
-                                    <i class="fas fa-save"></i> Update Staff
-                                </button>
-                                <button type="submit" name="action" value="save_continue" class="btn btn-outline-primary">
-                                    <i class="fas fa-save"></i> Save & Continue Editing
-                                </button>
-                            {% else %}
-                                <button type="submit" name="action" value="save" class="btn btn-primary">
-                                    <i class="fas fa-user-plus"></i> Add Staff
-                                </button>
-                                <button type="submit" name="action" value="save_add_another" class="btn btn-outline-primary">
-                                    <i class="fas fa-plus"></i> Save & Add Another
-                                </button>
-                            {% endif %}
+
+                        <div class="col-md-12">
+                            <h4>Status Settings</h4>
+                            <div class="form-group">
+                                {{ form.is_active }}
+                                <label for="{{ form.is_active.id_for_label }}" class="form-label ml-2">Active Staff Member</label>
+                                <small class="form-text text-muted">Inactive staff cannot be assigned devices</small>
+                                {% if form.is_active.errors %}
+                                    <div class="text-danger">{{ form.is_active.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-md-12 mt-3">
+                            <div class="form-group">
+                                <a href="{% url 'staff_list' %}" class="btn btn-secondary">Cancel</a>
+                                {% if form.instance.pk %}
+                                    <button type="submit" name="submit" class="btn btn-primary">Update Staff</button>
+                                    <button type="submit" name="continue" class="btn btn-outline-primary">Save & Continue Editing</button>
+                                {% else %}
+                                    <button type="submit" name="submit" class="btn btn-primary">Add Staff</button>
+                                    <button type="submit" name="add_another" class="btn btn-outline-primary">Save & Add Another</button>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('staffForm');
-    const firstNameField = document.getElementById('{{ form.first_name.id_for_label }}');
-    const lastNameField = document.getElementById('{{ form.last_name.id_for_label }}');
-    const usernameField = document.getElementById('{{ form.username.id_for_label }}');
-    const joiningDateField = document.getElementById('{{ form.joining_date.id_for_label }}');
-    const leavingDateField = document.getElementById('{{ form.leaving_date.id_for_label }}');
-    
-    // Auto-generate username from first and last name
-    function generateUsername() {
-        const firstName = firstNameField.value.trim().toLowerCase();
-        const lastName = lastNameField.value.trim().toLowerCase();
-        
-        if (firstName && lastName && !usernameField.value) {
-            // Generate username: first initial + last name
-            const username = firstName.charAt(0) + lastName;
-            usernameField.value = username;
-        }
-    }
-    
-    // Add event listeners for username generation
-    if (firstNameField && lastNameField && usernameField) {
-        firstNameField.addEventListener('blur', generateUsername);
-        lastNameField.addEventListener('blur', generateUsername);
-    }
-    
-    // Set default joining date to today for new staff
-    if (joiningDateField && !joiningDateField.value && !{{ form.instance.pk|yesno:"true,false" }}) {
-        const today = new Date().toISOString().split('T')[0];
-        joiningDateField.value = today;
-    }
-    
-    // Validate date ranges
-    function validateDates() {
-        const joiningDate = new Date(joiningDateField.value);
-        const leavingDate = new Date(leavingDateField.value);
-        
-        if (joiningDateField.value && leavingDateField.value) {
-            if (leavingDate <= joiningDate) {
-                leavingDateField.setCustomValidity('Leaving date must be after joining date');
-                return false;
-            } else {
-                leavingDateField.setCustomValidity('');
-                return true;
-            }
-        }
-        return true;
-    }
-    
-    // Add date validation listeners
-    if (joiningDateField && leavingDateField) {
-        joiningDateField.addEventListener('change', validateDates);
-        leavingDateField.addEventListener('change', validateDates);
-    }
-    
-    // Form submission handling
-    form.addEventListener('submit', function(e) {
-        // Validate required fields
-        const requiredFields = form.querySelectorAll('[required]');
-        let isValid = true;
-        
-        requiredFields.forEach(field => {
-            if (!field.value.trim()) {
-                field.classList.add('is-invalid');
-                isValid = false;
-            } else {
-                field.classList.remove('is-invalid');
-            }
-        });
-        
-        // Validate dates
-        if (!validateDates()) {
-            isValid = false;
-        }
-        
-        // Show loading state
-        if (isValid) {
-            const submitBtns = form.querySelectorAll('button[type="submit"]');
-            submitBtns.forEach(btn => {
-                btn.disabled = true;
-                const icon = btn.querySelector('i');
-                if (icon) {
-                    icon.className = 'fas fa-spinner fa-spin';
+    <script>
+        // ================================
+        // OFFICE LOCATION HIERARCHY FUNCTIONALITY
+        // ================================
+
+        // Initialize office location selection
+        function initializeOfficeLocationSelection() {
+            // Location method toggle
+            $('input[name="location_method"]').on('change', function() {
+                const method = $(this).val();
+                
+                if (method === 'hierarchy') {
+                    $('#location_hierarchy_selector').show();
+                    $('#location_direct_selector').hide();
+                    // Reset direct selection
+                    $('#{{ form.office_location.id_for_label }}').val('');
+                } else {
+                    $('#location_hierarchy_selector').hide();
+                    $('#location_direct_selector').show();
+                    // Reset hierarchy selection
+                    resetOfficeLocationHierarchy();
                 }
-                btn.innerHTML = btn.innerHTML.replace(/Add|Update|Save/, 'Saving...');
+                $('#office_location_preview').hide();
             });
-        } else {
-            e.preventDefault();
-            // Scroll to first error
-            const firstError = form.querySelector('.is-invalid, .text-danger');
-            if (firstError) {
-                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Building change handler
+            $('#office_building').on('change', function() {
+                const buildingId = $(this).val();
+                resetOfficeLocationCascade(['office_block', 'office_floor', 'office_department', 'office_room']);
+                
+                if (buildingId) {
+                    loadOfficeLocationOptions('{% url "inventory:ajax_get_blocks" %}', {building_id: buildingId}, $('#office_block'));
+                }
+                updateOfficeLocationPreface();
+            });
+            
+            // Block change handler
+            $('#office_block').on('change', function() {
+                const blockId = $(this).val();
+                resetOfficeLocationCascade(['office_floor', 'office_department', 'office_room']);
+                
+                if (blockId) {
+                    loadOfficeLocationOptions('{% url "inventory:ajax_get_floors" %}', {block_id: blockId}, $('#office_floor'));
+                }
+                updateOfficeLocationPreview();
+            });
+            
+            // Floor change handler
+            $('#office_floor').on('change', function() {
+                const floorId = $(this).val();
+                resetOfficeLocationCascade(['office_department', 'office_room']);
+                
+                if (floorId) {
+                    loadOfficeLocationOptions('{% url "inventory:ajax_get_departments" %}', {floor_id: floorId}, $('#office_department'));
+                }
+                updateOfficeLocationPreview();
+            });
+            
+            // Department change handler
+            $('#office_department').on('change', function() {
+                const departmentId = $(this).val();
+                resetOfficeLocationCascade(['office_room']);
+                
+                if (departmentId) {
+                    loadOfficeLocationOptions('{% url "inventory:ajax_get_rooms" %}', {department_id: departmentId}, $('#office_room'));
+                    // Auto-sync with staff department field if they match
+                    syncDepartmentSelection(departmentId);
+                    // Load final locations
+                    loadFinalOfficeLocations();
+                }
+                updateOfficeLocationPreview();
+            });
+            
+            // Room change handler
+            $('#office_room').on('change', function() {
+                loadFinalOfficeLocations();
+                updateOfficeLocationPreview();
+            });
+            
+            // Enhanced department-based filtering
+            const departmentField = document.getElementById('{{ form.department.id_for_label }}');
+            if (departmentField) {
+                departmentField.addEventListener('change', function() {
+                    const selectedDept = this.value;
+                    
+                    if (selectedDept) {
+                        // Try to auto-select matching department in hierarchy
+                        const deptOption = $('#office_department option').filter(function() {
+                            return $(this).val() === selectedDept;
+                        });
+                        
+                        if (deptOption.length) {
+                            $('#office_department').val(selectedDept).trigger('change');
+                        }
+                        
+                        // Filter direct location selection by department
+                        filterLocationsByDepartment(selectedDept);
+                    }
+                });
             }
         }
-    });
-    
-    // Real-time validation feedback
-    const inputs = form.querySelectorAll('.form-control, .form-select');
-    inputs.forEach(input => {
-        input.addEventListener('blur', function() {
-            if (this.required && !this.value.trim()) {
-                this.classList.add('is-invalid');
-            } else {
-                this.classList.remove('is-invalid');
-            }
-        });
-        
-        input.addEventListener('input', function() {
-            if (this.classList.contains('is-invalid') && this.value.trim()) {
-                this.classList.remove('is-invalid');
-            }
-        });
-    });
-    
-    // Initialize Bootstrap tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    
-    // Confirm navigation away with unsaved changes
-    let formChanged = false;
-    const formElements = form.querySelectorAll('input, select, textarea');
-    
-    formElements.forEach(element => {
-        element.addEventListener('change', function() {
-            formChanged = true;
-        });
-    });
-    
-    window.addEventListener('beforeunload', function(e) {
-        if (formChanged) {
-            e.preventDefault();
-            e.returnValue = '';
+
+        // Load office location options via AJAX
+        function loadOfficeLocationOptions(url, params, targetSelect) {
+            targetSelect.prop('disabled', true).html('<option value="">Loading...</option>');
+            
+            $.get(url, params)
+                .done(function(data) {
+                    let options = '<option value="">Select...</option>';
+                    const dataKey = Object.keys(data)[0];
+                    
+                    data[dataKey].forEach(function(item) {
+                        const name = item.name || item.room_number;
+                        const code = item.code ? ` (${item.code})` : '';
+                        const floorNum = item.floor_number ? ` - Floor ${item.floor_number}` : '';
+                        options += `<option value="${item.id}">${name}${code}${floorNum}</option>`;
+                    });
+                    
+                    targetSelect.html(options).prop('disabled', false);
+                })
+                .fail(function() {
+                    targetSelect.html('<option value="">Error loading data</option>');
+                });
         }
-    });
-    
-    // Remove change detection on form submit
-    form.addEventListener('submit', function() {
-        formChanged = false;
-    });
-    
-    // Department-based location filtering (if applicable)
-    const departmentField = document.getElementById('{{ form.department.id_for_label }}');
-    const locationField = document.getElementById('{{ form.office_location.id_for_label }}');
-    
-    if (departmentField && locationField) {
-        departmentField.addEventListener('change', function() {
-            // This could be enhanced to filter locations based on department
-            // For now, just clear the location when department changes
-            if (this.value) {
-                locationField.disabled = false;
-            } else {
-                locationField.disabled = true;
-                locationField.value = '';
+
+        // Reset office location cascade
+        function resetOfficeLocationCascade(fieldIds) {
+            fieldIds.forEach(function(fieldId) {
+                $(`#${fieldId}`).html('<option value="">Select...</option>').prop('disabled', true);
+            });
+        }
+
+        // Reset entire office location hierarchy
+        function resetOfficeLocationHierarchy() {
+            $('#office_building').val('');
+            resetOfficeLocationCascade(['office_block', 'office_floor', 'office_department', 'office_room']);
+            $('#office_location_preview').hide();
+        }
+
+        // Load final office locations based on hierarchy
+        function loadFinalOfficeLocations() {
+            const building = $('#office_building').val();
+            const block = $('#office_block').val();
+            const floor = $('#office_floor').val();
+            const department = $('#office_department').val();
+            const room = $('#office_room').val();
+            
+            if (department) {
+                const params = {
+                    building_id: building,
+                    block_id: block,
+                    floor_id: floor,
+                    department_id: department,
+                    room_id: room || ''
+                };
+                
+                $.get('{% url "inventory:ajax_location_search" %}', params)
+                    .done(function(data) {
+                        if (data.locations.length > 0) {
+                            // Auto-select the first matching location
+                            const location = data.locations[0];
+                            $('#{{ form.office_location.id_for_label }}').val(location.id);
+                        }
+                    });
             }
+        }
+
+        // Update office location preview
+        function updateOfficeLocationPreview() {
+            const parts = [];
+            
+            const building = $('#office_building option:selected').text();
+            const block = $('#office_block option:selected').text();
+            const floor = $('#office_floor option:selected').text();
+            const department = $('#office_department option:selected').text();
+            const room = $('#office_room option:selected').text();
+            
+            if (building && building !== 'Select Building...') parts.push(building);
+            if (block && block !== 'Select...' && block !== 'Loading...') parts.push(block);
+            if (floor && floor !== 'Select...' && floor !== 'Loading...') parts.push(floor);
+            if (department && department !== 'Select...' && department !== 'Loading...') parts.push(department);
+            if (room && room !== 'Select...' && room !== 'Loading...') parts.push(room);
+            
+            if (parts.length > 0) {
+                $('#office_location_breadcrumb').text(parts.join(' → '));
+                
+                // Create badges for hierarchy levels
+                let badges = '';
+                const badgeClasses = ['badge-primary', 'badge-info', 'badge-success', 'badge-warning', 'badge-secondary'];
+                
+                parts.forEach(function(part, index) {
+                    if (index < badgeClasses.length) {
+                        badges += `<span class="badge ${badgeClasses[index]} mr-1">${part}</span>`;
+                    }
+                });
+                
+                $('#office_location_badges').html(badges);
+                $('#office_location_preview').show();
+            } else {
+                $('#office_location_preview').hide();
+            }
+        }
+
+        // Sync department selection between staff department and office department
+        function syncDepartmentSelection(departmentId) {
+            const staffDepartmentField = $('#{{ form.department.id_for_label }}');
+            if (staffDepartmentField.val() !== departmentId) {
+                // Optional: Ask user if they want to sync
+                if (confirm('Would you like to set the staff department to match the office location department?')) {
+                    staffDepartmentField.val(departmentId);
+                }
+            }
+        }
+
+        // Filter locations by department in direct selection
+        function filterLocationsByDepartment(departmentId) {
+            const locationField = $('#{{ form.office_location.id_for_label }}');
+            const originalOptions = locationField.data('original-options');
+            
+            if (!originalOptions) {
+                // Store original options
+                locationField.data('original-options', locationField.html());
+            }
+            
+            if (departmentId) {
+                // Filter options by department (this would need backend support)
+                $.get('{% url "inventory:ajax_location_search" %}', {department_id: departmentId})
+                    .done(function(data) {
+                        let options = '<option value="">Select Office Location...</option>';
+                        data.locations.forEach(function(location) {
+                            options += `<option value="${location.id}">${location.display_text}</option>`;
+                        });
+                        locationField.html(options);
+                    });
+            } else {
+                // Restore original options
+                locationField.html(originalOptions);
+            }
+        }
+
+        // Initialize on document ready
+        $(document).ready(function() {
+            initializeOfficeLocationSelection();
         });
-    }
-});
-</script>
+    </script>
 {% endblock %}
