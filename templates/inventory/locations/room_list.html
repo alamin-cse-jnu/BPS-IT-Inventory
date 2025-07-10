@@ -1,0 +1,728 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Rooms - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rooms-header {
+        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .rooms-stats {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        display: block;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+    
+    .room-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+        position: relative;
+    }
+    
+    .room-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    
+    .room-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .room-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.75rem;
+        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .room-info h5 {
+        margin: 0 0 0.25rem 0;
+        font-weight: 600;
+        color: #212529;
+    }
+    
+    .room-subtitle {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .room-location {
+        color: #495057;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .room-location i {
+        margin-right: 0.5rem;
+        color: #6c757d;
+        width: 16px;
+    }
+    
+    .room-department {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .room-department i {
+        margin-right: 0.5rem;
+        color: #6c757d;
+        width: 16px;
+    }
+    
+    .room-metrics {
+        display: flex;
+        gap: 1.5rem;
+        padding: 1rem 0;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+        margin: 1rem 0;
+    }
+    
+    .metric-item {
+        text-align: center;
+        flex: 1;
+    }
+    
+    .metric-number {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #fd7e14;
+        display: block;
+    }
+    
+    .metric-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 0.25rem;
+    }
+    
+    .capacity-badge {
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.875rem;
+    }
+    
+    .capacity-badge i {
+        margin-right: 0.5rem;
+    }
+    
+    .room-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+    
+    .btn-outline-primary {
+        border-color: #fd7e14;
+        color: #fd7e14;
+    }
+    
+    .btn-outline-primary:hover {
+        background-color: #fd7e14;
+        border-color: #fd7e14;
+    }
+    
+    .room-status {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-active {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .search-filters {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .filter-row {
+        display: flex;
+        gap: 1rem;
+        align-items: end;
+    }
+    
+    .filter-group {
+        flex: 1;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+    
+    .btn-add-room {
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-add-room:hover {
+        background: linear-gradient(135deg, #20a23a 0%, #1e7e34 100%);
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item a {
+        color: #fd7e14;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    .department-badge {
+        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+    }
+    
+    .building-badge {
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+    }
+    
+    .floor-badge {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    @media (max-width: 768px) {
+        .rooms-stats {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .room-metrics {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .filter-row {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .room-actions {
+            flex-direction: column;
+        }
+        
+        .rooms-header {
+            padding: 1.5rem 0;
+            margin-bottom: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Rooms</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="rooms-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-0">
+                        <i class="fas fa-door-open me-3"></i>Room Management
+                    </h1>
+                    <p class="mb-0 mt-2 opacity-75">Manage individual rooms within departments</p>
+                    
+                    <div class="rooms-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_rooms }}</span>
+                            <span class="stat-label">Total Rooms</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ active_rooms }}</span>
+                            <span class="stat-label">Active</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_capacity }}</span>
+                            <span class="stat-label">Total Capacity</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ occupied_rooms|default:0 }}</span>
+                            <span class="stat-label">Occupied</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'inventory:room_add' %}" class="btn btn-add-room">
+                        <i class="fas fa-plus me-2"></i>Add Room
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="search-filters">
+        <form method="GET" class="filter-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="search" class="form-label">Search Rooms</label>
+                    <input type="text" 
+                           id="search" 
+                           name="search" 
+                           class="form-control" 
+                           placeholder="Search by room number, name, or department..."
+                           value="{{ request.GET.search }}">
+                </div>
+                <div class="filter-group">
+                    <label for="department" class="form-label">Department</label>
+                    <select id="department" name="department" class="form-select">
+                        <option value="">All Departments</option>
+                        {% for department in departments %}
+                            <option value="{{ department.id }}" {% if request.GET.department == department.id|stringformat:"s" %}selected{% endif %}>
+                                {{ department.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="building" class="form-label">Building</label>
+                    <select id="building" name="building" class="form-select">
+                        <option value="">All Buildings</option>
+                        {% for building in buildings %}
+                            <option value="{{ building.id }}" {% if request.GET.building == building.id|stringformat:"s" %}selected{% endif %}>
+                                {{ building.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="capacity" class="form-label">Min Capacity</label>
+                    <input type="number" 
+                           id="capacity" 
+                           name="capacity" 
+                           class="form-control" 
+                           placeholder="Min capacity..."
+                           value="{{ request.GET.capacity }}"
+                           min="1">
+                </div>
+                <div class="filter-group">
+                    <label for="status" class="form-label">Status</label>
+                    <select id="status" name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Rooms List -->
+    {% if rooms %}
+        <div class="row">
+            {% for room in rooms %}
+                <div class="col-lg-6 col-xl-4">
+                    <div class="room-card position-relative">
+                        <!-- Status Badge -->
+                        <div class="room-status">
+                            <span class="status-badge {% if room.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if room.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </div>
+
+                        <!-- Room Header -->
+                        <div class="room-header">
+                            <div class="room-icon">
+                                <i class="fas fa-door-open"></i>
+                            </div>
+                            <div class="room-info">
+                                <h5>{{ room.room_number }}</h5>
+                                <p class="room-subtitle">
+                                    {% if room.room_name %}{{ room.room_name }}{% else %}No name specified{% endif %}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Room Content -->
+                        <div class="room-content">
+                            <div class="room-location">
+                                <i class="fas fa-building"></i>
+                                <span class="building-badge">{{ room.department.floor.building.code }}</span>
+                                <span class="floor-badge">{{ room.department.floor.name }}</span>
+                            </div>
+                            
+                            <div class="room-department">
+                                <i class="fas fa-users"></i>
+                                <span class="department-badge">{{ room.department.code }}</span>
+                                {{ room.department.name }}
+                            </div>
+                            
+                            <div class="capacity-badge">
+                                <i class="fas fa-users"></i>
+                                Capacity: {{ room.capacity }}
+                            </div>
+                        </div>
+
+                        <!-- Room Metrics -->
+                        <div class="room-metrics">
+                            <div class="metric-item">
+                                <span class="metric-number">{{ room.devices_count|default:0 }}</span>
+                                <span class="metric-label">Devices</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-number">{{ room.staff_count|default:0 }}</span>
+                                <span class="metric-label">Staff</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-number">{{ room.utilization|default:0 }}%</span>
+                                <span class="metric-label">Utilization</span>
+                            </div>
+                        </div>
+
+                        <!-- Room Actions -->
+                        <div class="room-actions">
+                            <a href="{% url 'inventory:room_detail' room.id %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-eye me-1"></i>View
+                            </a>
+                            <a href="{% url 'inventory:room_edit' room.id %}" 
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-edit me-1"></i>Edit
+                            </a>
+                            <a href="{% url 'inventory:location_add' %}?room={{ room.id }}" 
+                               class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-map-marker-alt me-1"></i>Assign
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if rooms.has_other_pages %}
+            <div class="d-flex justify-content-center mt-4">
+                <nav aria-label="Rooms pagination">
+                    <ul class="pagination">
+                        {% if rooms.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.capacity %}capacity={{ request.GET.capacity }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ rooms.previous_page_number }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in rooms.paginator.page_range %}
+                            {% if rooms.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > rooms.number|add:'-3' and num < rooms.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.capacity %}capacity={{ request.GET.capacity }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if rooms.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.capacity %}capacity={{ request.GET.capacity }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ rooms.next_page_number }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        {% endif %}
+    {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-door-open"></i>
+            </div>
+            <h3>No Rooms Found</h3>
+            <p>There are no rooms matching your search criteria.</p>
+            <a href="{% url 'inventory:room_add' %}" class="btn btn-add-room">
+                <i class="fas fa-plus me-2"></i>Add First Room
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-submit filter form on select change
+    $('.filter-form select').on('change', function() {
+        $(this).closest('form').submit();
+    });
+    
+    // Search input with debounce
+    let searchTimeout;
+    $('#search').on('input', function() {
+        clearTimeout(searchTimeout);
+        const form = $(this).closest('form');
+        searchTimeout = setTimeout(function() {
+            form.submit();
+        }, 500);
+    });
+    
+    // Capacity input with debounce
+    let capacityTimeout;
+    $('#capacity').on('input', function() {
+        clearTimeout(capacityTimeout);
+        const form = $(this).closest('form');
+        capacityTimeout = setTimeout(function() {
+            form.submit();
+        }, 1000);
+    });
+    
+    // Room card hover effects
+    $('.room-card').hover(
+        function() {
+            $(this).find('.room-actions').addClass('show');
+        },
+        function() {
+            $(this).find('.room-actions').removeClass('show');
+        }
+    );
+    
+    // Department change cascades to building filter
+    $('#department').on('change', function() {
+        const departmentId = $(this).val();
+        
+        if (departmentId) {
+            // Auto-select the building for this department
+            const option = $(this).find('option:selected');
+            const departmentText = option.text();
+            
+            // You can implement AJAX call here to get the building for this department
+            // For now, we'll just submit the form
+            $(this).closest('form').submit();
+        }
+    });
+    
+    // Sort rooms by room number
+    function sortRoomCards() {
+        const container = $('.row').first();
+        const cards = container.children('.col-lg-6').get();
+        
+        cards.sort(function(a, b) {
+            const roomA = $(a).find('h5').text().trim();
+            const roomB = $(b).find('h5').text().trim();
+            
+            // Try to sort numerically if possible
+            const numA = roomA.match(/\d+/);
+            const numB = roomB.match(/\d+/);
+            
+            if (numA && numB) {
+                return parseInt(numA[0]) - parseInt(numB[0]);
+            }
+            
+            // Fallback to alphabetical sort
+            return roomA.localeCompare(roomB);
+        });
+        
+        $.each(cards, function(idx, card) {
+            container.append(card);
+        });
+    }
+    
+    // Apply sorting
+    if ($('.room-card').length > 0) {
+        sortRoomCards();
+    }
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        // Ctrl+N or Cmd+N to add new room
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            window.location.href = "{% url 'inventory:room_add' %}";
+        }
+        
+        // ESC to clear search
+        if (e.key === 'Escape') {
+            $('#search').val('').focus();
+        }
+    });
+    
+    // Focus on search input on load
+    $('#search').focus();
+    
+    // Animate cards on scroll
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, observerOptions);
+    
+    // Set initial state and observe cards
+    $('.room-card').each(function() {
+        this.style.opacity = '0';
+        this.style.transform = 'translateY(20px)';
+        this.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(this);
+    });
+    
+    // Capacity color coding
+    $('.capacity-badge').each(function() {
+        const capacity = parseInt($(this).text().match(/\d+/)[0]);
+        
+        if (capacity >= 20) {
+            $(this).removeClass('btn-success').addClass('btn-primary');
+        } else if (capacity >= 10) {
+            $(this).removeClass('btn-success').addClass('btn-info');
+        } else if (capacity >= 5) {
+            $(this).removeClass('btn-success').addClass('btn-warning');
+        } else {
+            $(this).removeClass('btn-success').addClass('btn-secondary');
+        }
+    });
+    
+    // Room utilization color coding
+    $('.metric-number').each(function() {
+        const parent = $(this).parent();
+        if (parent.find('.metric-label').text().includes('Utilization')) {
+            const utilization = parseInt($(this).text());
+            
+            if (utilization >= 80) {
+                $(this).css('color', '#dc3545'); // Red
+            } else if (utilization >= 60) {
+                $(this).css('color', '#fd7e14'); // Orange
+            } else if (utilization >= 40) {
+                $(this).css('color', '#ffc107'); // Yellow
+            } else {
+                $(this).css('color', '#28a745'); // Green
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

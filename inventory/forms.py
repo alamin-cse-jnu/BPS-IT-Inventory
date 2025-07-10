@@ -9,7 +9,7 @@ import re
 from .models import (
     Device, Assignment, Staff, Department, Location, Vendor,
     DeviceCategory, DeviceType, DeviceSubCategory, MaintenanceSchedule,
-    Building, Room, AuditLog, Floor, Room
+    Building, Room, AuditLog, Floor, Room, Block
 )
 
 
@@ -660,17 +660,36 @@ class StaffForm(forms.ModelForm):
 # ================================
 
 class LocationForm(forms.ModelForm):
-    """Form for creating and editing locations - FIXED FIELD MAPPING"""
+    """Form for creating and editing locations - UPDATED WITH BLOCK SUPPORT"""
     
     class Meta:
         model = Location
-        fields = ['building', 'floor', 'department', 'room', 'description', 'is_active']
+        fields = ['building', 'block', 'floor', 'department', 'room', 'description', 'is_active']
         
         widgets = {
-            'building': forms.Select(attrs={'class': 'form-control'}),
-            'floor': forms.Select(attrs={'class': 'form-control'}),
-            'department': forms.Select(attrs={'class': 'form-control'}),
-            'room': forms.Select(attrs={'class': 'form-control'}),
+            'building': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-target': 'block'
+            }),
+            'block': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-parent': 'building',
+                'data-cascade-target': 'floor'
+            }),
+            'floor': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-parent': 'block',
+                'data-cascade-target': 'department'
+            }),
+            'department': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-parent': 'floor',
+                'data-cascade-target': 'room'
+            }),
+            'room': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-parent': 'department'
+            }),
             'description': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
@@ -684,29 +703,103 @@ class LocationForm(forms.ModelForm):
         
         # Set required fields
         self.fields['building'].required = True
+        self.fields['block'].required = True
         self.fields['floor'].required = True
         self.fields['department'].required = True
         self.fields['room'].required = False
         
         # Filter active records only
         self.fields['building'].queryset = Building.objects.filter(is_active=True)
-        self.fields['floor'].queryset = Floor.objects.filter(is_active=True)
-        self.fields['department'].queryset = Department.objects.filter(is_active=True)
-        self.fields['room'].queryset = Room.objects.filter(is_active=True)
+        
+        # Cascade filtering setup
+        if 'building' in self.data:
+            try:
+                building_id = int(self.data.get('building'))
+                self.fields['block'].queryset = Block.objects.filter(
+                    building_id=building_id, is_active=True
+                ).order_by('name')
+            except (ValueError, TypeError):
+                self.fields['block'].queryset = Block.objects.none()
+        elif self.instance.pk and self.instance.building:
+            self.fields['block'].queryset = Block.objects.filter(
+                building=self.instance.building, is_active=True
+            ).order_by('name')
+        else:
+            self.fields['block'].queryset = Block.objects.filter(is_active=True)
+        
+        if 'block' in self.data:
+            try:
+                block_id = int(self.data.get('block'))
+                self.fields['floor'].queryset = Floor.objects.filter(
+                    block_id=block_id, is_active=True
+                ).order_by('floor_number')
+            except (ValueError, TypeError):
+                self.fields['floor'].queryset = Floor.objects.none()
+        elif self.instance.pk and self.instance.block:
+            self.fields['floor'].queryset = Floor.objects.filter(
+                block=self.instance.block, is_active=True
+            ).order_by('floor_number')
+        else:
+            self.fields['floor'].queryset = Floor.objects.filter(is_active=True)
+        
+        if 'floor' in self.data:
+            try:
+                floor_id = int(self.data.get('floor'))
+                self.fields['department'].queryset = Department.objects.filter(
+                    floor_id=floor_id, is_active=True
+                ).order_by('name')
+            except (ValueError, TypeError):
+                self.fields['department'].queryset = Department.objects.none()
+        elif self.instance.pk and self.instance.floor:
+            self.fields['department'].queryset = Department.objects.filter(
+                floor=self.instance.floor, is_active=True
+            ).order_by('name')
+        else:
+            self.fields['department'].queryset = Department.objects.filter(is_active=True)
+        
+        if 'department' in self.data:
+            try:
+                department_id = int(self.data.get('department'))
+                self.fields['room'].queryset = Room.objects.filter(
+                    department_id=department_id, is_active=True
+                ).order_by('room_number')
+            except (ValueError, TypeError):
+                self.fields['room'].queryset = Room.objects.none()
+        elif self.instance.pk and self.instance.department:
+            self.fields['room'].queryset = Room.objects.filter(
+                department=self.instance.department, is_active=True
+            ).order_by('room_number')
+        else:
+            self.fields['room'].queryset = Room.objects.filter(is_active=True)
 
     def clean(self):
-        """Basic validation"""
+        """Enhanced validation with block support"""
         cleaned_data = super().clean()
         
         building = cleaned_data.get('building')
+        block = cleaned_data.get('block')
         floor = cleaned_data.get('floor')
         department = cleaned_data.get('department')
         room = cleaned_data.get('room')
         
+        # Validate hierarchical relationships
+        if building and block and block.building != building:
+            raise ValidationError({'block': 'Selected block does not belong to the selected building.'})
+        
+        if block and floor and floor.block != block:
+            raise ValidationError({'floor': 'Selected floor does not belong to the selected block.'})
+        
+        if floor and department and department.floor != floor:
+            raise ValidationError({'department': 'Selected department does not belong to the selected floor.'})
+        
+        if department and room and room.department != department:
+            raise ValidationError({'room': 'Selected room does not belong to the selected department.'})
+        
         # Check for duplicate locations
-        if building and floor and department:
+        if building and block and floor and department:
             existing_location = Location.objects.filter(
                 building=building,
+                block=block,
                 floor=floor,
                 department=department,
                 room=room
@@ -718,7 +811,7 @@ class LocationForm(forms.ModelForm):
             if existing_location.exists():
                 raise ValidationError('A location with this combination already exists.')
         
-        return cleaned_data  
+        return cleaned_data
 
 
 class DepartmentForm(forms.ModelForm):
@@ -793,6 +886,177 @@ class DepartmentForm(forms.ModelForm):
         
         return cleaned_data
 
+class BlockForm(forms.ModelForm):
+    """Form for creating and editing blocks"""
+    
+    class Meta:
+        model = Block
+        fields = ['building', 'name', 'code', 'description', 'is_active']
+        
+        widgets = {
+            'building': forms.Select(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., East Block, West Block, North Block'
+            }),
+            'code': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., EB, WB, NB, SB',
+                'style': 'text-transform: uppercase;',
+                'maxlength': '20'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Description of this block within the building'
+            }),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Set required fields
+        self.fields['building'].required = True
+        self.fields['name'].required = True
+        self.fields['code'].required = True
+        
+        # Filter active buildings only
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+        
+        # Add help text
+        self.fields['code'].help_text = "Short code for this block (will be converted to uppercase)"
+        self.fields['name'].help_text = "Full name of the block"
+
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        if code:
+            code = code.upper().strip()
+            
+            # Check for duplicate code within the same building
+            building = self.cleaned_data.get('building')
+            if building:
+                existing_block = Block.objects.filter(
+                    building=building,
+                    code=code
+                )
+                
+                if self.instance.pk:
+                    existing_block = existing_block.exclude(pk=self.instance.pk)
+                
+                if existing_block.exists():
+                    raise ValidationError(f'Block with code "{code}" already exists in this building.')
+        
+        return code
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        if name:
+            name = name.strip()
+            
+            # Check for duplicate name within the same building
+            building = self.cleaned_data.get('building')
+            if building:
+                existing_block = Block.objects.filter(
+                    building=building,
+                    name__iexact=name
+                )
+                
+                if self.instance.pk:
+                    existing_block = existing_block.exclude(pk=self.instance.pk)
+                
+                if existing_block.exists():
+                    raise ValidationError(f'Block with name "{name}" already exists in this building.')
+        
+        return name
+
+class FloorForm(forms.ModelForm):
+    """Form for creating and editing floors"""
+    
+    class Meta:
+        model = Floor
+        fields = ['building', 'block', 'name', 'floor_number', 'description', 'is_active']
+        
+        widgets = {
+            'building': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-target': 'block'
+            }),
+            'block': forms.Select(attrs={
+                'class': 'form-control',
+                'data-cascade-parent': 'building'
+            }),
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., Ground Floor, First Floor'
+            }),
+            'floor_number': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '50',
+                'placeholder': 'e.g., 0, 1, 2, 3'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Description of this floor'
+            }),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'})
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Set required fields
+        self.fields['building'].required = True
+        self.fields['block'].required = True
+        self.fields['name'].required = True
+        self.fields['floor_number'].required = True
+        
+        # Filter active records only
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+        
+        # Dynamic filtering for blocks based on building
+        if 'building' in self.data:
+            try:
+                building_id = int(self.data.get('building'))
+                self.fields['block'].queryset = Block.objects.filter(
+                    building_id=building_id, is_active=True
+                ).order_by('name')
+            except (ValueError, TypeError):
+                self.fields['block'].queryset = Block.objects.none()
+        elif self.instance.pk and self.instance.building:
+            self.fields['block'].queryset = Block.objects.filter(
+                building=self.instance.building, is_active=True
+            ).order_by('name')
+        else:
+            self.fields['block'].queryset = Block.objects.filter(is_active=True)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        building = cleaned_data.get('building')
+        block = cleaned_data.get('block')
+        floor_number = cleaned_data.get('floor_number')
+        
+        # Validate that block belongs to the selected building
+        if building and block and block.building != building:
+            raise ValidationError({'block': 'Selected block does not belong to the selected building.'})
+        
+        # Check for duplicate floor number within the same building and block
+        if building and block and floor_number is not None:
+            existing_floor = Floor.objects.filter(
+                building=building,
+                block=block,
+                floor_number=floor_number
+            )
+            
+            if self.instance.pk:
+                existing_floor = existing_floor.exclude(pk=self.instance.pk)
+            
+            if existing_floor.exists():
+                raise ValidationError({'floor_number': f'Floor {floor_number} already exists in {block.name}.'})
+        
+        return cleaned_data
 
 # ================================
 # VENDOR MANAGEMENT FORMS

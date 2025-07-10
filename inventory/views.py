@@ -16,6 +16,7 @@ from django.core.management import call_command
 from django.core.serializers import serialize
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from .form_utils import LocationHierarchyUtils, BlockValidationUtils
 
 # Django contrib imports
 from django.contrib import messages
@@ -51,18 +52,16 @@ import base64
 from .models import (
     Device, Assignment, Staff, Department, Location, 
     DeviceCategory, DeviceType, DeviceSubCategory, Vendor,
-    MaintenanceSchedule, AuditLog, Room, Building,
+    MaintenanceSchedule, AuditLog, Room, Building, Block, Floor,
 )
-
-# CORRECTED: Import the correct DeviceTransferForm
 from .forms import (
     DeviceForm, AssignmentForm, StaffForm, ReturnForm, 
     LocationForm, AdvancedSearchForm, BulkDeviceActionForm,  
     BulkAssignmentForm, MaintenanceScheduleForm, DeviceTransferForm, AssignmentSearchForm,
-    VendorForm, CSVImportForm, DepartmentForm, DeviceTypeForm
+    VendorForm, CSVImportForm, DepartmentForm, DeviceTypeForm, BlockForm, FloorForm,
 )
 
-# FIXED: Import with comprehensive error handling and missing form fallbacks
+#Import with comprehensive error handling and missing form fallbacks
 try:
     from .utils import (
         get_device_assignment_summary, 
@@ -2097,78 +2096,135 @@ def department_assignments(request, department_id):
 # ================================
 
 @login_required
+@permission_required('inventory.view_location', raise_exception=True)
 def location_list(request):
-    """List all locations with device counts"""
+    """Enhanced location list with hierarchy support and filtering"""
     try:
+        # Base queryset with optimized joins
         locations = Location.objects.select_related(
-            'room__department', 'room__building'
+            'building', 'block', 'floor', 'department', 'room'
         ).prefetch_related(
-            'device_locations__device'
+            'current_assignments__device',
+            'assignment_history'
         ).annotate(
-            device_count=Count('device_locations', filter=Q(device_locations__is_active=True))
-        ).order_by('room__building__name', 'room__name', 'name')
+            device_count=Count('current_assignments', distinct=True),
+            total_value=Sum('current_assignments__device__purchase_price')
+        )
         
-        # Search functionality
+        # Filtering
+        building_filter = request.GET.get('building')
+        block_filter = request.GET.get('block')
+        floor_filter = request.GET.get('floor')
+        department_filter = request.GET.get('department')
+        is_active_filter = request.GET.get('is_active')
         search = request.GET.get('search')
+        
+        if building_filter:
+            locations = locations.filter(building_id=building_filter)
+        
+        if block_filter:
+            locations = locations.filter(block_id=block_filter)
+        
+        if floor_filter:
+            locations = locations.filter(floor_id=floor_filter)
+        
+        if department_filter:
+            locations = locations.filter(department_id=department_filter)
+        
+        if is_active_filter:
+            locations = locations.filter(is_active=(is_active_filter.lower() == 'true'))
+        
         if search:
             locations = locations.filter(
-                Q(name__icontains=search) |
-                Q(room__name__icontains=search) |
-                Q(room__department__name__icontains=search)
+                Q(building__name__icontains=search) |
+                Q(block__name__icontains=search) |
+                Q(floor__name__icontains=search) |
+                Q(department__name__icontains=search) |
+                Q(room__room_number__icontains=search) |
+                Q(description__icontains=search)
             )
         
-        # Building filter
-        building_id = request.GET.get('building')
-        if building_id:
-            locations = locations.filter(room__building_id=building_id)
-        
-        # Department filter
-        department_id = request.GET.get('department')
-        if department_id:
-            locations = locations.filter(room__department_id=department_id)
+        # Sorting
+        sort_by = request.GET.get('sort', 'hierarchy')
+        if sort_by == 'hierarchy':
+            locations = locations.order_by('building__name', 'block__name', 'floor__floor_number', 'department__name', 'room__room_number')
+        elif sort_by == 'devices':
+            locations = locations.order_by('-device_count')
+        elif sort_by == 'value':
+            locations = locations.order_by('-total_value')
+        elif sort_by == 'name':
+            locations = locations.order_by('building__name')
         
         # Pagination
-        paginator = Paginator(locations, 25)
+        paginator = Paginator(locations, 20)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
-        # Get filter options
-        buildings = Building.objects.all().order_by('name')
-        departments = Department.objects.all().order_by('name')
+        # Filter options for dropdowns
+        buildings = Building.objects.filter(is_active=True).order_by('name')
+        blocks = Block.objects.filter(is_active=True).order_by('building__name', 'name')
+        floors = Floor.objects.filter(is_active=True).order_by('building__name', 'block__name', 'floor_number')
+        departments = Department.objects.filter(is_active=True).order_by('name')
+        
+        # Statistics
+        total_locations = locations.count()
+        active_locations = locations.filter(is_active=True).count()
+        total_devices_in_locations = locations.aggregate(total=Sum('device_count'))['total'] or 0
         
         context = {
             'page_obj': page_obj,
+            'locations': page_obj.object_list,
             'buildings': buildings,
+            'blocks': blocks,
+            'floors': floors,
             'departments': departments,
-            'search': search,
-            'selected_building': building_id,
-            'selected_department': department_id,
+            'total_locations': total_locations,
+            'active_locations': active_locations,
+            'total_devices_in_locations': total_devices_in_locations,
+            'current_filters': {
+                'building': building_filter,
+                'block': block_filter,
+                'floor': floor_filter,
+                'department': department_filter,
+                'is_active': is_active_filter,
+                'search': search,
+                'sort': sort_by,
+            },
+            'title': 'Location Management',
         }
         
-        return render(request, 'inventory/location_list.html', context)
+        return render(request, 'inventory/locations/location_list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading locations: {str(e)}")
-        return render(request, 'inventory/location_list.html', {'page_obj': None})
+        return render(request, 'inventory/locations/location_list.html', {'locations': [], 'error': str(e)})
 
 @login_required
+@permission_required('inventory.view_location', raise_exception=True)
 def location_detail(request, location_id):
-    """Display location details with assigned devices"""
+    """Enhanced location detail with hierarchy display"""
     try:
-        location = get_object_or_404(Location.objects.select_related(
-            'room__department', 'room__building'
-        ), id=location_id)
+        location = get_object_or_404(
+            Location.objects.select_related(
+                'building', 'block', 'floor', 'department', 'room'
+            ),
+            id=location_id
+        )
         
-        # Get devices at this location
+        # Current assignments at this location
         current_assignments = Assignment.objects.filter(
             assigned_to_location=location,
-            is_active=True
-        ).select_related('device', 'assigned_to_staff')
+            status='ACTIVE'
+        ).select_related(
+            'device__device_type', 'assigned_to_staff__user'
+        ).order_by('-created_at')
         
-        # Get assignment history for this location
+        # Assignment history
         assignment_history = Assignment.objects.filter(
             assigned_to_location=location
-        ).select_related('device', 'assigned_to_staff').order_by('-created_at')[:20]
+        ).select_related(
+            'device', 'assigned_to_staff__user'
+        ).order_by('-created_at')[:20]
         
         # Calculate statistics
         total_devices = current_assignments.count()
@@ -2181,16 +2237,42 @@ def location_detail(request, location_id):
             'device__device_type__subcategory__category__name'
         ).annotate(count=Count('id')).order_by('-count')
         
+        # Device conditions breakdown
+        condition_breakdown = current_assignments.values(
+            'device__condition'
+        ).annotate(count=Count('id')).order_by('device__condition')
+        
+        # Recent activity (last 30 days)
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        recent_assignments = assignment_history.filter(
+            created_at__gte=thirty_days_ago
+        )[:10]
+        
+        # Generate hierarchy breadcrumb
+        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
+        location_code = LocationHierarchyUtils.get_location_code(
+            building=location.building,
+            block=location.block,
+            floor=location.floor,
+            department=location.department,
+            room=location.room
+        )
+        
         context = {
             'location': location,
             'current_assignments': current_assignments,
             'assignment_history': assignment_history,
+            'recent_assignments': recent_assignments,
             'total_devices': total_devices,
             'total_value': total_value,
             'category_breakdown': category_breakdown,
+            'condition_breakdown': condition_breakdown,
+            'hierarchy_breadcrumb': hierarchy_breadcrumb,
+            'location_code': location_code,
+            'title': f'Location: {hierarchy_breadcrumb}',
         }
         
-        return render(request, 'inventory/location_detail.html', context)
+        return render(request, 'inventory/locations/location_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading location details: {str(e)}")
@@ -2199,51 +2281,84 @@ def location_detail(request, location_id):
 @login_required
 @permission_required('inventory.add_location', raise_exception=True)
 def location_create(request):
-    """Create new location"""
+    """Enhanced location creation with block support"""
     if request.method == 'POST':
         form = LocationForm(request.POST)
         if form.is_valid():
             try:
-                location = form.save()
-                
-                # Create audit log
-                AuditLog.objects.create(
-                    user=request.user,
-                    action='CREATE',
-                    model_name='Location',
-                    object_id=str(location.id),
-                    object_repr=str(location),
-                    changes={'created': 'New location added'},
-                    ip_address=request.META.get('REMOTE_ADDR')
-                )
-                
-                messages.success(request, f'Location "{location.name}" created successfully.')
-                return redirect('inventory:location_detail', location_id=location.id)
+                with transaction.atomic():
+                    location = form.save()
+                    
+                    # Generate location code
+                    location_code = LocationHierarchyUtils.get_location_code(
+                        building=location.building,
+                        block=location.block,
+                        floor=location.floor,
+                        department=location.department,
+                        room=location.room
+                    )
+                    
+                    # Create audit log
+                    AuditLog.objects.create(
+                        user=request.user,
+                        action='CREATE',
+                        model_name='Location',
+                        object_id=str(location.id),
+                        object_repr=str(location),
+                        changes={
+                            'created': 'New location added',
+                            'location_code': location_code,
+                            'hierarchy': str(location)
+                        },
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
+                    messages.success(request, f'Location "{hierarchy_breadcrumb}" created successfully.')
+                    return redirect('inventory:location_detail', location_id=location.id)
             except Exception as e:
                 messages.error(request, f'Error creating location: {str(e)}')
     else:
         form = LocationForm()
+        
+        # Apply form utilities
+        LocationHierarchyUtils.setup_cascade_filtering(form)
     
     context = {
         'form': form,
         'title': 'Add New Location',
         'action': 'Create',
+        'breadcrumb': 'Create Location',
     }
-    return render(request, 'inventory/location_form.html', context)
+    return render(request, 'inventory/locations/location_form.html', context)
 
 @login_required
 @permission_required('inventory.change_location', raise_exception=True)
 def location_edit(request, location_id):
-    """Edit location details"""
+    """Enhanced location editing with hierarchy validation"""
     try:
-        location = get_object_or_404(Location, id=location_id)
+        location = get_object_or_404(
+            Location.objects.select_related('building', 'block', 'floor', 'department', 'room'),
+            id=location_id
+        )
         
         if request.method == 'POST':
             form = LocationForm(request.POST, instance=location)
             if form.is_valid():
                 try:
                     with transaction.atomic():
+                        old_hierarchy = str(location)
                         location = form.save()
+                        new_hierarchy = str(location)
+                        
+                        # Generate new location code
+                        location_code = LocationHierarchyUtils.get_location_code(
+                            building=location.building,
+                            block=location.block,
+                            floor=location.floor,
+                            department=location.department,
+                            room=location.room
+                        )
                         
                         # Log the activity
                         from .utils import log_user_activity
@@ -2253,23 +2368,35 @@ def location_edit(request, location_id):
                             model_name='Location',
                             object_id=location.id,
                             object_repr=str(location),
+                            changes={
+                                'old_hierarchy': old_hierarchy,
+                                'new_hierarchy': new_hierarchy,
+                                'location_code': location_code
+                            },
                             ip_address=request.META.get('REMOTE_ADDR')
                         )
                         
-                        messages.success(request, f'Location "{location.name}" updated successfully.')
+                        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
+                        messages.success(request, f'Location "{hierarchy_breadcrumb}" updated successfully.')
                         return redirect('inventory:location_detail', location_id=location.id)
                 except Exception as e:
                     messages.error(request, f'Error updating location: {str(e)}')
         else:
             form = LocationForm(instance=location)
+            
+        # Apply form utilities
+        LocationHierarchyUtils.setup_cascade_filtering(form)
+        
+        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
         
         context = {
             'form': form,
             'location': location,
-            'title': f'Edit Location: {location.name}',
+            'title': f'Edit Location: {hierarchy_breadcrumb}',
             'action': 'Update',
+            'breadcrumb': f'Edit {hierarchy_breadcrumb}',
         }
-        return render(request, 'inventory/location_form.html', context)
+        return render(request, 'inventory/locations/location_form.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading location for edit: {str(e)}")
@@ -2278,27 +2405,48 @@ def location_edit(request, location_id):
 @login_required
 @permission_required('inventory.delete_location', raise_exception=True)
 def location_delete(request, location_id):
-    """Delete location"""
+    """Enhanced location deletion with dependency checking"""
     try:
-        location = get_object_or_404(Location, id=location_id)
+        location = get_object_or_404(
+            Location.objects.select_related('building', 'block', 'floor', 'department', 'room'),
+            id=location_id
+        )
         
-        # Check if location has active assignments
+        # Check for dependencies
         active_assignments = Assignment.objects.filter(
-            location=location,
+            assigned_to_location=location,
             status='ACTIVE'
         ).count()
         
-        if active_assignments > 0:
-            messages.error(
-                request, 
-                f'Cannot delete location "{location.name}". It has {active_assignments} active device assignments.'
-            )
-            return redirect('inventory:location_detail', location_id=location.id)
+        total_assignments = Assignment.objects.filter(
+            assigned_to_location=location
+        ).count()
+        
+        staff_using_location = Staff.objects.filter(
+            office_location=location
+        ).count()
+        
+        # Check if location can be deleted
+        can_delete = active_assignments == 0 and staff_using_location == 0
         
         if request.method == 'POST':
+            if not can_delete:
+                messages.error(
+                    request, 
+                    f'Cannot delete location. It has {active_assignments} active assignments and {staff_using_location} staff members.'
+                )
+                return redirect('inventory:location_detail', location_id=location.id)
+            
             try:
                 with transaction.atomic():
-                    location_name = location.name
+                    hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
+                    location_code = LocationHierarchyUtils.get_location_code(
+                        building=location.building,
+                        block=location.block,
+                        floor=location.floor,
+                        department=location.department,
+                        room=location.room
+                    )
                     
                     # Log the activity before deletion
                     from .utils import log_user_activity
@@ -2308,22 +2456,33 @@ def location_delete(request, location_id):
                         model_name='Location',
                         object_id=location.id,
                         object_repr=str(location),
+                        changes={
+                            'deleted_hierarchy': hierarchy_breadcrumb,
+                            'location_code': location_code,
+                            'total_assignments_history': total_assignments
+                        },
                         ip_address=request.META.get('REMOTE_ADDR')
                     )
                     
                     location.delete()
-                    messages.success(request, f'Location "{location_name}" deleted successfully.')
+                    messages.success(request, f'Location "{hierarchy_breadcrumb}" deleted successfully.')
                     return redirect('inventory:location_list')
             except Exception as e:
                 messages.error(request, f'Error deleting location: {str(e)}')
                 return redirect('inventory:location_detail', location_id=location.id)
         
+        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
+        
         context = {
             'location': location,
+            'hierarchy_breadcrumb': hierarchy_breadcrumb,
             'active_assignments': active_assignments,
-            'title': f'Delete Location: {location.name}',
+            'total_assignments': total_assignments,
+            'staff_using_location': staff_using_location,
+            'can_delete': can_delete,
+            'title': f'Delete Location: {hierarchy_breadcrumb}',
         }
-        return render(request, 'inventory/location_delete.html', context)
+        return render(request, 'inventory/locations/location_delete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading location for deletion: {str(e)}")
@@ -5048,6 +5207,74 @@ def ajax_assignment_quick_actions(request, assignment_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
     
+@login_required
+def ajax_get_blocks(request):
+    """AJAX endpoint to get blocks for a building"""
+    building_id = request.GET.get('building_id')
+    
+    if building_id:
+        blocks = Block.objects.filter(
+            building_id=building_id,
+            is_active=True
+        ).order_by('name').values('id', 'name', 'code')
+        
+        return JsonResponse({
+            'blocks': list(blocks)
+        })
+    
+    return JsonResponse({'blocks': []})
+
+@login_required
+def ajax_get_floors(request):
+    """AJAX endpoint to get floors for a block"""
+    block_id = request.GET.get('block_id')
+    
+    if block_id:
+        floors = Floor.objects.filter(
+            block_id=block_id,
+            is_active=True
+        ).order_by('floor_number').values('id', 'name', 'floor_number')
+        
+        return JsonResponse({
+            'floors': list(floors)
+        })
+    
+    return JsonResponse({'floors': []})
+
+@login_required
+def ajax_get_departments(request):
+    """AJAX endpoint to get departments for a floor"""
+    floor_id = request.GET.get('floor_id')
+    
+    if floor_id:
+        departments = Department.objects.filter(
+            floor_id=floor_id,
+            is_active=True
+        ).order_by('name').values('id', 'name', 'code')
+        
+        return JsonResponse({
+            'departments': list(departments)
+        })
+    
+    return JsonResponse({'departments': []})
+
+@login_required
+def ajax_get_rooms(request):
+    """AJAX endpoint to get rooms for a department"""
+    department_id = request.GET.get('department_id')
+    
+    if department_id:
+        rooms = Room.objects.filter(
+            department_id=department_id,
+            is_active=True
+        ).order_by('room_number').values('id', 'room_number', 'room_name')
+        
+        return JsonResponse({
+            'rooms': list(rooms)
+        })
+    
+    return JsonResponse({'rooms': []})
+
 # ================================
 # IMPORT/EXPORT VIEWS - HIGH PRIORITY
 # ================================

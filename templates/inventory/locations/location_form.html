@@ -1,0 +1,1169 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem 0;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .form-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-section {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border-left: 4px solid #2563eb;
+    }
+
+    .hierarchy-preview {
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        border: 2px dashed #6366f1;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .hierarchy-preview.active {
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        border-color: #22c55e;
+    }
+
+    .cascade-field {
+        position: relative;
+        margin-bottom: 1rem;
+    }
+
+    .cascade-field .form-control:disabled {
+        background-color: #f1f5f9;
+        border-color: #e2e8f0;
+        opacity: 0.7;
+    }
+
+    .cascade-field .form-control:enabled {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .field-icon {
+        position: absolute;
+        left: 12px;
+        top: 38px;
+        color: #6b7280;
+        z-index: 3;
+    }
+
+    .cascade-field .form-control {
+        padding-left: 45px;
+    }
+
+    .hierarchy-badge {
+        background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+        color: white;
+        padding: 0.375rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        margin: 0.25rem;
+        display: inline-block;
+        font-weight: 500;
+    }
+
+    .validation-feedback {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 6px;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        color: #dc2626;
+    }
+
+    .help-text {
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 6px;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        color: #0369a1;
+        font-size: 0.875rem;
+    }
+
+    .form-actions {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 0 0 12px 12px;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        z-index: 10;
+    }
+
+    .required-asterisk {
+        color: #dc2626;
+        font-weight: bold;
+    }
+
+    .step-indicator {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .step-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .step-item:last-child {
+        border-bottom: none;
+    }
+
+    .step-number {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #e2e8f0;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 0.75rem;
+    }
+
+    .step-number.active {
+        background: #2563eb;
+        color: white;
+    }
+
+    .step-number.completed {
+        background: #10b981;
+        color: white;
+    }
+
+    .autocomplete-suggestion {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .autocomplete-suggestion:hover {
+        background: #e2e8f0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Form Header -->
+    <div class="form-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="h2 mb-0">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        {{ title }}
+                    </h1>
+                    <p class="mb-0 mt-2 opacity-75">
+                        {% if action == 'Create' %}
+                            Add a new location to the system hierarchy
+                        {% else %}
+                            Update location information and hierarchy
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% if location %}{% url 'inventory:location_detail' location.id %}{% else %}{% url 'inventory:location_list' %}{% endif %}" 
+                       class="btn btn-light">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        {% if location %}Back to Location{% else %}Back to List{% endif %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Inventory</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:location_list' %}">Locations</a></li>
+            <li class="breadcrumb-item active">{{ breadcrumb }}</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="row">
+                    <div class="col-md-2">
+                        <div class="step-item">
+                            <div class="step-number active" id="step1">1</div>
+                            <span class="small">Building</span>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="step-item">
+                            <div class="step-number" id="step2">2</div>
+                            <span class="small">Block</span>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="step-item">
+                            <div class="step-number" id="step3">3</div>
+                            <span class="small">Floor</span>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="step-item">
+                            <div class="step-number" id="step4">4</div>
+                            <span class="small">Department</span>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="step-item">
+                            <div class="step-number" id="step5">5</div>
+                            <span class="small">Room</span>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="step-item">
+                            <div class="step-number" id="step6">6</div>
+                            <span class="small">Details</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hierarchy Preview -->
+            <div class="hierarchy-preview" id="hierarchyPreview">
+                <div class="mb-2">
+                    <i class="fas fa-route fa-2x text-muted"></i>
+                </div>
+                <h5 class="mb-2">Location Hierarchy Preview</h5>
+                <div id="hierarchyText" class="text-muted">
+                    Select components to build the location hierarchy
+                </div>
+                <div id="hierarchyBadges" class="mt-3">
+                    <!-- Hierarchy badges will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Form Card -->
+            <div class="card form-card">
+                <form method="post" id="locationForm" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="card-body">
+                        <!-- Location Hierarchy Section -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-sitemap text-primary me-2"></i>
+                                Location Hierarchy
+                            </h5>
+                            <p class="text-muted mb-4">
+                                Build the location by selecting each level of the hierarchy. Each selection will enable the next level.
+                            </p>
+
+                            <div class="row">
+                                <!-- Building -->
+                                <div class="col-md-6">
+                                    <div class="cascade-field">
+                                        <label for="{{ form.building.id_for_label }}" class="form-label">
+                                            <i class="fas fa-building text-primary me-1"></i>
+                                            Building <span class="required-asterisk">*</span>
+                                        </label>
+                                        <div class="position-relative">
+                                            <i class="fas fa-building field-icon"></i>
+                                            {{ form.building }}
+                                        </div>
+                                        {% if form.building.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.building.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        {% if form.building.help_text %}
+                                            <div class="help-text">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                {{ form.building.help_text }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Block -->
+                                <div class="col-md-6">
+                                    <div class="cascade-field">
+                                        <label for="{{ form.block.id_for_label }}" class="form-label">
+                                            <i class="fas fa-th-large text-primary me-1"></i>
+                                            Block <span class="required-asterisk">*</span>
+                                        </label>
+                                        <div class="position-relative">
+                                            <i class="fas fa-th-large field-icon"></i>
+                                            {{ form.block }}
+                                        </div>
+                                        {% if form.block.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.block.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">Select a building first</small>
+                                    </div>
+                                </div>
+
+                                <!-- Floor -->
+                                <div class="col-md-6">
+                                    <div class="cascade-field">
+                                        <label for="{{ form.floor.id_for_label }}" class="form-label">
+                                            <i class="fas fa-layer-group text-primary me-1"></i>
+                                            Floor <span class="required-asterisk">*</span>
+                                        </label>
+                                        <div class="position-relative">
+                                            <i class="fas fa-layer-group field-icon"></i>
+                                            {{ form.floor }}
+                                        </div>
+                                        {% if form.floor.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.floor.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">Select a block first</small>
+                                    </div>
+                                </div>
+
+                                <!-- Department -->
+                                <div class="col-md-6">
+                                    <div class="cascade-field">
+                                        <label for="{{ form.department.id_for_label }}" class="form-label">
+                                            <i class="fas fa-users text-primary me-1"></i>
+                                            Department <span class="required-asterisk">*</span>
+                                        </label>
+                                        <div class="position-relative">
+                                            <i class="fas fa-users field-icon"></i>
+                                            {{ form.department }}
+                                        </div>
+                                        {% if form.department.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.department.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">Select a floor first</small>
+                                    </div>
+                                </div>
+
+                                <!-- Room (Optional) -->
+                                <div class="col-md-6">
+                                    <div class="cascade-field">
+                                        <label for="{{ form.room.id_for_label }}" class="form-label">
+                                            <i class="fas fa-door-open text-primary me-1"></i>
+                                            Room <span class="text-muted">(Optional)</span>
+                                        </label>
+                                        <div class="position-relative">
+                                            <i class="fas fa-door-open field-icon"></i>
+                                            {{ form.room }}
+                                        </div>
+                                        {% if form.room.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.room.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">Select a department first</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Information Section -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-info-circle text-primary me-2"></i>
+                                Additional Information
+                            </h5>
+
+                            <div class="row">
+                                <!-- Description -->
+                                <div class="col-md-8">
+                                    <div class="mb-3">
+                                        <label for="{{ form.description.id_for_label }}" class="form-label">
+                                            <i class="fas fa-align-left text-muted me-1"></i>
+                                            Description
+                                        </label>
+                                        {{ form.description }}
+                                        {% if form.description.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.description.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Optional description or notes about this location
+                                        </small>
+                                    </div>
+                                </div>
+
+                                <!-- Status -->
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="{{ form.is_active.id_for_label }}" class="form-label">
+                                            <i class="fas fa-toggle-on text-muted me-1"></i>
+                                            Status
+                                        </label>
+                                        <div class="form-check form-switch">
+                                            {{ form.is_active }}
+                                            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                                Active Location
+                                            </label>
+                                        </div>
+                                        {% if form.is_active.errors %}
+                                            <div class="validation-feedback">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ form.is_active.errors.0 }}
+                                            </div>
+                                        {% endif %}
+                                        <small class="form-text text-muted">
+                                            Inactive locations cannot be assigned devices
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Auto-Generated Information -->
+                        <div class="form-section">
+                            <h5 class="mb-3">
+                                <i class="fas fa-cog text-primary me-2"></i>
+                                Auto-Generated Information
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-barcode text-muted me-1"></i>
+                                            Location Code
+                                        </label>
+                                        <div class="form-control bg-light" id="locationCode">
+                                            <code>Will be generated automatically</code>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            Code format: BUILDING-BLOCK-FLOOR-DEPARTMENT
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="fas fa-fingerprint text-muted me-1"></i>
+                                            Unique Identifier
+                                        </label>
+                                        <div class="form-control bg-light" id="locationId">
+                                            <code>Will be generated on save</code>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            System-generated unique location ID
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Validation Summary -->
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            <h6><i class="fas fa-exclamation-triangle me-2"></i>Validation Errors</h6>
+                            {% for error in form.non_field_errors %}
+                                <p class="mb-1">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <small class="text-muted">
+                                    <span class="required-asterisk">*</span> Required fields
+                                </small>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <a href="{% if location %}{% url 'inventory:location_detail' location.id %}{% else %}{% url 'inventory:location_list' %}{% endif %}" 
+                                   class="btn btn-secondary me-2">
+                                    <i class="fas fa-times me-1"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary" id="submitBtn">
+                                    <i class="fas fa-save me-1"></i>
+                                    {{ action }} Location
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5>Processing Location...</h5>
+                <p class="text-muted mb-0">Please wait while we validate and save the location.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global variables
+let isFormValid = false;
+let cascadeInProgress = false;
+
+$(document).ready(function() {
+    initializeForm();
+    setupCascadeFiltering();
+    setupFormValidation();
+    setupHierarchyPreview();
+    
+    // Load existing data if editing
+    {% if location %}
+        updateHierarchyPreview();
+        updateStepIndicators();
+    {% endif %}
+});
+
+// Initialize form
+function initializeForm() {
+    // Add CSS classes to form fields
+    $('#{{ form.building.id_for_label }}').addClass('form-control cascade-parent');
+    $('#{{ form.block.id_for_label }}').addClass('form-control cascade-child');
+    $('#{{ form.floor.id_for_label }}').addClass('form-control cascade-child');
+    $('#{{ form.department.id_for_label }}').addClass('form-control cascade-child');
+    $('#{{ form.room.id_for_label }}').addClass('form-control cascade-child');
+    $('#{{ form.description.id_for_label }}').addClass('form-control');
+    $('#{{ form.is_active.id_for_label }}').addClass('form-check-input');
+    
+    // Initially disable cascade fields
+    $('#{{ form.block.id_for_label }}').prop('disabled', true);
+    $('#{{ form.floor.id_for_label }}').prop('disabled', true);
+    $('#{{ form.department.id_for_label }}').prop('disabled', true);
+    $('#{{ form.room.id_for_label }}').prop('disabled', true);
+}
+
+// Setup cascade filtering
+function setupCascadeFiltering() {
+    // Building change
+    $('#{{ form.building.id_for_label }}').change(function() {
+        const buildingId = $(this).val();
+        resetCascadeFields(['{{ form.block.id_for_label }}', '{{ form.floor.id_for_label }}', '{{ form.department.id_for_label }}', '{{ form.room.id_for_label }}']);
+        
+        if (buildingId) {
+            loadCascadeData('{% url "inventory:ajax_get_blocks" %}', {building_id: buildingId}, $('#{{ form.block.id_for_label }}'));
+            updateStepIndicator(1, 'completed');
+            updateStepIndicator(2, 'active');
+        } else {
+            updateStepIndicator(1, 'active');
+            resetStepIndicators(2);
+        }
+        updateHierarchyPreview();
+        generateLocationCode();
+    });
+    
+    // Block change
+    $('#{{ form.block.id_for_label }}').change(function() {
+        const blockId = $(this).val();
+        resetCascadeFields(['{{ form.floor.id_for_label }}', '{{ form.department.id_for_label }}', '{{ form.room.id_for_label }}']);
+        
+        if (blockId) {
+            loadCascadeData('{% url "inventory:ajax_get_floors" %}', {block_id: blockId}, $('#{{ form.floor.id_for_label }}'));
+            updateStepIndicator(2, 'completed');
+            updateStepIndicator(3, 'active');
+        } else {
+            updateStepIndicator(2, 'active');
+            resetStepIndicators(3);
+        }
+        updateHierarchyPreview();
+        generateLocationCode();
+    });
+    
+    // Floor change
+    $('#{{ form.floor.id_for_label }}').change(function() {
+        const floorId = $(this).val();
+        resetCascadeFields(['{{ form.department.id_for_label }}', '{{ form.room.id_for_label }}']);
+        
+        if (floorId) {
+            loadCascadeData('{% url "inventory:ajax_get_departments" %}', {floor_id: floorId}, $('#{{ form.department.id_for_label }}'));
+            updateStepIndicator(3, 'completed');
+            updateStepIndicator(4, 'active');
+        } else {
+            updateStepIndicator(3, 'active');
+            resetStepIndicators(4);
+        }
+        updateHierarchyPreview();
+        generateLocationCode();
+    });
+    
+    // Department change
+    $('#{{ form.department.id_for_label }}').change(function() {
+        const departmentId = $(this).val();
+        resetCascadeFields(['{{ form.room.id_for_label }}']);
+        
+        if (departmentId) {
+            loadCascadeData('{% url "inventory:ajax_get_rooms" %}', {department_id: departmentId}, $('#{{ form.room.id_for_label }}'));
+            updateStepIndicator(4, 'completed');
+            updateStepIndicator(5, 'active');
+            updateStepIndicator(6, 'active');
+        } else {
+            updateStepIndicator(4, 'active');
+            resetStepIndicators(5);
+        }
+        updateHierarchyPreview();
+        generateLocationCode();
+    });
+    
+    // Room change
+    $('#{{ form.room.id_for_label }}').change(function() {
+        if ($(this).val()) {
+            updateStepIndicator(5, 'completed');
+        } else {
+            updateStepIndicator(5, 'active');
+        }
+        updateHierarchyPreview();
+        generateLocationCode();
+    });
+}
+
+// Load cascade data via AJAX
+function loadCascadeData(url, params, targetSelect) {
+    if (cascadeInProgress) return;
+    
+    cascadeInProgress = true;
+    targetSelect.prop('disabled', true).html('<option value="">Loading...</option>');
+    
+    // Add loading overlay
+    const loadingHtml = '<div class="loading-overlay"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>';
+    targetSelect.parent().append(loadingHtml);
+    
+    $.get(url, params)
+        .done(function(data) {
+            let options = '<option value="">Select...</option>';
+            const dataKey = Object.keys(data)[0];
+            
+            if (data[dataKey] && data[dataKey].length > 0) {
+                data[dataKey].forEach(function(item) {
+                    const name = item.name || item.room_number;
+                    const code = item.code ? ` (${item.code})` : '';
+                    const floorNum = item.floor_number ? ` - Floor ${item.floor_number}` : '';
+                    options += `<option value="${item.id}">${name}${code}${floorNum}</option>`;
+                });
+                targetSelect.prop('disabled', false);
+            } else {
+                options = '<option value="">No options available</option>';
+            }
+            
+            targetSelect.html(options);
+        })
+        .fail(function(xhr) {
+            console.error('Error loading cascade data:', xhr);
+            targetSelect.html('<option value="">Error loading data</option>');
+        })
+        .always(function() {
+            targetSelect.parent().find('.loading-overlay').remove();
+            cascadeInProgress = false;
+        });
+}
+
+// Reset cascade fields
+function resetCascadeFields(fieldIds) {
+    fieldIds.forEach(function(fieldId) {
+        $(`#${fieldId}`).html('<option value="">Select...</option>').prop('disabled', true);
+    });
+}
+
+// Update step indicators
+function updateStepIndicator(step, status) {
+    const stepElement = $(`#step${step}`);
+    stepElement.removeClass('active completed');
+    stepElement.addClass(status);
+}
+
+function resetStepIndicators(fromStep) {
+    for (let i = fromStep; i <= 6; i++) {
+        $(`#step${i}`).removeClass('active completed');
+    }
+}
+
+function updateStepIndicators() {
+    const building = $('#{{ form.building.id_for_label }}').val();
+    const block = $('#{{ form.block.id_for_label }}').val();
+    const floor = $('#{{ form.floor.id_for_label }}').val();
+    const department = $('#{{ form.department.id_for_label }}').val();
+    const room = $('#{{ form.room.id_for_label }}').val();
+    
+    resetStepIndicators(1);
+    
+    if (building) {
+        updateStepIndicator(1, 'completed');
+        updateStepIndicator(2, block ? 'completed' : 'active');
+    } else {
+        updateStepIndicator(1, 'active');
+        return;
+    }
+    
+    if (block) {
+        updateStepIndicator(3, floor ? 'completed' : 'active');
+    } else return;
+    
+    if (floor) {
+        updateStepIndicator(4, department ? 'completed' : 'active');
+    } else return;
+    
+    if (department) {
+        updateStepIndicator(5, room ? 'completed' : 'active');
+        updateStepIndicator(6, 'active');
+    }
+}
+
+// Setup hierarchy preview
+function setupHierarchyPreview() {
+    // Update preview on any field change
+    $('#locationForm select').change(function() {
+        updateHierarchyPreview();
+    });
+}
+
+// Update hierarchy preview
+function updateHierarchyPreview() {
+    const building = $('#{{ form.building.id_for_label }} option:selected').text();
+    const block = $('#{{ form.block.id_for_label }} option:selected').text();
+    const floor = $('#{{ form.floor.id_for_label }} option:selected').text();
+    const department = $('#{{ form.department.id_for_label }} option:selected').text();
+    const room = $('#{{ form.room.id_for_label }} option:selected').text();
+    
+    const parts = [];
+    const badges = [];
+    
+    if (building && building !== 'Select...') {
+        parts.push(building);
+        badges.push(`<span class="hierarchy-badge"><i class="fas fa-building me-1"></i>${building}</span>`);
+    }
+    
+    if (block && block !== 'Select...' && block !== 'Loading...') {
+        parts.push(block);
+        badges.push(`<span class="hierarchy-badge"><i class="fas fa-th-large me-1"></i>${block}</span>`);
+    }
+    
+    if (floor && floor !== 'Select...' && floor !== 'Loading...') {
+        parts.push(floor);
+        badges.push(`<span class="hierarchy-badge"><i class="fas fa-layer-group me-1"></i>${floor}</span>`);
+    }
+    
+    if (department && department !== 'Select...' && department !== 'Loading...') {
+        parts.push(department);
+        badges.push(`<span class="hierarchy-badge"><i class="fas fa-users me-1"></i>${department}</span>`);
+    }
+    
+    if (room && room !== 'Select...' && room !== 'Loading...') {
+        parts.push(room);
+        badges.push(`<span class="hierarchy-badge"><i class="fas fa-door-open me-1"></i>${room}</span>`);
+    }
+    
+    if (parts.length > 0) {
+        $('#hierarchyText').text(parts.join(' → '));
+        $('#hierarchyBadges').html(badges.join(''));
+        $('#hierarchyPreview').addClass('active');
+    } else {
+        $('#hierarchyText').text('Select components to build the location hierarchy');
+        $('#hierarchyBadges').empty();
+        $('#hierarchyPreview').removeClass('active');
+    }
+}
+
+// Generate location code preview
+function generateLocationCode() {
+    const building = $('#{{ form.building.id_for_label }} option:selected');
+    const block = $('#{{ form.block.id_for_label }} option:selected');
+    const floor = $('#{{ form.floor.id_for_label }} option:selected');
+    const department = $('#{{ form.department.id_for_label }} option:selected');
+    
+    let code = '';
+    
+    if (building.val()) {
+        // Extract building code (assuming it's in parentheses or use first 3 chars)
+        const buildingText = building.text();
+        const buildingCode = buildingText.match(/\(([^)]+)\)/) ? buildingText.match(/\(([^)]+)\)/)[1] : buildingText.substring(0, 3).toUpperCase();
+        code += buildingCode;
+    }
+    
+    if (block.val()) {
+        const blockText = block.text();
+        const blockCode = blockText.match(/\(([^)]+)\)/) ? blockText.match(/\(([^)]+)\)/)[1] : blockText.substring(0, 2).toUpperCase();
+        code += code ? `-${blockCode}` : blockCode;
+    }
+    
+    if (floor.val()) {
+        const floorText = floor.text();
+        const floorNum = floorText.match(/Floor (\d+)/) ? floorText.match(/Floor (\d+)/)[1] : floorText.match(/\d+/) ? floorText.match(/\d+/)[0] : 'F';
+        code += code ? `-${floorNum}` : floorNum;
+    }
+    
+    if (department.val()) {
+        const deptText = department.text();
+        const deptCode = deptText.match(/\(([^)]+)\)/) ? deptText.match(/\(([^)]+)\)/)[1] : deptText.substring(0, 3).toUpperCase();
+        code += code ? `-${deptCode}` : deptCode;
+    }
+    
+    if (code) {
+        $('#locationCode').html(`<code>${code}</code>`);
+    } else {
+        $('#locationCode').html('<code>Will be generated automatically</code>');
+    }
+}
+
+// Setup form validation
+function setupFormValidation() {
+    $('#locationForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        if (validateForm()) {
+            showLoadingModal();
+            submitForm();
+        }
+    });
+    
+    // Real-time validation
+    $('#locationForm input, #locationForm select, #locationForm textarea').on('change blur', function() {
+        validateField($(this));
+    });
+}
+
+// Validate individual field
+function validateField(field) {
+    const fieldName = field.attr('name');
+    const value = field.val();
+    const isRequired = field.closest('.cascade-field').find('.required-asterisk').length > 0;
+    
+    // Remove existing validation feedback
+    field.closest('.cascade-field, .mb-3').find('.validation-feedback').remove();
+    field.removeClass('is-invalid is-valid');
+    
+    // Required field validation
+    if (isRequired && !value) {
+        addFieldError(field, 'This field is required.');
+        return false;
+    }
+    
+    // Hierarchy validation
+    if (fieldName === 'block' && value) {
+        const building = $('#{{ form.building.id_for_label }}').val();
+        if (!building) {
+            addFieldError(field, 'Please select a building first.');
+            return false;
+        }
+    }
+    
+    if (fieldName === 'floor' && value) {
+        const block = $('#{{ form.block.id_for_label }}').val();
+        if (!block) {
+            addFieldError(field, 'Please select a block first.');
+            return false;
+        }
+    }
+    
+    if (fieldName === 'department' && value) {
+        const floor = $('#{{ form.floor.id_for_label }}').val();
+        if (!floor) {
+            addFieldError(field, 'Please select a floor first.');
+            return false;
+        }
+    }
+    
+    if (fieldName === 'room' && value) {
+        const department = $('#{{ form.department.id_for_label }}').val();
+        if (!department) {
+            addFieldError(field, 'Please select a department first.');
+            return false;
+        }
+    }
+    
+    // If we get here, field is valid
+    field.addClass('is-valid');
+    return true;
+}
+
+// Add field error
+function addFieldError(field, message) {
+    field.addClass('is-invalid');
+    const errorHtml = `
+        <div class="validation-feedback">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            ${message}
+        </div>
+    `;
+    field.closest('.cascade-field, .mb-3').append(errorHtml);
+}
+
+// Validate entire form
+function validateForm() {
+    let isValid = true;
+    
+    // Validate required fields
+    const requiredFields = ['{{ form.building.id_for_label }}', '{{ form.block.id_for_label }}', '{{ form.floor.id_for_label }}', '{{ form.department.id_for_label }}'];
+    
+    requiredFields.forEach(function(fieldId) {
+        const field = $(`#${fieldId}`);
+        if (!validateField(field)) {
+            isValid = false;
+        }
+    });
+    
+    // Check for duplicate location
+    if (isValid) {
+        checkDuplicateLocation();
+    }
+    
+    return isValid;
+}
+
+// Check for duplicate location
+function checkDuplicateLocation() {
+    const formData = {
+        building: $('#{{ form.building.id_for_label }}').val(),
+        block: $('#{{ form.block.id_for_label }}').val(),
+        floor: $('#{{ form.floor.id_for_label }}').val(),
+        department: $('#{{ form.department.id_for_label }}').val(),
+        room: $('#{{ form.room.id_for_label }}').val()
+    };
+    
+    $.post('{% url "inventory:ajax_validate_hierarchy" %}', {
+        ...formData,
+        {% if location %}'location_id': '{{ location.id }}',{% endif %}
+        'csrfmiddlewaretoken': '{{ csrf_token }}'
+    })
+    .done(function(response) {
+        if (!response.is_valid) {
+            // Show duplicate error
+            const alertHtml = `
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Duplicate Location:</strong> ${response.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            $('.card-body').prepend(alertHtml);
+            isFormValid = false;
+        } else {
+            isFormValid = true;
+        }
+    });
+}
+
+// Submit form
+function submitForm() {
+    const formData = new FormData($('#locationForm')[0]);
+    
+    $.ajax({
+        url: $('#locationForm').attr('action') || window.location.href,
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            hideLoadingModal();
+            
+            if (response.success) {
+                // Show success message
+                showSuccessMessage(response.message);
+                
+                // Redirect after delay
+                setTimeout(function() {
+                    window.location.href = response.redirect_url;
+                }, 1500);
+            } else {
+                // Handle form errors
+                displayFormErrors(response.errors);
+            }
+        },
+        error: function(xhr) {
+            hideLoadingModal();
+            console.error('Form submission error:', xhr);
+            
+            if (xhr.status === 400) {
+                // Validation errors
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    displayFormErrors(response.errors);
+                } catch (e) {
+                    // Fallback: submit normally
+                    $('#locationForm')[0].submit();
+                }
+            } else {
+                // Fallback: submit normally
+                $('#locationForm')[0].submit();
+            }
+        }
+    });
+}
+
+// Display form errors
+function displayFormErrors(errors) {
+    // Clear existing errors
+    $('.is-invalid').removeClass('is-invalid');
+    $('.validation-feedback').remove();
+    $('.alert-danger').remove();
+    
+    if (errors.non_field_errors) {
+        const alertHtml = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <h6><i class="fas fa-exclamation-triangle me-2"></i>Validation Errors</h6>
+                ${errors.non_field_errors.map(error => `<p class="mb-1">${error}</p>`).join('')}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        $('.card-body').prepend(alertHtml);
+    }
+    
+    // Field-specific errors
+    Object.keys(errors).forEach(function(fieldName) {
+        if (fieldName !== 'non_field_errors') {
+            const field = $(`[name="${fieldName}"]`);
+            if (field.length) {
+                addFieldError(field, errors[fieldName][0]);
+            }
+        }
+    });
+}
+
+// Show success message
+function showSuccessMessage(message) {
+    const alertHtml = `
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    $('.card-body').prepend(alertHtml);
+}
+
+// Show/hide loading modal
+function showLoadingModal() {
+    $('#loadingModal').modal('show');
+    $('#submitBtn').prop('disabled', true);
+}
+
+function hideLoadingModal() {
+    $('#loadingModal').modal('hide');
+    $('#submitBtn').prop('disabled', false);
+}
+
+// Keyboard shortcuts
+$(document).keydown(function(e) {
+    // Ctrl+S to save
+    if (e.ctrlKey && e.keyCode === 83) {
+        e.preventDefault();
+        $('#submitBtn').click();
+    }
+    
+    // Escape to cancel
+    if (e.keyCode === 27) {
+        window.location.href = "{% if location %}{% url 'inventory:location_detail' location.id %}{% else %}{% url 'inventory:location_list' %}{% endif %}";
+    }
+});
+
+// Auto-save draft (optional)
+function autoSaveDraft() {
+    const formData = {
+        building: $('#{{ form.building.id_for_label }}').val(),
+        block: $('#{{ form.block.id_for_label }}').val(),
+        floor: $('#{{ form.floor.id_for_label }}').val(),
+        department: $('#{{ form.department.id_for_label }}').val(),
+        room: $('#{{ form.room.id_for_label }}').val(),
+        description: $('#{{ form.description.id_for_label }}').val(),
+        is_active: $('#{{ form.is_active.id_for_label }}').is(':checked')
+    };
+    
+    localStorage.setItem('location_form_draft', JSON.stringify(formData));
+}
+
+// Load draft (optional)
+function loadDraft() {
+    const draft = localStorage.getItem('location_form_draft');
+    if (draft && !$('#{{ form.building.id_for_label }}').val()) {
+        try {
+            const data = JSON.parse(draft);
+            
+            // Restore form data
+            Object.keys(data).forEach(function(key) {
+                const field = $(`[name="${key}"]`);
+                if (field.attr('type') === 'checkbox') {
+                    field.prop('checked', data[key]);
+                } else {
+                    field.val(data[key]);
+                }
+            });
+            
+            // Trigger cascade updates
+            $('#{{ form.building.id_for_label }}').trigger('change');
+        } catch (e) {
+            console.error('Error loading draft:', e);
+        }
+    }
+}
+
+// Clear draft on successful submission
+function clearDraft() {
+    localStorage.removeItem('location_form_draft');
+}
+
+// Initialize tooltips
+$(function () {
+    $('[data-bs-toggle="tooltip"]').tooltip();
+});
+</script>
+{% endblock %}

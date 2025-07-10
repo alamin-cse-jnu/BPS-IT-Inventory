@@ -10,7 +10,7 @@ from django.db import models
 from .models import (
     Device, Assignment, Staff, Department, Location, Vendor,
     DeviceCategory, DeviceType, DeviceSubCategory, MaintenanceSchedule,
-    Building, Room, AuditLog
+    Building, Room, AuditLog, Block, Floor
 )
 
 
@@ -67,7 +67,129 @@ class DeviceInlineForm(forms.ModelForm):
             'device_name': forms.TextInput(attrs={'size': 30}),
         }
 
+class BlockAdminForm(forms.ModelForm):
+    """Enhanced block form for admin interface"""
+    
+    class Meta:
+        model = Block
+        fields = '__all__'
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3, 'cols': 80}),
+            'code': forms.TextInput(attrs={
+                'placeholder': 'e.g., EB, WB, NB, SB',
+                'style': 'text-transform: uppercase;'
+            }),
+            'name': forms.TextInput(attrs={
+                'placeholder': 'e.g., East Block, West Block'
+            }),
+        }
+    
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        if code:
+            code = code.upper().strip()
+            
+            # Check for duplicate code within the same building
+            building = self.cleaned_data.get('building')
+            if building:
+                existing_block = Block.objects.filter(
+                    building=building,
+                    code=code
+                )
+                
+                if self.instance.pk:
+                    existing_block = existing_block.exclude(pk=self.instance.pk)
+                
+                if existing_block.exists():
+                    raise ValidationError(f'Block with code "{code}" already exists in this building.')
+        
+        return code
 
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        if name:
+            name = name.strip()
+            
+            # Check for duplicate name within the same building
+            building = self.cleaned_data.get('building')
+            if building:
+                existing_block = Block.objects.filter(
+                    building=building,
+                    name__iexact=name
+                )
+                
+                if self.instance.pk:
+                    existing_block = existing_block.exclude(pk=self.instance.pk)
+                
+                if existing_block.exists():
+                    raise ValidationError(f'Block with name "{name}" already exists in this building.')
+        
+        return name
+
+class FloorAdminForm(forms.ModelForm):
+    """Enhanced floor form for admin interface"""
+    
+    class Meta:
+        model = Floor
+        fields = '__all__'
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3, 'cols': 80}),
+            'floor_number': forms.NumberInput(attrs={
+                'min': 0,
+                'max': 50,
+                'placeholder': 'e.g., 1, 2, 3'
+            }),
+            'name': forms.TextInput(attrs={
+                'placeholder': 'e.g., First Floor, Ground Floor'
+            }),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter blocks based on selected building
+        if 'building' in self.data:
+            try:
+                building_id = int(self.data.get('building'))
+                self.fields['block'].queryset = Block.objects.filter(
+                    building_id=building_id,
+                    is_active=True
+                ).order_by('name')
+            except (ValueError, TypeError):
+                self.fields['block'].queryset = Block.objects.none()
+        elif self.instance.pk and self.instance.building:
+            self.fields['block'].queryset = Block.objects.filter(
+                building=self.instance.building,
+                is_active=True
+            ).order_by('name')
+        else:
+            self.fields['block'].queryset = Block.objects.filter(is_active=True)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        building = cleaned_data.get('building')
+        block = cleaned_data.get('block')
+        floor_number = cleaned_data.get('floor_number')
+        
+        # Validate that block belongs to the selected building
+        if building and block and block.building != building:
+            raise ValidationError('Selected block does not belong to the selected building.')
+        
+        # Check for duplicate floor number within the same building and block
+        if building and block and floor_number is not None:
+            existing_floor = Floor.objects.filter(
+                building=building,
+                block=block,
+                floor_number=floor_number
+            )
+            
+            if self.instance.pk:
+                existing_floor = existing_floor.exclude(pk=self.instance.pk)
+            
+            if existing_floor.exists():
+                raise ValidationError(f'Floor {floor_number} already exists in {block.name}.')
+        
+        return cleaned_data
 # ================================
 # ASSIGNMENT ADMIN FORMS
 # ================================
@@ -184,23 +306,110 @@ class LocationAdminForm(forms.ModelForm):
         fields = '__all__'
         widgets = {
             'description': forms.Textarea(attrs={'rows': 4, 'cols': 80}),
-            'environmental_conditions': forms.Textarea(attrs={'rows': 3, 'cols': 80}),
-            'coordinates': forms.TextInput(attrs={
-                'placeholder': 'Latitude, Longitude (e.g., 23.7104, 90.4074)'
-            }),
         }
     
-    def clean_coordinates(self):
-        coordinates = self.cleaned_data.get('coordinates')
-        if coordinates:
-            try:
-                lat, lng = map(float, coordinates.split(','))
-                if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
-                    raise ValidationError("Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180.")
-            except (ValueError, TypeError):
-                raise ValidationError("Coordinates must be in format: latitude, longitude (e.g., 23.7104, 90.4074)")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         
-        return coordinates
+        # Cascade filtering for block -> floor -> department -> room
+        if 'building' in self.data:
+            try:
+                building_id = int(self.data.get('building'))
+                self.fields['block'].queryset = Block.objects.filter(
+                    building_id=building_id,
+                    is_active=True
+                ).order_by('name')
+            except (ValueError, TypeError):
+                self.fields['block'].queryset = Block.objects.none()
+        elif self.instance.pk and self.instance.building:
+            self.fields['block'].queryset = Block.objects.filter(
+                building=self.instance.building,
+                is_active=True
+            ).order_by('name')
+        
+        if 'block' in self.data:
+            try:
+                block_id = int(self.data.get('block'))
+                self.fields['floor'].queryset = Floor.objects.filter(
+                    block_id=block_id,
+                    is_active=True
+                ).order_by('floor_number')
+            except (ValueError, TypeError):
+                self.fields['floor'].queryset = Floor.objects.none()
+        elif self.instance.pk and self.instance.block:
+            self.fields['floor'].queryset = Floor.objects.filter(
+                block=self.instance.block,
+                is_active=True
+            ).order_by('floor_number')
+        
+        if 'floor' in self.data:
+            try:
+                floor_id = int(self.data.get('floor'))
+                self.fields['department'].queryset = Department.objects.filter(
+                    floor_id=floor_id,
+                    is_active=True
+                ).order_by('name')
+            except (ValueError, TypeError):
+                self.fields['department'].queryset = Department.objects.none()
+        elif self.instance.pk and self.instance.floor:
+            self.fields['department'].queryset = Department.objects.filter(
+                floor=self.instance.floor,
+                is_active=True
+            ).order_by('name')
+        
+        if 'department' in self.data:
+            try:
+                department_id = int(self.data.get('department'))
+                self.fields['room'].queryset = Room.objects.filter(
+                    department_id=department_id,
+                    is_active=True
+                ).order_by('room_number')
+            except (ValueError, TypeError):
+                self.fields['room'].queryset = Room.objects.none()
+        elif self.instance.pk and self.instance.department:
+            self.fields['room'].queryset = Room.objects.filter(
+                department=self.instance.department,
+                is_active=True
+            ).order_by('room_number')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        building = cleaned_data.get('building')
+        block = cleaned_data.get('block')
+        floor = cleaned_data.get('floor')
+        department = cleaned_data.get('department')
+        room = cleaned_data.get('room')
+        
+        # Validate hierarchical relationships
+        if building and block and block.building != building:
+            raise ValidationError('Selected block does not belong to the selected building.')
+        
+        if block and floor and floor.block != block:
+            raise ValidationError('Selected floor does not belong to the selected block.')
+        
+        if floor and department and department.floor != floor:
+            raise ValidationError('Selected department does not belong to the selected floor.')
+        
+        if department and room and room.department != department:
+            raise ValidationError('Selected room does not belong to the selected department.')
+        
+        # Check for duplicate locations
+        if building and block and floor and department:
+            existing_location = Location.objects.filter(
+                building=building,
+                block=block,
+                floor=floor,
+                department=department,
+                room=room
+            )
+            
+            if self.instance.pk:
+                existing_location = existing_location.exclude(pk=self.instance.pk)
+            
+            if existing_location.exists():
+                raise ValidationError('A location with this combination already exists.')
+        
+        return cleaned_data
 
 
 # ================================

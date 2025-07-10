@@ -1,0 +1,609 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Location Management - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .location-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+    }
+    
+    .location-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        border-color: #2563eb;
+    }
+
+    .hierarchy-badge {
+        background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+        color: white;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: none;
+    }
+
+    .filter-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+
+    .location-actions .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+        border-radius: 6px;
+        margin: 0 0.125rem;
+    }
+
+    .device-count-badge {
+        background: #10b981;
+        color: white;
+        font-weight: 600;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+    }
+
+    .location-status.active {
+        color: #10b981;
+    }
+
+    .location-status.inactive {
+        color: #ef4444;
+    }
+
+    .hierarchy-path {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .location-value {
+        color: #059669;
+        font-weight: 600;
+    }
+
+    .search-results {
+        background: #f0f9ff;
+        border: 1px solid #0ea5e9;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-map-marker-alt text-primary me-2"></i>
+                        Location Management
+                    </h1>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Inventory</a></li>
+                            <li class="breadcrumb-item active">Locations</li>
+                        </ol>
+                    </nav>
+                </div>
+                <div>
+                    <a href="{% url 'inventory:location_create' %}" class="btn btn-primary me-2">
+                        <i class="fas fa-plus me-1"></i>Add Location
+                    </a>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="fas fa-download me-1"></i>Export
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'inventory:bulk_location_export' %}?format=csv">
+                                <i class="fas fa-file-csv me-2"></i>CSV Export
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'inventory:bulk_location_export' %}?format=excel">
+                                <i class="fas fa-file-excel me-2"></i>Excel Export
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">{{ total_locations }}</h3>
+                        <p class="mb-0 opacity-75">Total Locations</p>
+                    </div>
+                    <div class="fs-2 opacity-75">
+                        <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">{{ active_locations }}</h3>
+                        <p class="mb-0 opacity-75">Active Locations</p>
+                    </div>
+                    <div class="fs-2 opacity-75">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card" style="background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">{{ total_devices_in_locations }}</h3>
+                        <p class="mb-0 opacity-75">Devices Assigned</p>
+                    </div>
+                    <div class="fs-2 opacity-75">
+                        <i class="fas fa-desktop"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stats-card" style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #333;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">{{ buildings.count }}</h3>
+                        <p class="mb-0 opacity-75">Buildings</p>
+                    </div>
+                    <div class="fs-2 opacity-75">
+                        <i class="fas fa-building"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results Alert -->
+    {% if current_filters.search %}
+    <div class="search-results">
+        <i class="fas fa-search me-2"></i>
+        Search results for: <strong>"{{ current_filters.search }}"</strong>
+        <a href="{% url 'inventory:location_list' %}" class="btn btn-sm btn-outline-primary ms-2">
+            <i class="fas fa-times me-1"></i>Clear Search
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="filter-card">
+                <form method="get" id="filterForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="search" class="form-label">
+                            <i class="fas fa-search text-muted me-1"></i>Search
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="search" 
+                               name="search" 
+                               placeholder="Search locations..."
+                               value="{{ current_filters.search }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="building" class="form-label">
+                            <i class="fas fa-building text-muted me-1"></i>Building
+                        </label>
+                        <select class="form-select" id="building" name="building">
+                            <option value="">All Buildings</option>
+                            {% for building in buildings %}
+                                <option value="{{ building.id }}" 
+                                        {% if current_filters.building == building.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ building.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="block" class="form-label">
+                            <i class="fas fa-th-large text-muted me-1"></i>Block
+                        </label>
+                        <select class="form-select" id="block" name="block">
+                            <option value="">All Blocks</option>
+                            {% for block in blocks %}
+                                <option value="{{ block.id }}" 
+                                        {% if current_filters.block == block.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ block.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="floor" class="form-label">
+                            <i class="fas fa-layer-group text-muted me-1"></i>Floor
+                        </label>
+                        <select class="form-select" id="floor" name="floor">
+                            <option value="">All Floors</option>
+                            {% for floor in floors %}
+                                <option value="{{ floor.id }}" 
+                                        {% if current_filters.floor == floor.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ floor.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="is_active" class="form-label">
+                            <i class="fas fa-toggle-on text-muted me-1"></i>Status
+                        </label>
+                        <select class="form-select" id="is_active" name="is_active">
+                            <option value="">All Status</option>
+                            <option value="true" {% if current_filters.is_active == 'true' %}selected{% endif %}>Active</option>
+                            <option value="false" {% if current_filters.is_active == 'false' %}selected{% endif %}>Inactive</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="fas fa-filter"></i>
+                            </button>
+                            <a href="{% url 'inventory:location_list' %}" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-times"></i>
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sort Options -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted">
+                        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} locations
+                    </span>
+                </div>
+                <div>
+                    <div class="btn-group btn-group-sm">
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' %}{{ key }}={{ value }}&{% endif %}{% endfor %}sort=name" 
+                           class="btn {% if current_filters.sort == 'name' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                            <i class="fas fa-sort-alpha-down me-1"></i>Name
+                        </a>
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' %}{{ key }}={{ value }}&{% endif %}{% endfor %}sort=building" 
+                           class="btn {% if current_filters.sort == 'building' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                            <i class="fas fa-building me-1"></i>Building
+                        </a>
+                        <a href="?{% for key, value in request.GET.items %}{% if key != 'sort' %}{{ key }}={{ value }}&{% endif %}{% endfor %}sort=devices" 
+                           class="btn {% if current_filters.sort == 'devices' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+                            <i class="fas fa-desktop me-1"></i>Devices
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Locations Grid -->
+    <div class="row">
+        {% for location in locations %}
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card location-card h-100">
+                <div class="card-body">
+                    <!-- Status and Actions -->
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <span class="hierarchy-badge">
+                            {% if location.building %}{{ location.building.name }}{% endif %}
+                            {% if location.block %} - {{ location.block.name }}{% endif %}
+                        </span>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" 
+                                    type="button" 
+                                    data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'inventory:location_detail' location.id %}">
+                                        <i class="fas fa-eye me-2"></i>View Details
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'inventory:location_edit' location.id %}">
+                                        <i class="fas fa-edit me-2"></i>Edit
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" 
+                                       href="{% url 'inventory:location_delete' location.id %}"
+                                       onclick="return confirm('Are you sure you want to delete this location?')">
+                                        <i class="fas fa-trash me-2"></i>Delete
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Location Info -->
+                    <div class="hierarchy-path">
+                        {% if location.building %}{{ location.building.name }}{% endif %}
+                        {% if location.block %} → {{ location.block.name }}{% endif %}
+                        {% if location.floor %} → Floor {{ location.floor.floor_number }}{% endif %}
+                        {% if location.department %} → {{ location.department.name }}{% endif %}
+                    </div>
+
+                    <h5 class="card-title mb-2">
+                        <a href="{% url 'inventory:location_detail' location.id %}" class="text-decoration-none">
+                            {% if location.room %}
+                                {{ location.room.room_number }} - {{ location.room.room_name }}
+                            {% else %}
+                                {{ location.department.name|default:"General Location" }}
+                            {% endif %}
+                        </a>
+                    </h5>
+
+                    {% if location.description %}
+                    <p class="card-text text-muted small mb-3">
+                        {{ location.description|truncatechars:80 }}
+                    </p>
+                    {% endif %}
+
+                    <!-- Stats -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="text-center p-2 bg-light rounded">
+                                <div class="device-count-badge">{{ location.device_count|default:0 }}</div>
+                                <small class="text-muted d-block mt-1">Devices</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center p-2 bg-light rounded">
+                                <div class="location-value">
+                                    ${{ location.total_value|default:0|floatformat:0 }}
+                                </div>
+                                <small class="text-muted d-block mt-1">Total Value</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status and Actions -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="location-status {% if location.is_active %}active{% else %}inactive{% endif %}">
+                            <i class="fas {% if location.is_active %}fa-check-circle{% else %}fa-times-circle{% endif %} me-1"></i>
+                            {% if location.is_active %}Active{% else %}Inactive{% endif %}
+                        </span>
+                        <div class="location-actions">
+                            <a href="{% url 'inventory:location_detail' location.id %}" 
+                               class="btn btn-sm btn-outline-primary" 
+                               title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{% url 'inventory:location_edit' location.id %}" 
+                               class="btn btn-sm btn-outline-warning" 
+                               title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {% if location.device_count == 0 %}
+                            <button class="btn btn-sm btn-outline-danger" 
+                                    title="Delete"
+                                    onclick="confirmDelete('{{ location.id }}', '{{ location|safe }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-map-marker-alt text-muted" style="font-size: 4rem;"></i>
+                </div>
+                <h4 class="text-muted mb-3">No Locations Found</h4>
+                {% if current_filters.search or current_filters.building or current_filters.block %}
+                <p class="text-muted mb-4">No locations match your current filters.</p>
+                <a href="{% url 'inventory:location_list' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-times me-1"></i>Clear Filters
+                </a>
+                {% else %}
+                <p class="text-muted mb-4">Get started by adding your first location.</p>
+                {% endif %}
+                <a href="{% url 'inventory:location_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Add First Location
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <nav aria-label="Locations pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for page_num in page_obj.paginator.page_range %}
+                        {% if page_num == page_obj.number %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                        {% elif page_num > page_obj.number|add:'-3' and page_num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_num }}">{{ page_num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this location?</p>
+                <p><strong id="locationName"></strong></p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    This action cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="#" id="confirmDeleteBtn" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i>Delete Location
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit filter form on change
+$(document).ready(function() {
+    $('#filterForm select').change(function() {
+        $('#filterForm').submit();
+    });
+    
+    // Search with delay
+    let searchTimeout;
+    $('#search').on('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            $('#filterForm').submit();
+        }, 500);
+    });
+});
+
+// Delete confirmation
+function confirmDelete(locationId, locationName) {
+    $('#locationName').text(locationName);
+    $('#confirmDeleteBtn').attr('href', '/inventory/locations/' + locationId + '/delete/');
+    $('#deleteModal').modal('show');
+}
+
+// Cascade filtering for building -> block -> floor
+$('#building').change(function() {
+    const buildingId = $(this).val();
+    const blockSelect = $('#block');
+    const floorSelect = $('#floor');
+    
+    // Reset dependent selects
+    blockSelect.html('<option value="">All Blocks</option>');
+    floorSelect.html('<option value="">All Floors</option>');
+    
+    if (buildingId) {
+        // Load blocks for selected building
+        // Example AJAX call using Fetch API
+        fetch(`/api/blocks/?building=${buildingId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                // Include CSRF token for Django if needed
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Handle the response (e.g., populate a dropdown with blocks)
+            console.log('Blocks loaded:', data);
+            // Example: Update a dropdown with block options
+            const blockSelect = document.getElementById('blockSelect');
+            blockSelect.innerHTML = ''; // Clear existing options
+            data.blocks.forEach(block => {
+                const option = document.createElement('option');
+                option.value = block.id;
+                option.text = block.name;
+                blockSelect.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Error loading blocks:', error));
+    }
+});
+
+// Keyboard shortcuts
+$(document).keydown(function(e) {
+    // Ctrl+F to focus search
+    if (e.ctrlKey && e.keyCode === 70) {
+        e.preventDefault();
+        $('#search').focus();
+    }
+    
+    // Escape to clear search
+    if (e.keyCode === 27 && $('#search').is(':focus')) {
+        $('#search').val('');
+        $('#filterForm').submit();
+    }
+});
+
+// Tooltip initialization
+$(function () {
+    $('[data-bs-toggle="tooltip"]').tooltip();
+});
+</script>
+{% endblock %}

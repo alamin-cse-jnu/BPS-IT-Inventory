@@ -1,11 +1,4 @@
 # inventory/form_utils.py
-"""
-Form Utilities for BPS IT Inventory Management System
-Helper functions, mixins, and utilities for Django forms
-
-File Location: inventory/form_utils.py
-Purpose: Reusable form components and validation utilities
-"""
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -249,7 +242,37 @@ class CoordinatesField(forms.CharField):
         
         return value
 
-
+class BlockCodeField(forms.CharField):
+    """Custom field for block codes with automatic formatting"""
+    
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('max_length', 20)
+        kwargs.setdefault('help_text', 'Short code for block (e.g., EB, WB, NB, SB)')
+        
+        # Add custom widget attributes
+        widget_attrs = kwargs.get('widget', forms.TextInput()).attrs
+        widget_attrs.update({
+            'style': 'text-transform: uppercase;',
+            'pattern': '[A-Z0-9]{1,4}',
+            'title': 'Enter 1-4 uppercase letters or numbers'
+        })
+        
+        super().__init__(*args, **kwargs)
+    
+    def clean(self, value):
+        value = super().clean(value)
+        if value:
+            # Auto-format to uppercase
+            value = value.upper().strip()
+            
+            # Validate format
+            import re
+            if not re.match(r'^[A-Z0-9]{1,4}$', value):
+                raise forms.ValidationError(
+                    "Block code must be 1-4 uppercase letters or numbers (e.g., EB, WB)"
+                )
+        
+        return value
 # ================================
 # CUSTOM WIDGETS
 # ================================
@@ -359,7 +382,41 @@ class FileUploadWidget(forms.ClearableFileInput):
         
         super().__init__(*args, **kwargs)
 
-
+class HierarchyDisplayWidget(forms.Widget):
+    """Widget to display location hierarchy as breadcrumb"""
+    
+    template_name = 'widgets/hierarchy_display.html'
+    
+    def __init__(self, hierarchy_fields=None, separator=" → ", attrs=None):
+        self.hierarchy_fields = hierarchy_fields or ['building', 'block', 'floor', 'department', 'room']
+        self.separator = separator
+        super().__init__(attrs)
+    
+    def render(self, name, value, attrs=None, renderer=None):
+        if not value:
+            return ""
+        
+        # Generate hierarchy breadcrumb
+        breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(value)
+        
+        context = {
+            'widget': {
+                'name': name,
+                'value': value,
+                'breadcrumb': breadcrumb,
+                'separator': self.separator,
+                'attrs': attrs or {}
+            }
+        }
+        
+        return self.render_template(context, renderer)
+    
+    def render_template(self, context, renderer=None):
+        # Simple HTML rendering for hierarchy display
+        breadcrumb = context['widget']['breadcrumb']
+        attrs_str = ' '.join([f'{k}="{v}"' for k, v in context['widget']['attrs'].items()])
+        
+        return f'<div class="hierarchy-display" {attrs_str}>{breadcrumb}</div>'
 # ================================
 # FORM VALIDATORS
 # ================================
@@ -963,6 +1020,36 @@ class AccessibilityUtils:
             # Add keyboard shortcuts for common actions
             if isinstance(widget, forms.widgets.Input):
                 widget.attrs['data-keyboard-shortcuts'] = 'true'
+    
+    @staticmethod
+    def add_hierarchy_navigation_aids(form):
+        """Add navigation aids for hierarchical location forms"""
+        hierarchy_fields = ['building', 'block', 'floor', 'department', 'room']
+        
+        for i, field_name in enumerate(hierarchy_fields):
+            if field_name in form.fields:
+                field = form.fields[field_name]
+                
+                # Add role and aria-level for screen readers
+                field.widget.attrs.update({
+                    'role': 'combobox',
+                    'aria-level': str(i + 1),
+                    'aria-expanded': 'false',
+                    'aria-haspopup': 'listbox'
+                })
+                
+                # Add description for hierarchy level
+                hierarchy_descriptions = {
+                    'building': 'Level 1: Select building',
+                    'block': 'Level 2: Select block within building',
+                    'floor': 'Level 3: Select floor within block',
+                    'department': 'Level 4: Select department within floor',
+                    'room': 'Level 5: Select room within department (optional)'
+                }
+                
+                if field_name in hierarchy_descriptions:
+                    existing_help = field.help_text or ""
+                    field.help_text = f"{hierarchy_descriptions[field_name]}. {existing_help}".strip()
 
 
 # ================================
@@ -1009,6 +1096,252 @@ class PerformanceUtils:
                     'data-cache-key': f'form_{form.__class__.__name__.lower()}_{field_name}'
                 })
 
+    @staticmethod
+    def optimize_location_hierarchy_queries(form):
+        """Optimize queries for location hierarchy forms"""
+        from .models import Building, Block, Floor, Department, Room
+        
+        # Optimize building queryset
+        if 'building' in form.fields:
+            form.fields['building'].queryset = Building.objects.filter(
+                is_active=True
+            ).prefetch_related('blocks')
+        
+        # Optimize block queryset
+        if 'block' in form.fields:
+            form.fields['block'].queryset = Block.objects.filter(
+                is_active=True
+            ).select_related('building').prefetch_related('floors')
+        
+        # Optimize floor queryset
+        if 'floor' in form.fields:
+            form.fields['floor'].queryset = Floor.objects.filter(
+                is_active=True
+            ).select_related('building', 'block').prefetch_related('departments')
+        
+        # Optimize department queryset
+        if 'department' in form.fields:
+            form.fields['department'].queryset = Department.objects.filter(
+                is_active=True
+            ).select_related('floor__building', 'floor__block').prefetch_related('rooms')
+        
+        # Optimize room queryset
+        if 'room' in form.fields:
+            form.fields['room'].queryset = Room.objects.filter(
+                is_active=True
+            ).select_related('department__floor__building', 'department__floor__block')
+
+# ================================
+# LOCATION HIERARCHY UTILITIES
+# ================================
+
+class LocationHierarchyUtils:
+    """Utilities for handling location hierarchy with blocks"""
+    
+    @staticmethod
+    def setup_cascade_filtering(form, building_field='building', block_field='block', 
+                              floor_field='floor', department_field='department', room_field='room'):
+        """Setup cascade filtering for location hierarchy forms"""
+        from .models import Building, Block, Floor, Department, Room
+        
+        # Add cascade data attributes
+        if building_field in form.fields:
+            form.fields[building_field].widget.attrs.update({
+                'data-cascade-target': block_field,
+                'data-cascade-url': '/api/cascade/blocks/',
+                'class': f"{form.fields[building_field].widget.attrs.get('class', '')} cascade-parent".strip()
+            })
+        
+        if block_field in form.fields:
+            form.fields[block_field].widget.attrs.update({
+                'data-cascade-parent': building_field,
+                'data-cascade-target': floor_field,
+                'data-cascade-url': '/api/cascade/floors/',
+                'class': f"{form.fields[block_field].widget.attrs.get('class', '')} cascade-child".strip()
+            })
+        
+        if floor_field in form.fields:
+            form.fields[floor_field].widget.attrs.update({
+                'data-cascade-parent': block_field,
+                'data-cascade-target': department_field,
+                'data-cascade-url': '/api/cascade/departments/',
+                'class': f"{form.fields[floor_field].widget.attrs.get('class', '')} cascade-child".strip()
+            })
+        
+        if department_field in form.fields:
+            form.fields[department_field].widget.attrs.update({
+                'data-cascade-parent': floor_field,
+                'data-cascade-target': room_field,
+                'data-cascade-url': '/api/cascade/rooms/',
+                'class': f"{form.fields[department_field].widget.attrs.get('class', '')} cascade-child".strip()
+            })
+        
+        if room_field in form.fields:
+            form.fields[room_field].widget.attrs.update({
+                'data-cascade-parent': department_field,
+                'class': f"{form.fields[room_field].widget.attrs.get('class', '')} cascade-child".strip()
+            })
+    
+    @staticmethod
+    def get_hierarchy_breadcrumb(location):
+        """Generate breadcrumb for location hierarchy"""
+        if not location:
+            return ""
+        
+        parts = []
+        
+        if hasattr(location, 'building') and location.building:
+            parts.append(location.building.name)
+        
+        if hasattr(location, 'block') and location.block:
+            parts.append(location.block.name)
+        
+        if hasattr(location, 'floor') and location.floor:
+            parts.append(location.floor.name)
+        
+        if hasattr(location, 'department') and location.department:
+            parts.append(location.department.name)
+        
+        if hasattr(location, 'room') and location.room:
+            parts.append(f"Room {location.room.room_number}")
+        
+        return " → ".join(parts)
+    
+    @staticmethod
+    def validate_hierarchy_consistency(building=None, block=None, floor=None, department=None, room=None):
+        """Validate that location hierarchy is consistent"""
+        errors = {}
+        
+        # Validate block belongs to building
+        if building and block and block.building != building:
+            errors['block'] = 'Selected block does not belong to the selected building.'
+        
+        # Validate floor belongs to block
+        if block and floor and floor.block != block:
+            errors['floor'] = 'Selected floor does not belong to the selected block.'
+        
+        # Validate department belongs to floor
+        if floor and department and department.floor != floor:
+            errors['department'] = 'Selected department does not belong to the selected floor.'
+        
+        # Validate room belongs to department
+        if department and room and room.department != department:
+            errors['room'] = 'Selected room does not belong to the selected department.'
+        
+        return errors
+    
+    @staticmethod
+    def get_location_code(building=None, block=None, floor=None, department=None, room=None):
+        """Generate location code from hierarchy components"""
+        parts = []
+        
+        if building and hasattr(building, 'code'):
+            parts.append(building.code)
+        
+        if block and hasattr(block, 'code'):
+            parts.append(block.code)
+        
+        if floor and hasattr(floor, 'floor_number'):
+            parts.append(f"F{floor.floor_number}")
+        
+        if department and hasattr(department, 'code'):
+            parts.append(department.code)
+        
+        if room and hasattr(room, 'room_number'):
+            parts.append(room.room_number)
+        
+        return "-".join(parts)
+
+# ================================
+# BLOCK VALIDATION UTILITIES
+# ================================
+
+class BlockValidationUtils:
+    """Utilities for block-specific validation"""
+    
+    @staticmethod
+    def validate_block_code(code, building=None, instance=None):
+        """Validate block code format and uniqueness"""
+        from .models import Block
+        from django.core.exceptions import ValidationError
+        
+        if not code:
+            return None
+        
+        # Format validation
+        code = code.upper().strip()
+        
+        # Check format: Should be 2-4 uppercase letters/numbers
+        import re
+        if not re.match(r'^[A-Z0-9]{1,4}$', code):
+            raise ValidationError("Block code must be 1-4 uppercase letters/numbers (e.g., EB, WB, NB)")
+        
+        # Uniqueness validation within building
+        if building:
+            existing = Block.objects.filter(building=building, code=code)
+            if instance:
+                existing = existing.exclude(pk=instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f'Block code "{code}" already exists in this building.')
+        
+        return code
+    
+    @staticmethod
+    def validate_block_name(name, building=None, instance=None):
+        """Validate block name and uniqueness"""
+        from .models import Block
+        from django.core.exceptions import ValidationError
+        
+        if not name:
+            return None
+        
+        name = name.strip()
+        
+        # Length validation
+        if len(name) < 2:
+            raise ValidationError("Block name must be at least 2 characters long.")
+        
+        # Uniqueness validation within building (case-insensitive)
+        if building:
+            existing = Block.objects.filter(building=building, name__iexact=name)
+            if instance:
+                existing = existing.exclude(pk=instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f'Block name "{name}" already exists in this building.')
+        
+        return name
+    
+    @staticmethod
+    def suggest_block_code(name, building=None):
+        """Suggest block code based on name"""
+        from .models import Block
+        
+        if not name:
+            return ""
+        
+        # Extract initials from block name
+        words = name.upper().split()
+        if len(words) == 1:
+            # Single word: take first 2-3 characters
+            suggested = words[0][:3]
+        elif len(words) == 2:
+            # Two words: take first letter of each
+            suggested = words[0][0] + words[1][0]
+        else:
+            # Multiple words: take first letter of first two words
+            suggested = words[0][0] + words[1][0]
+        
+        # Check if suggested code exists, if so, add number
+        if building:
+            base_code = suggested
+            counter = 1
+            while Block.objects.filter(building=building, code=suggested).exists():
+                suggested = f"{base_code}{counter}"
+                counter += 1
+        
+        return suggested
 
 # ================================
 # INTERNATIONALIZATION UTILITIES
