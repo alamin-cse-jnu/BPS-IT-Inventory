@@ -12,7 +12,7 @@ from .models import (
     DeviceCategory, DeviceSubCategory, DeviceType, Device, 
     Assignment, Staff, Department, Location, Vendor, 
     MaintenanceSchedule, AuditLog, SystemConfiguration,
-    AssignmentHistory, Building, Floor, Room
+    AssignmentHistory, Building, Floor, Room, Block
 )
 
 # ================================
@@ -74,20 +74,71 @@ class DeviceTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Building)
 class BuildingAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'get_floors_count', 'is_active', 'created_at')
+    list_display = ('name', 'code', 'get_blocks_count', 'get_floors_count', 'is_active', 'created_at')
     list_filter = ('is_active', 'created_at')
     search_fields = ('name', 'code', 'address')
     readonly_fields = ('created_at', 'updated_at')
     
     def get_floors_count(self, obj):
-        return obj.floors.count()
+        count = obj.floors.count()
+        if count > 0:
+            url = reverse('admin:inventory_floor_changelist')
+            return format_html(
+                '<a href="{}?building__id__exact={}">{}</a>',
+                url, obj.pk, count
+            )
+        return 0
+    get_floors_count.short_description = 'Floors'
+
+    def get_blocks_count(self, obj):
+        count = obj.blocks.count()
+        if count > 0:
+            url = reverse('admin:inventory_block_changelist')
+            return format_html(
+                '<a href="{}?building__id__exact={}">{}</a>',
+                url, obj.pk, count
+            )
+        return 0
+    get_blocks_count.short_description = 'Blocks'
+
+@admin.register(Block)
+class BlockAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'building', 'get_floors_count', 'is_active', 'created_at')
+    list_filter = ('building', 'is_active', 'created_at')
+    search_fields = ('name', 'code', 'building__name', 'description')
+    readonly_fields = ('created_at', 'updated_at')
+    list_select_related = ('building',)
+    
+    fieldsets = (
+        ('Block Information', {
+            'fields': ('building', 'name', 'code', 'description')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def get_floors_count(self, obj):
+        count = obj.floors.count()
+        if count > 0:
+            url = reverse('admin:inventory_floor_changelist')
+            return format_html(
+                '<a href="{}?block__id__exact={}">{}</a>',
+                url, obj.pk, count
+            )
+        return 0
     get_floors_count.short_description = 'Floors'
 
 @admin.register(Floor)
 class FloorAdmin(admin.ModelAdmin):
-    list_display = ('name', 'building', 'floor_number', 'get_departments_count', 'is_active')
-    list_filter = ('building', 'is_active', 'created_at')
-    search_fields = ('name', 'building__name')
+    list_display = ('name', 'building', 'block', 'floor_number', 'get_departments_count', 'is_active')
+    list_filter = ('building', 'block', 'is_active', 'created_at')
+    search_fields = ('name', 'building__name', 'block__name')
+    list_select_related = ('building', 'block')
     readonly_fields = ('created_at', 'updated_at')
     
     def get_departments_count(self, obj):
@@ -111,8 +162,9 @@ class RoomAdmin(admin.ModelAdmin):
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     list_display = ('get_location_name', 'get_location_code', 'get_location_type', 'is_active')
-    list_filter = ('building', 'is_active')
-    search_fields = ('building__name', 'department__name', 'description')
+    list_filter = ('building', 'block', 'floor', 'is_active')
+    search_fields = ('building__name', 'block__name', 'floor__name', 'department__name', 'description')
+    list_select_related = ('building', 'block', 'floor', 'department', 'room')
     readonly_fields = ('created_at', 'updated_at')
     
     def get_location_name(self, obj):
@@ -122,7 +174,7 @@ class LocationAdmin(admin.ModelAdmin):
     
     def get_location_code(self, obj):
         """Build location code from components"""
-        return f"{obj.building.code}-{obj.floor.floor_number}-{obj.department.code}"
+        return f"{obj.building.code}-{obj.block.code}-{obj.floor.floor_number}-{obj.department.code}"
     get_location_code.short_description = 'Location Code'
     
     def get_location_type(self, obj):

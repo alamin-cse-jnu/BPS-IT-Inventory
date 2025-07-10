@@ -1,3 +1,6 @@
+# inventory/urls.py
+# Location: bps_inventory/apps/inventory/urls.py
+
 from django.urls import path
 from . import views
 
@@ -39,7 +42,6 @@ urlpatterns = [
     path('my-assignments/', views.my_assignments, name='my_assignments'),
     path('my-assignments/<str:assignment_id>/', views.my_assignment_detail, name='my_assignment_detail'),
 
-
     # ================================
     # STAFF MANAGEMENT - CONFIRMED EXISTS
     # ================================
@@ -60,13 +62,49 @@ urlpatterns = [
     path('departments/<str:department_id>/assignments/', views.department_assignments, name='department_assignments'),
     
     # ================================
-    # LOCATION MANAGEMENT - CONFIRMED EXISTS
+    # LOCATION MANAGEMENT - ENHANCED WITH BLOCK SUPPORT
     # ================================
     path('locations/', views.location_list, name='location_list'),
     path('locations/add/', views.location_create, name='location_add'),
     path('locations/<str:location_id>/', views.location_detail, name='location_detail'),
     path('locations/<str:location_id>/edit/', views.location_edit, name='location_edit'),
     path('locations/<str:location_id>/delete/', views.location_delete, name='location_delete'),
+
+    # ================================
+    # BUILDING MANAGEMENT
+    # ================================
+    path('buildings/', views.building_list, name='building_list'),
+    path('buildings/add/', views.building_create, name='building_add'),
+    path('buildings/<str:building_id>/', views.building_detail, name='building_detail'),
+    path('buildings/<str:building_id>/edit/', views.building_edit, name='building_edit'),
+    path('buildings/<str:building_id>/delete/', views.building_delete, name='building_delete'),
+
+    # ================================
+    # BLOCK MANAGEMENT
+    # ================================
+    path('blocks/', views.block_list, name='block_list'),
+    path('blocks/add/', views.block_create, name='block_add'),
+    path('blocks/<str:block_id>/', views.block_detail, name='block_detail'),
+    path('blocks/<str:block_id>/edit/', views.block_edit, name='block_edit'),
+    path('blocks/<str:block_id>/delete/', views.block_delete, name='block_delete'),
+
+    # ================================
+    # FLOOR MANAGEMENT
+    # ================================
+    path('floors/', views.floor_list, name='floor_list'),
+    path('floors/add/', views.floor_create, name='floor_add'),
+    path('floors/<str:floor_id>/', views.floor_detail, name='floor_detail'),
+    path('floors/<str:floor_id>/edit/', views.floor_edit, name='floor_edit'),
+    path('floors/<str:floor_id>/delete/', views.floor_delete, name='floor_delete'),
+
+    # ================================
+    # ROOM MANAGEMENT
+    # ================================
+    path('rooms/', views.room_list, name='room_list'),
+    path('rooms/add/', views.room_create, name='room_add'),
+    path('rooms/<str:room_id>/', views.room_detail, name='room_detail'),
+    path('rooms/<str:room_id>/edit/', views.room_edit, name='room_edit'),
+    path('rooms/<str:room_id>/delete/', views.room_delete, name='room_delete'),
     
     # ================================
     # VENDOR MANAGEMENT - CONFIRMED EXISTS
@@ -132,7 +170,7 @@ urlpatterns = [
     path('reports/audit/', views.audit_report, name='audit_report'),
     
     # ================================
-    # AJAX ENDPOINTS - CONFIRMED EXISTS
+    # AJAX ENDPOINTS - ENHANCED WITH LOCATION HIERARCHY SUPPORT
     # ================================
     path('ajax/get-subcategories/', views.ajax_subcategories_by_category, name='ajax_get_subcategories'), 
     path('ajax/get-device-types/', views.ajax_device_types_by_subcategory, name='ajax_get_device_types'),  
@@ -141,9 +179,53 @@ urlpatterns = [
     path('ajax/staff-search/', views.ajax_staff_search, name='ajax_staff_search'),
     path('ajax/location-search/', views.ajax_location_search, name='ajax_location_search'),
     
+    # Location Hierarchy Cascade AJAX Endpoints
+    path('ajax/get-blocks/', views.ajax_get_blocks, name='ajax_get_blocks'),
+    path('ajax/get-floors/', views.ajax_get_floors, name='ajax_get_floors'),
+    path('ajax/get-departments/', views.ajax_get_departments, name='ajax_get_departments'),
+    path('ajax/get-rooms/', views.ajax_get_rooms, name='ajax_get_rooms'),
+    
+    # Hierarchy Validation and Utilities
+    path('ajax/validate-hierarchy/', views.ajax_validate_hierarchy, name='ajax_validate_hierarchy'),
+    path('ajax/suggest-block-code/', views.ajax_suggest_block_code, name='ajax_suggest_block_code'),
+    path('ajax/location-breadcrumb/', views.ajax_location_breadcrumb, name='ajax_location_breadcrumb'),
+
+    # ================================
+    # ORGANIZATION HIERARCHY UTILITIES
+    # ================================
+    path('hierarchy/', views.hierarchy_overview, name='hierarchy_overview'),
+    path('hierarchy/tree/', views.hierarchy_tree_view, name='hierarchy_tree'),
+    path('hierarchy/map/', views.hierarchy_map_view, name='hierarchy_map'),
+    path('hierarchy/export/', views.hierarchy_export, name='hierarchy_export'),
+
+    # ================================
+    # LOCATION-SPECIFIC REPORTS
+    # ================================
+    path('reports/location-utilization/', views.location_utilization_report, name='location_utilization_report'),
+    path('reports/hierarchy-breakdown/', views.hierarchy_breakdown_report, name='hierarchy_breakdown_report'),
+    path('reports/space-analysis/', views.space_analysis_report, name='space_analysis_report'),
+
+    # ================================
+    # BULK LOCATION OPERATIONS
+    # ================================
+    path('bulk/locations/create/', views.bulk_location_create, name='bulk_location_create'),
+    path('bulk/locations/update/', views.bulk_location_update, name='bulk_location_update'),
+    path('bulk/locations/export/', views.bulk_location_export, name='bulk_location_export'),
+    path('bulk/locations/import/', views.bulk_location_import, name='bulk_location_import'),
+    
     # ================================
     # SYSTEM UTILITIES - CONFIRMED EXISTS
     # ================================
     path('system/statistics/', views.system_statistics, name='system_statistics'),
     path('audit/logs/', views.audit_log_list, name='audit_log_list'),
+
+    # ================================
+    # API ENDPOINTS FOR MOBILE/EXTERNAL INTEGRATION
+    # ================================
+    path('api/locations/search/', views.api_location_search, name='api_location_search'),
+    path('api/hierarchy/validate/', views.api_hierarchy_validate, name='api_hierarchy_validate'),
+    path('api/blocks/by-building/<str:building_id>/', views.api_blocks_by_building, name='api_blocks_by_building'),
+    path('api/floors/by-block/<str:block_id>/', views.api_floors_by_block, name='api_floors_by_block'),
+    path('api/departments/by-floor/<str:floor_id>/', views.api_departments_by_floor, name='api_departments_by_floor'),
+    path('api/rooms/by-department/<str:department_id>/', views.api_rooms_by_department, name='api_rooms_by_department'),
 ]

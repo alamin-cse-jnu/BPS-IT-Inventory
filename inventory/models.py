@@ -25,9 +25,27 @@ class Building(models.Model):
     def __str__(self):
         return f"{self.name} ({self.code})"
 
+class Block(models.Model):
+    """Block information within buildings - Parliament blocks like East Block, West Block, etc."""
+    building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='blocks')
+    name = models.CharField(max_length=100, help_text="Block name (e.g., East Block, West Block)")
+    code = models.CharField(max_length=20, help_text="Block code (e.g., EB, WB, NB, SB)")
+    description = models.TextField(blank=True, help_text="Description of this block")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['building', 'code']
+        ordering = ['building', 'name']
+
+    def __str__(self):
+        return f"{self.building.name} - {self.name}"
+
 class Floor(models.Model):
     """Floor information within buildings"""
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='floors')
+    block = models.ForeignKey(Block, on_delete=models.CASCADE, related_name='floors')
     name = models.CharField(max_length=50)
     floor_number = models.IntegerField()
     description = models.TextField(blank=True)
@@ -36,11 +54,11 @@ class Floor(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['building', 'floor_number']
-        ordering = ['building', 'floor_number']
+        unique_together = ['building', 'block', 'floor_number']
+        ordering = ['building', 'block', 'floor_number']
 
     def __str__(self):
-        return f"{self.building.name} - {self.name}"
+        return f"{self.building.name} - {self.block.name} - {self.name}"
 
 class Department(models.Model):
     """Department information"""
@@ -77,10 +95,12 @@ class Room(models.Model):
 
     def __str__(self):
         return f"{self.department.name} - {self.room_number}"
+    
 
 class Location(models.Model):
     """Specific location combining building, floor, department, and room"""
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='locations')
+    block = models.ForeignKey(Block, on_delete=models.CASCADE, related_name='locations')
     floor = models.ForeignKey(Floor, on_delete=models.CASCADE, related_name='locations')
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='locations')
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='locations', null=True, blank=True)
@@ -90,11 +110,11 @@ class Location(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['building', 'floor', 'department', 'room']
-        ordering = ['building', 'floor', 'department', 'room']
+        unique_together = ['building', 'block', 'floor', 'department', 'room']
+        ordering = ['building', 'block', 'floor', 'department', 'room']
 
     def __str__(self):
-        location_str = f"{self.building.name} - {self.floor.name} - {self.department.name}"
+        location_str = f"{self.building.name} - {self.block.name} - {self.floor.name} - {self.department.name}"
         if self.room:
             location_str += f" - {self.room.room_number}"
         return location_str
