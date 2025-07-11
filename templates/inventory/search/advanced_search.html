@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Advanced Search - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .advanced-search-form {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .search-section {
+        border-bottom: 1px solid #e9ecef;
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .search-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 15px;
+        border-left: 4px solid #007bff;
+        padding-left: 10px;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 8px;
+    }
+    
+    .search-actions {
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .search-results {
+        margin-top: 30px;
+    }
+    
+    .results-summary {
+        background: #e7f3ff;
+        border-left: 4px solid #007bff;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 0 6px 6px 0;
+    }
+    
+    .results-table {
+        background: #ffffff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .filter-badge {
+        background: #e9ecef;
+        color: #495057;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        margin-right: 5px;
+        margin-bottom: 5px;
+        display: inline-block;
+    }
+    
+    .clear-filter {
+        color: #dc3545;
+        cursor: pointer;
+        margin-left: 5px;
+    }
+    
+    .btn-search {
+        background: #007bff;
+        border: none;
+        color: white;
+        padding: 12px 30px;
+        font-weight: 500;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-search:hover {
+        background: #0056b3;
+        transform: translateY(-1px);
+    }
+    
+    .btn-clear {
+        background: #6c757d;
+        border: none;
+        color: white;
+        padding: 12px 30px;
+        font-weight: 500;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-clear:hover {
+        background: #545b62;
+    }
+    
+    .search-type-tabs {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 20px;
+    }
+    
+    .search-type-tab {
+        padding: 10px 20px;
+        margin-right: 10px;
+        background: transparent;
+        border: none;
+        color: #6c757d;
+        font-weight: 500;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.3s ease;
+    }
+    
+    .search-type-tab.active {
+        color: #007bff;
+        border-bottom-color: #007bff;
+    }
+    
+    .search-type-tab:hover {
+        color: #007bff;
+    }
+    
+    .quick-filters {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    
+    .quick-filter {
+        padding: 6px 12px;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .quick-filter:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+    }
+    
+    .quick-filter.active {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+    
+    .search-progress {
+        display: none;
+        margin-top: 20px;
+    }
+    
+    .progress-bar {
+        background: #007bff;
+        height: 4px;
+        border-radius: 2px;
+        animation: progress-animation 2s ease-in-out infinite;
+    }
+    
+    @keyframes progress-animation {
+        0% { width: 0%; }
+        50% { width: 100%; }
+        100% { width: 0%; }
+    }
+    
+    .export-options {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 15px;
+    }
+    
+    .export-btn {
+        padding: 8px 16px;
+        border: 1px solid #dee2e6;
+        background: white;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        color: #495057;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .export-btn:hover {
+        background: #f8f9fa;
+        border-color: #adb5bd;
+    }
+    
+    .device-status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    
+    .status-available {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-assigned {
+        background: #cce5ff;
+        color: #004085;
+    }
+    
+    .status-maintenance {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-retired {
+        background: #f8d7da;
+        color: #721c24;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-header">
+                <h1 class="page-title">
+                    <i class="fas fa-search me-2"></i>Advanced Search
+                </h1>
+                <p class="text-muted">Find devices, assignments, and staff with advanced filtering options</p>
+            </div>
+            
+            <div class="advanced-search-form">
+                <form method="post" id="advancedSearchForm">
+                    {% csrf_token %}
+                    
+                    <!-- Search Type Selection -->
+                    <div class="search-type-tabs">
+                        <button type="button" class="search-type-tab active" data-type="devices">
+                            <i class="fas fa-laptop me-1"></i>Devices
+                        </button>
+                        <button type="button" class="search-type-tab" data-type="assignments">
+                            <i class="fas fa-user-tag me-1"></i>Assignments
+                        </button>
+                        <button type="button" class="search-type-tab" data-type="staff">
+                            <i class="fas fa-users me-1"></i>Staff
+                        </button>
+                        <button type="button" class="search-type-tab" data-type="maintenance">
+                            <i class="fas fa-tools me-1"></i>Maintenance
+                        </button>
+                    </div>
+                    
+                    <input type="hidden" name="search_type" id="searchType" value="devices">
+                    
+                    <!-- Quick Filters -->
+                    <div class="quick-filters">
+                        <div class="quick-filter" data-filter="available">Available Devices</div>
+                        <div class="quick-filter" data-filter="assigned">Assigned Devices</div>
+                        <div class="quick-filter" data-filter="maintenance">Under Maintenance</div>
+                        <div class="quick-filter" data-filter="warranty_expiring">Warranty Expiring</div>
+                        <div class="quick-filter" data-filter="overdue">Overdue Returns</div>
+                    </div>
+                    
+                    <!-- Basic Search -->
+                    <div class="search-section">
+                        <div class="section-title">Basic Search</div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Search Query</label>
+                                    <input type="text"

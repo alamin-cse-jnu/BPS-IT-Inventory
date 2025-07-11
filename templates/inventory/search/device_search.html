@@ -1,0 +1,688 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Device Search - BPS Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+    }
+    
+    .search-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+    }
+    
+    .search-form-container {
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .search-form-container .form-control,
+    .search-form-container .form-select {
+        background: rgba(255,255,255,0.9);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: #333;
+    }
+    
+    .search-form-container .form-control:focus,
+    .search-form-container .form-select:focus {
+        background: white;
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    
+    .search-form-container label {
+        color: white;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    
+    .search-stats {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .search-results {
+        margin-top: 1.5rem;
+    }
+    
+    .device-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .device-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    .device-card-header {
+        background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+        padding: 1rem;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .device-status {
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .status-available {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-assigned {
+        background: #cce5ff;
+        color: #004085;
+    }
+    
+    .status-maintenance {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-damaged {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .device-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .info-item {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .info-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+    }
+    
+    .info-value {
+        color: #333;
+        font-weight: 600;
+    }
+    
+    .device-actions {
+        padding: 1rem;
+        background: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .device-actions .btn {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .empty-search {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6c757d;
+    }
+    
+    .empty-search i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .advanced-search-toggle {
+        color: white;
+        text-decoration: none;
+        border-bottom: 1px dashed rgba(255,255,255,0.5);
+    }
+    
+    .advanced-search-toggle:hover {
+        color: #f8f9fa;
+        border-bottom-color: white;
+    }
+    
+    .advanced-search-panel {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .pagination-container {
+        margin-top: 2rem;
+        padding: 1rem 0;
+    }
+    
+    .pagination .page-link {
+        color: #667eea;
+        border-color: #dee2e6;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-color: #667eea;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h3 mb-0 text-gray-800">
+                    <i class="fas fa-search text-primary me-2"></i>
+                    Device Search
+                </h1>
+                <p class="text-muted mb-0">Find devices using advanced search filters</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-list me-1"></i>
+                    All Devices
+                </a>
+                <a href="{% url 'inventory:device_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>
+                    Add Device
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Container -->
+    <div class="search-container">
+        <div class="row mb-3">
+            <div class="col">
+                <h4 class="mb-0">
+                    <i class="fas fa-filter me-2"></i>
+                    Search Devices
+                </h4>
+                <p class="mb-0 opacity-75">Use the filters below to find specific devices</p>
+            </div>
+        </div>
+
+        <div class="search-form-container">
+            <form method="GET" id="searchForm">
+                <div class="row g-3">
+                    <!-- Quick Search -->
+                    <div class="col-md-6">
+                        <label for="search" class="form-label">
+                            <i class="fas fa-search me-1"></i>
+                            Quick Search
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="search" 
+                               name="search" 
+                               value="{{ request.GET.search }}" 
+                               placeholder="Search by name, serial number, or description...">
+                    </div>
+
+                    <!-- Device Type -->
+                    <div class="col-md-3">
+                        <label for="device_type" class="form-label">
+                            <i class="fas fa-laptop me-1"></i>
+                            Device Type
+                        </label>
+                        <select name="device_type" id="device_type" class="form-select">
+                            <option value="">All Types</option>
+                            {% for device_type in device_types %}
+                                <option value="{{ device_type.id }}" 
+                                        {% if device_type.id|stringformat:"s" == request.GET.device_type %}selected{% endif %}>
+                                    {{ device_type.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Status -->
+                    <div class="col-md-3">
+                        <label for="status" class="form-label">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Status
+                        </label>
+                        <select name="status" id="status" class="form-select">
+                            <option value="">All Status</option>
+                            {% for choice in status_choices %}
+                                <option value="{{ choice.0 }}" 
+                                        {% if choice.0 == request.GET.status %}selected{% endif %}>
+                                    {{ choice.1 }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Advanced Search Toggle -->
+                    <div class="col-12">
+                        <a href="#" class="advanced-search-toggle" onclick="toggleAdvancedSearch(event)">
+                            <i class="fas fa-cog me-1"></i>
+                            Advanced Search Options
+                        </a>
+                    </div>
+
+                    <!-- Advanced Search Panel -->
+                    <div id="advancedSearchPanel" class="advanced-search-panel" style="display: none;">
+                        <div class="row g-3">
+                            <!-- Location -->
+                            <div class="col-md-4">
+                                <label for="location" class="form-label">
+                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                    Location
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="location" 
+                                       name="location" 
+                                       value="{{ request.GET.location }}" 
+                                       placeholder="Building, room, etc.">
+                            </div>
+
+                            <!-- Condition -->
+                            <div class="col-md-4">
+                                <label for="condition" class="form-label">
+                                    <i class="fas fa-tools me-1"></i>
+                                    Condition
+                                </label>
+                                <select name="condition" id="condition" class="form-select">
+                                    <option value="">All Conditions</option>
+                                    {% for choice in condition_choices %}
+                                        <option value="{{ choice.0 }}" 
+                                                {% if choice.0 == request.GET.condition %}selected{% endif %}>
+                                            {{ choice.1 }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Assigned To -->
+                            <div class="col-md-4">
+                                <label for="assigned_to" class="form-label">
+                                    <i class="fas fa-user me-1"></i>
+                                    Assigned To
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="assigned_to" 
+                                       name="assigned_to" 
+                                       value="{{ request.GET.assigned_to }}" 
+                                       placeholder="Staff name or ID">
+                            </div>
+
+                            <!-- Purchase Date Range -->
+                            <div class="col-md-6">
+                                <label class="form-label">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    Purchase Date Range
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col">
+                                        <input type="date" 
+                                               class="form-control" 
+                                               name="purchase_date_from" 
+                                               value="{{ request.GET.purchase_date_from }}" 
+                                               placeholder="From">
+                                    </div>
+                                    <div class="col-auto align-self-end">
+                                        <span class="text-white">to</span>
+                                    </div>
+                                    <div class="col">
+                                        <input type="date" 
+                                               class="form-control" 
+                                               name="purchase_date_to" 
+                                               value="{{ request.GET.purchase_date_to }}" 
+                                               placeholder="To">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Warranty Status -->
+                            <div class="col-md-6">
+                                <label for="warranty_status" class="form-label">
+                                    <i class="fas fa-shield-alt me-1"></i>
+                                    Warranty Status
+                                </label>
+                                <select name="warranty_status" id="warranty_status" class="form-select">
+                                    <option value="">All Warranty Status</option>
+                                    <option value="active" {% if request.GET.warranty_status == 'active' %}selected{% endif %}>
+                                        Active Warranty
+                                    </option>
+                                    <option value="expired" {% if request.GET.warranty_status == 'expired' %}selected{% endif %}>
+                                        Expired Warranty
+                                    </option>
+                                    <option value="expiring_soon" {% if request.GET.warranty_status == 'expiring_soon' %}selected{% endif %}>
+                                        Expiring Soon (30 days)
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Actions -->
+                    <div class="col-12">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="submit" class="btn btn-light">
+                                <i class="fas fa-search me-1"></i>
+                                Search Devices
+                            </button>
+                            <a href="{% url 'inventory:device_search' %}" class="btn btn-outline-light">
+                                <i class="fas fa-times me-1"></i>
+                                Clear Filters
+                            </a>
+                            <button type="button" class="btn btn-outline-light" onclick="exportResults()">
+                                <i class="fas fa-download me-1"></i>
+                                Export Results
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Search Statistics -->
+    {% if page_obj %}
+        <div class="search-stats">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-bar text-primary me-1"></i>
+                        Search Results
+                        <span class="badge bg-primary ms-2">{{ page_obj.paginator.count }}</span>
+                        {% if request.GET.search %}
+                            for "{{ request.GET.search }}"
+                        {% endif %}
+                    </h6>
+                    {% if page_obj.paginator.count > 0 %}
+                        <small class="text-muted">
+                            Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} devices
+                        </small>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm active" onclick="toggleView('card')">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleView('table')">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Search Results -->
+    <div class="search-results">
+        {% if page_obj.object_list %}
+            <div id="cardView" class="row g-4">
+                {% for device in page_obj %}
+                    <div class="col-xl-4 col-lg-6">
+                        <div class="card device-card h-100">
+                            <div class="device-card-header">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-0 fw-bold text-primary">{{ device.name }}</h6>
+                                    <span class="device-status status-{{ device.status|lower }}">
+                                        {{ device.get_status_display }}
+                                    </span>
+                                </div>
+                                <small class="text-muted">{{ device.device_type.name }}</small>
+                            </div>
+
+                            <div class="device-info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">Serial Number</span>
+                                    <span class="info-value">{{ device.serial_number|default:"Not Set" }}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Location</span>
+                                    <span class="info-value">{{ device.location|default:"Not Set" }}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Condition</span>
+                                    <span class="info-value">{{ device.get_condition_display }}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Purchase Date</span>
+                                    <span class="info-value">{{ device.purchase_date|date:"M d, Y"|default:"Not Set" }}</span>
+                                </div>
+                                {% if device.current_assignment %}
+                                    <div class="info-item">
+                                        <span class="info-label">Assigned To</span>
+                                        <span class="info-value">{{ device.current_assignment.staff.get_full_name }}</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="device-actions">
+                                <a href="{% url 'inventory:device_detail' device.pk %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View Details
+                                </a>
+                                <a href="{% url 'inventory:device_edit' device.pk %}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Edit
+                                </a>
+                                {% if device.status == 'available' %}
+                                    <a href="{% url 'inventory:assignment_create' %}?device={{ device.pk }}" class="btn btn-success btn-sm">
+                                        <i class="fas fa-user-plus me-1"></i>
+                                        Assign
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- Table View (Hidden by default) -->
+            <div id="tableView" class="card" style="display: none;">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>Device Name</th>
+                                    <th>Type</th>
+                                    <th>Serial Number</th>
+                                    <th>Status</th>
+                                    <th>Location</th>
+                                    <th>Assigned To</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for device in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ device.name }}</strong>
+                                        </td>
+                                        <td>{{ device.device_type.name }}</td>
+                                        <td>{{ device.serial_number|default:"Not Set" }}</td>
+                                        <td>
+                                            <span class="device-status status-{{ device.status|lower }}">
+                                                {{ device.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ device.location|default:"Not Set" }}</td>
+                                        <td>
+                                            {% if device.current_assignment %}
+                                                {{ device.current_assignment.staff.get_full_name }}
+                                            {% else %}
+                                                <span class="text-muted">Unassigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'inventory:device_detail' device.pk %}" class="btn btn-outline-primary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'inventory:device_edit' device.pk %}" class="btn btn-outline-secondary">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="empty-search">
+                <i class="fas fa-search"></i>
+                <h4>No devices found</h4>
+                <p class="text-muted">
+                    {% if request.GET.search or request.GET.device_type or request.GET.status %}
+                        Try adjusting your search criteria or 
+                        <a href="{% url 'inventory:device_search' %}">clear all filters</a>
+                    {% else %}
+                        Start by entering search criteria above
+                    {% endif %}
+                </p>
+                <a href="{% url 'inventory:device_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>
+                    Add New Device
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+        <div class="pagination-container">
+            <nav aria-label="Search results pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{{ request.GET.urlencode }}&page=1">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.paginator.num_pages }}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit form on select changes
+    const selects = document.querySelectorAll('#device_type, #status, #condition, #warranty_status');
+    selects.forEach(select => {
+        select.addEventListener('change', function() {
+            document.getElementById('searchForm').submit();
+        });
+    });
+
+    // Search input enhancement
+    const searchInput = document.getElementById('search');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (this.value.length >= 3 || this.value.length === 0) {
+                    document.getElementById('searchForm').submit();
+                }
+            }, 500);
+        });
+    }
+});
+
+function toggleAdvancedSearch(event) {
+    event.preventDefault();
+    const panel = document.getElementById('advancedSearchPanel');
+    const toggle = event.target.closest('a');
+    
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        toggle.innerHTML = '<i class="fas fa-cog me-1"></i>Hide Advanced Options';
+    } else {
+        panel.style.display = 'none';
+        toggle.innerHTML = '<i class="fas fa-cog me-1"></i>Advanced Search Options';
+    }
+}
+
+function toggleView(viewType) {
+    const cardView = document.getElementById('cardView');
+    const tableView = document.getElementById('tableView');
+    const buttons = document.querySelectorAll('[onclick^="toggleView"]');
+    
+    buttons.forEach(btn => btn.classList.remove('active'));
+    
+    if (viewType === 'card') {
+        cardView.style.display = 'block';
+        tableView.style.display = 'none';
+        buttons[0].classList.add('active');
+    } else {
+        cardView.style.display = 'none';
+        tableView.style.display = 'block';
+        buttons[1].classList.add('active');
+    }
+}
+
+function exportResults() {
+    const form = document.getElementById('searchForm');
+    const formData = new FormData(form);
+    const params = new URLSearchParams(formData);
+    params.append('export', 'csv');
+    
+    window.location.href = `{% url 'inventory:device_search' %}?${params.toString()}`;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,351 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Reports Dashboard - BPS IT Inventory{% endblock %}
+
+{% block page_title %}Reports Dashboard{% endblock %}
+
+{% block page_subtitle %}
+    <p class="text-muted">Generate and view comprehensive reports for your inventory management</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border-left: 4px solid #007bff;
+        transition: all 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    
+    .stats-card.warning {
+        border-left-color: #ffc107;
+    }
+    
+    .stats-card.danger {
+        border-left-color: #dc3545;
+    }
+    
+    .stats-card.success {
+        border-left-color: #28a745;
+    }
+    
+    .stats-card.info {
+        border-left-color: #17a2b8;
+    }
+    
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #495057;
+    }
+    
+    .stats-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+    
+    .stats-icon {
+        font-size: 3rem;
+        opacity: 0.1;
+        position: absolute;
+        right: 20px;
+        top: 20px;
+    }
+    
+    .report-card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 1px solid #e9ecef;
+    }
+    
+    .report-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        border-color: #007bff;
+    }
+    
+    .report-card h5 {
+        color: #495057;
+        margin-bottom: 10px;
+    }
+    
+    .report-card p {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+    }
+    
+    .report-card .btn {
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+    
+    .recent-reports {
+        background: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .report-item {
+        padding: 12px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .report-item:last-child {
+        border-bottom: none;
+    }
+    
+    .report-item h6 {
+        color: #495057;
+        margin-bottom: 5px;
+    }
+    
+    .report-item small {
+        color: #6c757d;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+    }
+    
+    .section-title {
+        color: #495057;
+        font-weight: 600;
+        margin-bottom: 20px;
+        position: relative;
+    }
+    
+    .section-title::after {
+        content: '';
+        position: absolute;
+        bottom: -5px;
+        left: 0;
+        width: 50px;
+        height: 3px;
+        background: #007bff;
+        border-radius: 2px;
+    }
+    
+    .quick-actions {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .quick-actions .btn {
+        margin-right: 10px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <h5 class="mb-3">Quick Actions</h5>
+        <a href="{% url 'reports:inventory_report' %}" class="btn btn-primary">
+            <i class="fas fa-laptop mr-2"></i>Generate Inventory Report
+        </a>
+        <a href="{% url 'reports:assignment_report' %}" class="btn btn-info">
+            <i class="fas fa-users mr-2"></i>Generate Assignment Report
+        </a>
+        <a href="{% url 'reports:audit_report' %}" class="btn btn-warning">
+            <i class="fas fa-search mr-2"></i>Generate Audit Report
+        </a>
+        <a href="{% url 'reports:generate_custom_report' %}" class="btn btn-success">
+            <i class="fas fa-cog mr-2"></i>Create Custom Report
+        </a>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card">
+                <div class="position-relative">
+                    <i class="fas fa-laptop stats-icon"></i>
+                    <div class="stats-number">{{ stats.total_devices }}</div>
+                    <div class="stats-label">Total Devices</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card success">
+                <div class="position-relative">
+                    <i class="fas fa-check-circle stats-icon"></i>
+                    <div class="stats-number">{{ stats.active_assignments }}</div>
+                    <div class="stats-label">Active Assignments</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card warning">
+                <div class="position-relative">
+                    <i class="fas fa-exclamation-triangle stats-icon"></i>
+                    <div class="stats-number">{{ stats.overdue_assignments }}</div>
+                    <div class="stats-label">Overdue Assignments</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card danger">
+                <div class="position-relative">
+                    <i class="fas fa-shield-alt stats-icon"></i>
+                    <div class="stats-number">{{ stats.warranty_expiring }}</div>
+                    <div class="stats-label">Warranties Expiring</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Available Reports -->
+        <div class="col-lg-8">
+            <h4 class="section-title">Available Reports</h4>
+            
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="report-card" onclick="location.href='{% url 'reports:inventory_report' %}'">
+                        <h5><i class="fas fa-laptop text-primary mr-2"></i>Inventory Report</h5>
+                        <p>Comprehensive overview of all devices, their status, and current assignments.</p>
+                        <a href="{% url 'reports:inventory_report' %}" class="btn btn-primary btn-sm">Generate Report</a>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-4">
+                    <div class="report-card" onclick="location.href='{% url 'reports:assignment_report' %}'">
+                        <h5><i class="fas fa-users text-info mr-2"></i>Assignment Report</h5>
+                        <p>Track device assignments, returns, and staff device usage patterns.</p>
+                        <a href="{% url 'reports:assignment_report' %}" class="btn btn-info btn-sm">Generate Report</a>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-4">
+                    <div class="report-card" onclick="location.href='{% url 'reports:maintenance_report' %}'">
+                        <h5><i class="fas fa-tools text-warning mr-2"></i>Maintenance Report</h5>
+                        <p>View scheduled maintenance, completed tasks, and upcoming service dates.</p>
+                        <a href="{% url 'reports:maintenance_report' %}" class="btn btn-warning btn-sm">Generate Report</a>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-4">
+                    <div class="report-card" onclick="location.href='{% url 'reports:audit_report' %}'">
+                        <h5><i class="fas fa-search text-success mr-2"></i>Audit Report</h5>
+                        <p>Review system audit logs, user activities, and security events.</p>
+                        <a href="{% url 'reports:audit_report' %}" class="btn btn-success btn-sm">Generate Report</a>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-4">
+                    <div class="report-card" onclick="location.href='{% url 'reports:warranty_report' %}'">
+                        <h5><i class="fas fa-shield-alt text-danger mr-2"></i>Warranty Report</h5>
+                        <p>Monitor warranty statuses, expiration dates, and coverage details.</p>
+                        <a href="{% url 'reports:warranty_report' %}" class="btn btn-danger btn-sm">Generate Report</a>
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-4">
+                    <div class="report-card" onclick="location.href='{% url 'reports:department_utilization' %}'">
+                        <h5><i class="fas fa-chart-pie text-secondary mr-2"></i>Department Utilization</h5>
+                        <p>Analyze device distribution and usage across departments.</p>
+                        <a href="{% url 'reports:department_utilization' %}" class="btn btn-secondary btn-sm">Generate Report</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Reports -->
+        <div class="col-lg-4">
+            <h4 class="section-title">Recent Reports</h4>
+            
+            <div class="recent-reports">
+                {% if recent_reports %}
+                    {% for report in recent_reports %}
+                    <div class="report-item">
+                        <h6>{{ report.template.name|default:"Custom Report" }}</h6>
+                        <small class="text-muted">Generated on {{ report.created_at|date:"M d, Y H:i" }}</small>
+                        <div class="mt-2">
+                            {% if report.status == 'COMPLETED' %}
+                                <span class="badge badge-success">Completed</span>
+                            {% elif report.status == 'IN_PROGRESS' %}
+                                <span class="badge badge-info">In Progress</span>
+                            {% elif report.status == 'FAILED' %}
+                                <span class="badge badge-danger">Failed</span>
+                            {% else %}
+                                <span class="badge badge-secondary">{{ report.status }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-file-alt text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-3">No recent reports generated</p>
+                        <a href="{% url 'reports:inventory_report' %}" class="btn btn-primary btn-sm">Generate Your First Report</a>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Custom Report Section -->
+            <div class="mt-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-cog text-primary" style="font-size: 2rem;"></i>
+                        <h5 class="card-title mt-3">Custom Reports</h5>
+                        <p class="card-text">Create customized reports with specific filters and parameters.</p>
+                        <a href="{% url 'reports:generate_custom_report' %}" class="btn btn-primary">Create Custom Report</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add any dashboard-specific JavaScript here
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animate numbers on load
+        const numbers = document.querySelectorAll('.stats-number');
+        numbers.forEach(number => {
+            const finalValue = parseInt(number.textContent);
+            let currentValue = 0;
+            const increment = finalValue / 20;
+            
+            const updateNumber = () => {
+                if (currentValue < finalValue) {
+                    currentValue += increment;
+                    number.textContent = Math.floor(currentValue);
+                    setTimeout(updateNumber, 50);
+                } else {
+                    number.textContent = finalValue;
+                }
+            };
+            
+            updateNumber();
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,1076 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Global Search - BPS Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+    }
+    
+    .search-hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 3rem 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        text-align: center;
+    }
+    
+    .search-hero h2 {
+        font-size: 2.5rem;
+        font-weight: 300;
+        margin-bottom: 1rem;
+    }
+    
+    .search-hero p {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin-bottom: 2rem;
+    }
+    
+    .global-search-form {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 2rem;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .search-input-container {
+        position: relative;
+        margin-bottom: 1.5rem;
+    }
+    
+    .search-input {
+        background: rgba(255,255,255,0.9);
+        border: 2px solid rgba(255,255,255,0.3);
+        border-radius: 50px;
+        padding: 1rem 4rem 1rem 1.5rem;
+        font-size: 1.1rem;
+        width: 100%;
+        color: #333;
+    }
+    
+    .search-input:focus {
+        background: white;
+        border-color: rgba(255,255,255,0.8);
+        box-shadow: 0 0 0 0.2rem rgba(255,255,255,0.25);
+        outline: none;
+    }
+    
+    .search-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 50%;
+        width: 45px;
+        height: 45px;
+        color: white;
+        font-size: 1.2rem;
+        transition: all 0.3s ease;
+    }
+    
+    .search-btn:hover {
+        transform: translateY(-50%) scale(1.05);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    
+    .search-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: center;
+    }
+    
+    .filter-chip {
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 25px;
+        padding: 0.5rem 1rem;
+        color: white;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+    }
+    
+    .filter-chip:hover,
+    .filter-chip.active {
+        background: rgba(255,255,255,0.3);
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .search-suggestions {
+        margin-top: 1rem;
+        text-align: left;
+    }
+    
+    .suggestion-tag {
+        display: inline-block;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 15px;
+        padding: 0.25rem 0.75rem;
+        margin: 0.25rem;
+        color: rgba(255,255,255,0.8);
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .suggestion-tag:hover {
+        background: rgba(255,255,255,0.2);
+        color: white;
+    }
+    
+    .search-stats {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+        display: block;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    
+    .search-results {
+        margin-top: 2rem;
+    }
+    
+    .result-section {
+        margin-bottom: 3rem;
+    }
+    
+    .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: between;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #e9ecef;
+    }
+    
+    .section-title {
+        color: #495057;
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    .section-count {
+        background: #667eea;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        margin-left: 1rem;
+    }
+    
+    .view-all-link {
+        color: #667eea;
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-left: auto;
+    }
+    
+    .view-all-link:hover {
+        color: #764ba2;
+        text-decoration: underline;
+    }
+    
+    .result-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .result-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        border-color: #667eea;
+    }
+    
+    .result-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .result-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+    
+    .result-title {
+        color: #495057;
+        font-weight: 600;
+        margin: 0;
+        text-decoration: none;
+    }
+    
+    .result-title:hover {
+        color: #667eea;
+    }
+    
+    .result-type {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .result-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .meta-item {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .meta-label {
+        color: #6c757d;
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .meta-value {
+        color: #495057;
+        font-weight: 500;
+    }
+    
+    .result-description {
+        color: #6c757d;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+    
+    .result-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .result-actions .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .highlight {
+        background: #fff3cd;
+        padding: 0.1rem 0.2rem;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+    
+    .empty-results {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-results i {
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+        opacity: 0.5;
+    }
+    
+    .search-tips {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-top: 2rem;
+    }
+    
+    .tips-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .tip-item {
+        display: flex;
+        align-items: start;
+        gap: 1rem;
+    }
+    
+    .tip-icon {
+        color: #667eea;
+        font-size: 1.5rem;
+        margin-top: 0.25rem;
+    }
+    
+    .tip-content h6 {
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    
+    .tip-content p {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+    
+    @media (max-width: 768px) {
+        .search-hero {
+            padding: 2rem 1rem;
+        }
+        
+        .search-hero h2 {
+            font-size: 2rem;
+        }
+        
+        .global-search-form {
+            padding: 1.5rem;
+        }
+        
+        .search-filters {
+            justify-content: flex-start;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .result-meta {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h3 mb-0 text-gray-800">
+                    <i class="fas fa-globe text-primary me-2"></i>
+                    Global Search
+                </h1>
+                <p class="text-muted mb-0">Search across all inventory items, staff, and assignments</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group">
+                    <a href="{% url 'inventory:device_search' %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-laptop me-1"></i>
+                        Device Search
+                    </a>
+                    <a href="{% url 'inventory:assignment_search' %}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-user-tag me-1"></i>
+                        Assignment Search
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Hero Section -->
+    <div class="search-hero">
+        <h2>Find Anything</h2>
+        <p>Search devices, staff, assignments, and more across the entire inventory system</p>
+        
+        <div class="global-search-form">
+            <form method="GET" id="globalSearchForm">
+                <div class="search-input-container">
+                    <input type="text" 
+                           class="search-input" 
+                           name="q" 
+                           value="{{ query }}" 
+                           placeholder="Search devices, staff, assignments, serial numbers..."
+                           autocomplete="off"
+                           id="globalSearchInput">
+                    <button type="submit" class="search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                
+                <div class="search-filters">
+                    <a href="?q={{ query }}" class="filter-chip {% if not search_type %}active{% endif %}">
+                        <i class="fas fa-globe me-1"></i>
+                        All Results
+                    </a>
+                    <a href="?q={{ query }}&type=devices" class="filter-chip {% if search_type == 'devices' %}active{% endif %}">
+                        <i class="fas fa-laptop me-1"></i>
+                        Devices
+                    </a>
+                    <a href="?q={{ query }}&type=staff" class="filter-chip {% if search_type == 'staff' %}active{% endif %}">
+                        <i class="fas fa-users me-1"></i>
+                        Staff
+                    </a>
+                    <a href="?q={{ query }}&type=assignments" class="filter-chip {% if search_type == 'assignments' %}active{% endif %}">
+                        <i class="fas fa-user-tag me-1"></i>
+                        Assignments
+                    </a>
+                    <a href="?q={{ query }}&type=maintenance" class="filter-chip {% if search_type == 'maintenance' %}active{% endif %}">
+                        <i class="fas fa-tools me-1"></i>
+                        Maintenance
+                    </a>
+                </div>
+                
+                {% if not query %}
+                <div class="search-suggestions">
+                    <p class="mb-2 opacity-75">Try searching for:</p>
+                    <span class="suggestion-tag" onclick="searchFor('laptop')">laptop</span>
+                    <span class="suggestion-tag" onclick="searchFor('john')">john</span>
+                    <span class="suggestion-tag" onclick="searchFor('dell')">dell</span>
+                    <span class="suggestion-tag" onclick="searchFor('hp')">hp</span>
+                    <span class="suggestion-tag" onclick="searchFor('maintenance')">maintenance</span>
+                    <span class="suggestion-tag" onclick="searchFor('warranty')">warranty</span>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    {% if query %}
+        <!-- Search Statistics -->
+        <div class="search-stats">
+            <div class="row mb-3">
+                <div class="col">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar text-primary me-1"></i>
+                        Search Results for: <span class="text-primary">"{{ query }}"</span>
+                    </h5>
+                    <small class="text-muted">Found {{ total_results }} results across {{ result_sections }} categories</small>
+                </div>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-number">{{ devices.count|default:0 }}</span>
+                    <span class="stat-label">Devices</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ staff.count|default:0 }}</span>
+                    <span class="stat-label">Staff Members</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ assignments.count|default:0 }}</span>
+                    <span class="stat-label">Assignments</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ maintenance.count|default:0 }}</span>
+                    <span class="stat-label">Maintenance Records</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div class="search-results">
+            {% if devices %}
+                <div class="result-section">
+                    <div class="section-header">
+                        <h4 class="section-title">
+                            <i class="fas fa-laptop text-primary me-2"></i>
+                            Devices
+                            <span class="section-count">{{ devices.count }}</span>
+                        </h4>
+                        {% if devices.count > 5 %}
+                            <a href="{% url 'inventory:device_search' %}?search={{ query }}" class="view-all-link">
+                                View All Devices
+                                <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                    
+                    {% for device in devices|slice:":5" %}
+                        <div class="result-card">
+                            <div class="result-header">
+                                <a href="{% url 'inventory:device_detail' device.pk %}" class="result-title">
+                                    {{ device.name|default:"Unnamed Device" }}
+                                </a>
+                                <span class="result-type">Device</span>
+                            </div>
+                            
+                            <div class="result-meta">
+                                <div class="meta-item">
+                                    <span class="meta-label">Type</span>
+                                    <span class="meta-value">{{ device.device_type.name }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Serial Number</span>
+                                    <span class="meta-value">{{ device.serial_number|default:"Not Set" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Status</span>
+                                    <span class="meta-value">{{ device.get_status_display }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Location</span>
+                                    <span class="meta-value">{{ device.location|default:"Not Set" }}</span>
+                                </div>
+                            </div>
+                            
+                            {% if device.description %}
+                                <div class="result-description">
+                                    {{ device.description|truncatewords:20 }}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="result-actions">
+                                <a href="{% url 'inventory:device_detail' device.pk %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View Details
+                                </a>
+                                <a href="{% url 'inventory:device_edit' device.pk %}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Edit
+                                </a>
+                                {% if device.status == 'available' %}
+                                    <a href="{% url 'inventory:assignment_create' %}?device={{ device.pk }}" class="btn btn-success btn-sm">
+                                        <i class="fas fa-user-plus me-1"></i>
+                                        Assign
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if staff %}
+                <div class="result-section">
+                    <div class="section-header">
+                        <h4 class="section-title">
+                            <i class="fas fa-users text-success me-2"></i>
+                            Staff Members
+                            <span class="section-count">{{ staff.count }}</span>
+                        </h4>
+                        {% if staff.count > 5 %}
+                            <a href="{% url 'inventory:staff_list' %}?search={{ query }}" class="view-all-link">
+                                View All Staff
+                                <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                    
+                    {% for person in staff|slice:":5" %}
+                        <div class="result-card">
+                            <div class="result-header">
+                                <a href="{% url 'inventory:staff_detail' person.pk %}" class="result-title">
+                                    {{ person.get_full_name }}
+                                </a>
+                                <span class="result-type">Staff</span>
+                            </div>
+                            
+                            <div class="result-meta">
+                                <div class="meta-item">
+                                    <span class="meta-label">Employee ID</span>
+                                    <span class="meta-value">{{ person.employee_id|default:"Not Set" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Department</span>
+                                    <span class="meta-value">{{ person.department.name|default:"Not Set" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Position</span>
+                                    <span class="meta-value">{{ person.position|default:"Not Set" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Email</span>
+                                    <span class="meta-value">{{ person.email|default:"Not Set" }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="result-actions">
+                                <a href="{% url 'inventory:staff_detail' person.pk %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View Profile
+                                </a>
+                                <a href="{% url 'inventory:staff_edit' person.pk %}" class="btn btn-outline-secondary btn-sm">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Edit
+                                </a>
+                                <a href="{% url 'inventory:assignment_create' %}?staff={{ person.pk }}" class="btn btn-success btn-sm">
+                                    <i class="fas fa-plus me-1"></i>
+                                    New Assignment
+                                </a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if assignments %}
+                <div class="result-section">
+                    <div class="section-header">
+                        <h4 class="section-title">
+                            <i class="fas fa-user-tag text-info me-2"></i>
+                            Assignments
+                            <span class="section-count">{{ assignments.count }}</span>
+                        </h4>
+                        {% if assignments.count > 5 %}
+                            <a href="{% url 'inventory:assignment_search' %}?search={{ query }}" class="view-all-link">
+                                View All Assignments
+                                <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                    
+                    {% for assignment in assignments|slice:":5" %}
+                        <div class="result-card">
+                            <div class="result-header">
+                                <a href="{% url 'inventory:assignment_detail' assignment.pk %}" class="result-title">
+                                    {{ assignment.device.name }} → {{ assignment.staff.get_full_name }}
+                                </a>
+                                <span class="result-type">Assignment</span>
+                            </div>
+                            
+                            <div class="result-meta">
+                                <div class="meta-item">
+                                    <span class="meta-label">Device</span>
+                                    <span class="meta-value">{{ assignment.device.name }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Staff Member</span>
+                                    <span class="meta-value">{{ assignment.staff.get_full_name }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Assigned Date</span>
+                                    <span class="meta-value">{{ assignment.assigned_date|date:"M d, Y" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Status</span>
+                                    <span class="meta-value">{{ assignment.get_status_display }}</span>
+                                </div>
+                            </div>
+                            
+                            {% if assignment.notes %}
+                                <div class="result-description">
+                                    {{ assignment.notes|truncatewords:20 }}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="result-actions">
+                                <a href="{% url 'inventory:assignment_detail' assignment.pk %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View Details
+                                </a>
+                                {% if assignment.status == 'active' %}
+                                    <a href="{% url 'inventory:assignment_return' assignment.pk %}" class="btn btn-warning btn-sm">
+                                        <i class="fas fa-undo me-1"></i>
+                                        Return
+                                    </a>
+                                    <a href="{% url 'inventory:assignment_extend' assignment.pk %}" class="btn btn-info btn-sm">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Extend
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if maintenance %}
+                <div class="result-section">
+                    <div class="section-header">
+                        <h4 class="section-title">
+                            <i class="fas fa-tools text-warning me-2"></i>
+                            Maintenance Records
+                            <span class="section-count">{{ maintenance.count }}</span>
+                        </h4>
+                        {% if maintenance.count > 5 %}
+                            <a href="{% url 'inventory:maintenance_list' %}?search={{ query }}" class="view-all-link">
+                                View All Maintenance
+                                <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                    
+                    {% for record in maintenance|slice:":5" %}
+                        <div class="result-card">
+                            <div class="result-header">
+                                <a href="{% url 'inventory:maintenance_detail' record.pk %}" class="result-title">
+                                    {{ record.title|default:"Maintenance Record" }}
+                                </a>
+                                <span class="result-type">Maintenance</span>
+                            </div>
+                            
+                            <div class="result-meta">
+                                <div class="meta-item">
+                                    <span class="meta-label">Device</span>
+                                    <span class="meta-value">{{ record.device.name }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Type</span>
+                                    <span class="meta-value">{{ record.get_maintenance_type_display }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Scheduled Date</span>
+                                    <span class="meta-value">{{ record.scheduled_date|date:"M d, Y" }}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Status</span>
+                                    <span class="meta-value">{{ record.get_status_display }}</span>
+                                </div>
+                            </div>
+                            
+                            {% if record.description %}
+                                <div class="result-description">
+                                    {{ record.description|truncatewords:20 }}
+                                </div>
+                            {% endif %}
+                            
+                            <div class="result-actions">
+                                <a href="{% url 'inventory:maintenance_detail' record.pk %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View Details
+                                </a>
+                                {% if record.status == 'scheduled' %}
+                                    <a href="{% url 'inventory:maintenance_edit' record.pk %}" class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-edit me-1"></i>
+                                        Edit
+                                    </a>
+                                    <a href="{% url 'inventory:maintenance_complete' record.pk %}" class="btn btn-success btn-sm">
+                                        <i class="fas fa-check me-1"></i>
+                                        Complete
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if not devices and not staff and not assignments and not maintenance and query %}
+                <div class="empty-results">
+                    <i class="fas fa-search"></i>
+                    <h4>No results found</h4>
+                    <p>No items match your search criteria for "<strong>{{ query }}</strong>"</p>
+                    <div class="mt-3">
+                        <a href="{% url 'inventory:global_search' %}" class="btn btn-primary me-2">
+                            <i class="fas fa-search me-1"></i>
+                            New Search
+                        </a>
+                        <a href="{% url 'inventory:device_create' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-plus me-1"></i>
+                            Add Device
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    {% else %}
+        <!-- Search Tips -->
+        <div class="search-tips">
+            <h5 class="mb-3">
+                <i class="fas fa-lightbulb text-warning me-2"></i>
+                Search Tips & Quick Actions
+            </h5>
+            
+            <div class="tips-grid">
+                <div class="tip-item">
+                    <i class="fas fa-search tip-icon"></i>
+                    <div class="tip-content">
+                        <h6>Smart Search</h6>
+                        <p>Search by device name, serial number, staff name, or any partial match. The system will find relevant results across all categories.</p>
+                    </div>
+                </div>
+                
+                <div class="tip-item">
+                    <i class="fas fa-filter tip-icon"></i>
+                    <div class="tip-content">
+                        <h6>Filter Results</h6>
+                        <p>Use the filter chips above to narrow down results to specific categories like devices, staff, or assignments.</p>
+                    </div>
+                </div>
+                
+                <div class="tip-item">
+                    <i class="fas fa-bolt tip-icon"></i>
+                    <div class="tip-content">
+                        <h6>Quick Actions</h6>
+                        <p>Perform common actions directly from search results without navigating to detail pages.</p>
+                    </div>
+                </div>
+                
+                <div class="tip-item">
+                    <i class="fas fa-keyboard tip-icon"></i>
+                    <div class="tip-content">
+                        <h6>Keyboard Shortcut</h6>
+                        <p>Press <kbd>Ctrl + K</kbd> (or <kbd>Cmd + K</kbd> on Mac) to quickly focus the search input from anywhere.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Quick Links</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'inventory:device_list' %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-laptop me-1"></i>
+                            Browse Devices
+                        </a>
+                        <a href="{% url 'inventory:staff_list' %}" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-users me-1"></i>
+                            Browse Staff
+                        </a>
+                        <a href="{% url 'inventory:assignment_list' %}" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-user-tag me-1"></i>
+                            Browse Assignments
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-muted mb-3">Recent Activity</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'inventory:dashboard' %}?filter=recent" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-clock me-1"></i>
+                            Recent Items
+                        </a>
+                        <a href="{% url 'inventory:assignment_list' %}?status=active" class="btn btn-outline-warning btn-sm">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            Active Assignments
+                        </a>
+                        <a href="{% url 'inventory:maintenance_list' %}?status=pending" class="btn btn-outline-danger btn-sm">
+                            <i class="fas fa-tools me-1"></i>
+                            Pending Maintenance
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('globalSearchInput');
+    const searchForm = document.getElementById('globalSearchForm');
+    
+    // Auto-focus search input
+    if (searchInput && !searchInput.value) {
+        searchInput.focus();
+    }
+    
+    // Real-time search suggestions (debounced)
+    let searchTimeout;
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            if (query.length >= 2) {
+                searchTimeout = setTimeout(() => {
+                    // Implement real-time suggestions here if needed
+                    // fetchSearchSuggestions(query);
+                }, 300);
+            }
+        });
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+K or Cmd+K to focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+        
+        // Escape to clear search
+        if (e.key === 'Escape' && document.activeElement === searchInput) {
+            searchInput.value = '';
+        }
+    });
+    
+    // Auto-submit on filter chip clicks
+    const filterChips = document.querySelectorAll('.filter-chip');
+    filterChips.forEach(chip => {
+        chip.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = new URL(this.href);
+            const searchParams = url.searchParams;
+            
+            // Update form with new parameters
+            const currentQuery = searchInput.value;
+            if (currentQuery) {
+                searchParams.set('q', currentQuery);
+            }
+            
+            // Navigate to new URL
+            window.location.href = url.toString();
+        });
+    });
+    
+    // Result card hover effects
+    const resultCards = document.querySelectorAll('.result-card');
+    resultCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-3px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+    
+    // Highlight search terms in results
+    function highlightSearchTerms() {
+        const query = searchInput ? searchInput.value.toLowerCase() : '';
+        if (!query || query.length < 2) return;
+        
+        const terms = query.split(' ').filter(term => term.length > 1);
+        const textNodes = document.querySelectorAll('.result-card .meta-value, .result-card .result-description');
+        
+        textNodes.forEach(node => {
+            let content = node.textContent;
+            terms.forEach(term => {
+                const regex = new RegExp(`(${term})`, 'gi');
+                content = content.replace(regex, '<span class="highlight">$1</span>');
+            });
+            if (content !== node.textContent) {
+                node.innerHTML = content;
+            }
+        });
+    }
+    
+    // Apply highlighting if there's a search query
+    if (searchInput && searchInput.value) {
+        highlightSearchTerms();
+    }
+    
+    // Loading state for search
+    if (searchForm) {
+        searchForm.addEventListener('submit', function() {
+            const submitBtn = this.querySelector('.search-btn');
+            if (submitBtn) {
+                const icon = submitBtn.querySelector('i');
+                icon.className = 'fas fa-spinner fa-spin';
+                submitBtn.disabled = true;
+            }
+        });
+    }
+    
+    // Result actions with loading states
+    const actionButtons = document.querySelectorAll('.result-actions .btn');
+    actionButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (this.href && !this.href.includes('#')) {
+                const icon = this.querySelector('i');
+                if (icon && !icon.classList.contains('fa-external-link-alt')) {
+                    icon.className = 'fas fa-spinner fa-spin';
+                    this.disabled = true;
+                }
+            }
+        });
+    });
+    
+    // Export functionality
+    function exportSearchResults() {
+        const query = searchInput ? searchInput.value : '';
+        const currentUrl = new URL(window.location);
+        currentUrl.searchParams.set('export', 'csv');
+        window.location.href = currentUrl.toString();
+    }
+    
+    // Advanced search modal (if implemented)
+    function showAdvancedSearch() {
+        // Implementation for advanced search modal
+        console.log('Advanced search modal would open here');
+    }
+    
+    // Search analytics (track search queries)
+    function trackSearch(query, resultCount) {
+        // Implementation for search analytics
+        console.log(`Search: "${query}" - Results: ${resultCount}`);
+    }
+    
+    // Track current search if exists
+    const currentQuery = searchInput ? searchInput.value : '';
+    const resultCount = document.querySelectorAll('.result-card').length;
+    if (currentQuery && resultCount >= 0) {
+        trackSearch(currentQuery, resultCount);
+    }
+});
+
+// Global function for suggestion tags
+function searchFor(term) {
+    const searchInput = document.getElementById('globalSearchInput');
+    if (searchInput) {
+        searchInput.value = term;
+        searchInput.form.submit();
+    }
+}
+
+// Export function (called from buttons)
+function exportResults() {
+    const currentUrl = new URL(window.location);
+    currentUrl.searchParams.set('export', 'csv');
+    window.location.href = currentUrl.toString();
+}
+
+// Print function (called from buttons)
+function printResults() {
+    window.print();
+}
+
+// Share search results
+function shareSearch() {
+    if (navigator.share) {
+        navigator.share({
+            title: 'BPS Inventory Search Results',
+            url: window.location.href
+        });
+    } else {
+        // Fallback: copy to clipboard
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('Search URL copied to clipboard!');
+        });
+    }
+}
+</script>
+{% endblock %}
