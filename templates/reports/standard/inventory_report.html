@@ -1,0 +1,640 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Inventory Report - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stats-card.success {
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    }
+    
+    .stats-card.warning {
+        background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    }
+    
+    .stats-card.danger {
+        background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+    }
+    
+    .stats-card.info {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    }
+    
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+    }
+    
+    .stats-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stats-icon {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        font-size: 2rem;
+        opacity: 0.3;
+    }
+    
+    .report-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+    
+    .filter-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .table-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        overflow: hidden;
+    }
+    
+    .table-responsive {
+        border-radius: 12px;
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: none;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+    }
+    
+    .table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid #f1f3f4;
+        vertical-align: middle;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .status-badge {
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-available {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-assigned {
+        background-color: #cce5ff;
+        color: #004085;
+    }
+    
+    .status-maintenance {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-retired {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .device-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .device-avatar {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .device-details h6 {
+        margin: 0;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    
+    .device-details small {
+        color: #6c757d;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-action {
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-view {
+        background-color: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .btn-view:hover {
+        background-color: #1976d2;
+        color: white;
+    }
+    
+    .btn-edit {
+        background-color: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .btn-edit:hover {
+        background-color: #f57c00;
+        color: white;
+    }
+    
+    .btn-qr {
+        background-color: #f3e5f5;
+        color: #7b1fa2;
+    }
+    
+    .btn-qr:hover {
+        background-color: #7b1fa2;
+        color: white;
+    }
+    
+    .export-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+    }
+    
+    .chart-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .stats-card {
+            background: #f8f9fa !important;
+            color: #333 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .report-header {
+            background: #f8f9fa !important;
+            color: #333 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="mb-2">
+                    <i class="fas fa-chart-bar me-3"></i>
+                    Inventory Report
+                </h1>
+                <p class="mb-0 opacity-75">
+                    Comprehensive overview of all devices in the BPS IT inventory system
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="report-meta">
+                    <div class="mb-1">
+                        <small class="opacity-75">Generated on:</small>
+                        <strong>{{ report_date|date:"F d, Y" }}</strong>
+                    </div>
+                    <div>
+                        <small class="opacity-75">Report ID:</small>
+                        <strong>INV-{{ report_date|date:"Ymd" }}-001</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card">
+                <div class="position-relative p-4">
+                    <i class="fas fa-laptop stats-icon"></i>
+                    <div class="stats-number">{{ total_devices|default:0 }}</div>
+                    <div class="stats-label">Total Devices</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card success">
+                <div class="position-relative p-4">
+                    <i class="fas fa-check-circle stats-icon"></i>
+                    <div class="stats-number">{{ active_devices|default:0 }}</div>
+                    <div class="stats-label">Active Devices</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card warning">
+                <div class="position-relative p-4">
+                    <i class="fas fa-user-check stats-icon"></i>
+                    <div class="stats-number">{{ assigned_devices|default:0 }}</div>
+                    <div class="stats-label">Assigned Devices</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="stats-card info">
+                <div class="position-relative p-4">
+                    <i class="fas fa-dollar-sign stats-icon"></i>
+                    <div class="stats-number">${{ total_value|floatformat:0|default:0 }}</div>
+                    <div class="stats-label">Total Value</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters & Export -->
+    <div class="row">
+        <!-- Filters -->
+        <div class="col-lg-8">
+            <div class="filter-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-filter me-2"></i>
+                    Filters
+                </h5>
+                <form method="get" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="device_type" class="form-label">Device Type</label>
+                        <select class="form-select" id="device_type" name="device_type">
+                            <option value="">All Types</option>
+                            {% for type in device_types %}
+                            <option value="{{ type.id }}" {% if type.id|stringformat:"s" == request.GET.device_type %}selected{% endif %}>
+                                {{ type.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">All Status</option>
+                            <option value="AVAILABLE" {% if request.GET.status == "AVAILABLE" %}selected{% endif %}>Available</option>
+                            <option value="ASSIGNED" {% if request.GET.status == "ASSIGNED" %}selected{% endif %}>Assigned</option>
+                            <option value="MAINTENANCE" {% if request.GET.status == "MAINTENANCE" %}selected{% endif %}>Maintenance</option>
+                            <option value="RETIRED" {% if request.GET.status == "RETIRED" %}selected{% endif %}>Retired</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">Purchase Date From</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">Purchase Date To</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+                    </div>
+                    
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-2"></i>
+                            Apply Filters
+                        </button>
+                        <a href="{% url 'reports:inventory_report' %}" class="btn btn-outline-secondary ms-2">
+                            <i class="fas fa-times me-2"></i>
+                            Clear Filters
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Export Options -->
+        <div class="col-lg-4">
+            <div class="export-section">
+                <h5 class="mb-3">
+                    <i class="fas fa-download me-2"></i>
+                    Export Options
+                </h5>
+                <div class="d-grid gap-2">
+                    <a href="?format=pdf{% if request.GET.device_type %}&device_type={{ request.GET.device_type }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" 
+                       class="btn btn-outline-danger">
+                        <i class="fas fa-file-pdf me-2"></i>
+                        Export as PDF
+                    </a>
+                    <a href="?format=excel{% if request.GET.device_type %}&device_type={{ request.GET.device_type }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}" 
+                       class="btn btn-outline-success">
+                        <i class="fas fa-file-excel me-2"></i>
+                        Export as Excel
+                    </a>
+                    <button onclick="window.print()" class="btn btn-outline-primary">
+                        <i class="fas fa-print me-2"></i>
+                        Print Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Devices Table -->
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Device Information</th>
+                        <th>Type & Category</th>
+                        <th>Status</th>
+                        <th>Assignment</th>
+                        <th>Purchase Info</th>
+                        <th>Warranty</th>
+                        <th class="no-print">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in devices %}
+                    <tr>
+                        <td>
+                            <div class="device-info">
+                                <div class="device-avatar">
+                                    {{ device.device_name|first|upper }}
+                                </div>
+                                <div class="device-details">
+                                    <h6>{{ device.device_name }}</h6>
+                                    <small>{{ device.device_id }}</small>
+                                    {% if device.asset_tag %}
+                                    <br><small class="text-muted">Asset: {{ device.asset_tag }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <strong>{{ device.device_type.name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ device.device_type.subcategory.category.name }}</small>
+                                {% if device.brand %}
+                                <br><small>{{ device.brand }} {{ device.model }}</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ device.status|lower }}">
+                                {{ device.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if device.current_assignment %}
+                            <div>
+                                <strong>{{ device.current_assignment.assigned_to_staff }}</strong>
+                                {% if device.current_assignment.assigned_to_department %}
+                                <br><small class="text-muted">{{ device.current_assignment.assigned_to_department }}</small>
+                                {% endif %}
+                                {% if device.current_assignment.assignment_date %}
+                                <br><small class="text-muted">Since: {{ device.current_assignment.assignment_date|date:"M d, Y" }}</small>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if device.purchase_price %}
+                            <div>
+                                <strong>${{ device.purchase_price|floatformat:2 }}</strong>
+                                {% if device.purchase_date %}
+                                <br><small class="text-muted">{{ device.purchase_date|date:"M d, Y" }}</small>
+                                {% endif %}
+                                {% if device.vendor %}
+                                <br><small class="text-muted">{{ device.vendor.name }}</small>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if device.warranty_end_date %}
+                            <div>
+                                {% if device.warranty_end_date < today %}
+                                <span class="text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    Expired
+                                </span>
+                                {% elif device.warranty_end_date < thirty_days_from_now %}
+                                <span class="text-warning">
+                                    <i class="fas fa-clock me-1"></i>
+                                    Expiring Soon
+                                </span>
+                                {% else %}
+                                <span class="text-success">
+                                    <i class="fas fa-shield-alt me-1"></i>
+                                    Active
+                                </span>
+                                {% endif %}
+                                <br><small class="text-muted">{{ device.warranty_end_date|date:"M d, Y" }}</small>
+                            </div>
+                            {% else %}
+                            <span class="text-muted">No Warranty</span>
+                            {% endif %}
+                        </td>
+                        <td class="no-print">
+                            <div class="action-buttons">
+                                <a href="{% url 'inventory:device_detail' device.device_id %}" 
+                                   class="btn btn-action btn-view" 
+                                   title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'inventory:device_edit' device.device_id %}" 
+                                   class="btn btn-action btn-edit" 
+                                   title="Edit Device">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'qr_management:device_qr' device.device_id %}" 
+                                   class="btn btn-action btn-qr" 
+                                   title="Generate QR Code">
+                                    <i class="fas fa-qrcode"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="fas fa-inbox fa-2x mb-3"></i>
+                                <h5>No devices found</h5>
+                                <p>Try adjusting your filters or add some devices to the inventory.</p>
+                                <a href="{% url 'inventory:device_add' %}" class="btn btn-primary">
+                                    <i class="fas fa-plus me-2"></i>
+                                    Add Device
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="p-3 border-top">
+            <nav aria-label="Inventory pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.device_type %}device_type={{ request.GET.device_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}page=1">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.device_type %}device_type={{ request.GET.device_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    
+                    <li class="page-item active">
+                        <span class="page-link">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                        </span>
+                    </li>
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.device_type %}device_type={{ request.GET.device_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if request.GET.device_type %}device_type={{ request.GET.device_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.date_from %}date_from={{ request.GET.date_from }}&{% endif %}{% if request.GET.date_to %}date_to={{ request.GET.date_to }}&{% endif %}page={{ page_obj.paginator.num_pages }}">Last</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Summary Section -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Device Status Distribution
+                </h5>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="h4 text-success">{{ active_devices|default:0 }}</div>
+                            <small class="text-muted">Active</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="h4 text-warning">{{ maintenance_devices|default:0 }}</div>
+                            <small class="text-muted">Maintenance</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6">
+            <div class="chart-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Top Device Categories
+                </h5>
+                {% for category in category_breakdown|slice:":5" %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>{{ category.device_type__subcategory__category__name|default:"Unknown" }}</span>
+                    <span class="badge bg-primary">{{ category.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Report Footer -->
+    <div class="text-center mt-4 no-print">
+        <hr>
+        <small class="text-muted">
+            Report generated on {{ report_date|date:"F d, Y \a\t g:i A" }} by {{ user.get_full_name|default:user.username }}
+            <br>
+            BPS IT Inventory Management System
+        </small>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh statistics every 5 minutes
+    setTimeout(function() {
+        location.reload();
+    }, 300000);
+    
+    // Enhanced print functionality
+    window.addEventListener('beforeprint', function() {
+        document.title = 'BPS IT Inventory Report - ' + new Date().toLocaleDateString();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,455 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block page_title %}Scan Detail - {{ scan.device.device_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/qr_management.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="page-title">Scan Detail</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'qr_management_index' %}">QR Management</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'qr_scan_history' %}">Scan History</a></li>
+                    <li class="breadcrumb-item active">Scan Detail</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="action-buttons">
+            <a href="{% url 'device_detail' scan.device.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-laptop"></i> View Device
+            </a>
+            <a href="{% url 'qr_scan_history' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to History
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Scan Information -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> Scan Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="info-label">Scan Status</label>
+                                <div>
+                                    {% if scan.is_verified %}
+                                        <span class="badge bg-success fs-6">
+                                            <i class="fas fa-check-circle"></i> Verified
+                                        </span>
+                                    {% elif scan.verification_status == 'failed' %}
+                                        <span class="badge bg-danger fs-6">
+                                            <i class="fas fa-times-circle"></i> Failed
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning fs-6">
+                                            <i class="fas fa-clock"></i> Pending
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="info-group mb-3">
+                                <label class="info-label">Scanned At</label>
+                                <div>
+                                    <strong>{{ scan.scanned_at|date:"F d, Y" }}</strong><br>
+                                    <small class="text-muted">{{ scan.scanned_at|time:"H:i:s" }} ({{ scan.scanned_at|timesince }} ago)</small>
+                                </div>
+                            </div>
+
+                            <div class="info-group mb-3">
+                                <label class="info-label">Scanner</label>
+                                <div>
+                                    {% if scan.scanned_by %}
+                                        <strong>{{ scan.scanned_by.get_full_name }}</strong><br>
+                                        <small class="text-muted">{{ scan.scanned_by.username }}</small>
+                                    {% else %}
+                                        <span class="text-muted">Anonymous Scanner</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="info-group mb-3">
+                                <label class="info-label">Scan Method</label>
+                                <div>
+                                    {% if scan.scan_method %}
+                                        <span class="badge bg-info">{{ scan.scan_method|title }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="info-label">Location</label>
+                                <div>
+                                    {% if scan.location %}
+                                        <strong>{{ scan.location.name }}</strong><br>
+                                        <small class="text-muted">{{ scan.location.get_full_path }}</small>
+                                    {% else %}
+                                        <span class="text-muted">Location not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="info-group mb-3">
+                                <label class="info-label">IP Address</label>
+                                <div>
+                                    {% if scan.ip_address %}
+                                        <code>{{ scan.ip_address }}</code>
+                                    {% else %}
+                                        <span class="text-muted">Not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="info-group mb-3">
+                                <label class="info-label">User Agent</label>
+                                <div>
+                                    {% if scan.user_agent %}
+                                        <small class="text-muted">{{ scan.user_agent|truncatechars:80 }}</small>
+                                    {% else %}
+                                        <span class="text-muted">Not recorded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            {% if scan.verification_message %}
+                            <div class="info-group mb-3">
+                                <label class="info-label">Verification Message</label>
+                                <div>
+                                    <div class="alert alert-{% if scan.is_verified %}success{% else %}warning{% endif %} mb-0">
+                                        {{ scan.verification_message }}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if scan.scan_data %}
+                    <div class="mt-4">
+                        <h6>Raw Scan Data</h6>
+                        <div class="bg-light p-3 rounded">
+                            <pre><code>{{ scan.scan_data|safe }}</code></pre>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Device Information at Scan Time -->
+            {% if scan.device_data_at_scan %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-camera"></i> Device State at Scan Time</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for key, value in scan.device_data_at_scan.items %}
+                        <div class="col-md-6 mb-2">
+                            <strong>{{ key|title }}:</strong> {{ value }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Related Scans -->
+            {% if related_scans %}
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-history"></i> Other Scans for This Device</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date/Time</th>
+                                    <th>Scanner</th>
+                                    <th>Status</th>
+                                    <th>Location</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for related_scan in related_scans %}
+                                <tr {% if related_scan.id == scan.id %}class="table-active"{% endif %}>
+                                    <td>
+                                        <small>
+                                            {{ related_scan.scanned_at|date:"M d, Y H:i" }}
+                                            {% if related_scan.id == scan.id %}
+                                                <span class="badge bg-primary">Current</span>
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if related_scan.scanned_by %}
+                                            {{ related_scan.scanned_by.get_full_name }}
+                                        {% else %}
+                                            <span class="text-muted">Anonymous</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if related_scan.is_verified %}
+                                            <span class="badge bg-success">Verified</span>
+                                        {% elif related_scan.verification_status == 'failed' %}
+                                            <span class="badge bg-danger">Failed</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if related_scan.location %}
+                                            {{ related_scan.location.name }}
+                                        {% else %}
+                                            <span class="text-muted">Unknown</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if related_scan.id != scan.id %}
+                                            <a href="{% url 'qr_scan_detail' related_scan.id %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Device Information -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-laptop"></i> Device Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h5>{{ scan.device.device_name }}</h5>
+                        <p class="text-muted">{{ scan.device.asset_tag }}</p>
+                        <div class="device-status">
+                            <span class="badge bg-{% if scan.device.status == 'Available' %}success{% elif scan.device.status == 'Assigned' %}warning{% else %}danger{% endif %}">
+                                {{ scan.device.status }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="device-details">
+                        <div class="info-group mb-2">
+                            <label class="info-label">Category</label>
+                            <div>{{ scan.device.device_type.subcategory.category.name }}</div>
+                        </div>
+
+                        <div class="info-group mb-2">
+                            <label class="info-label">Type</label>
+                            <div>{{ scan.device.device_type.type_name }}</div>
+                        </div>
+
+                        {% if scan.device.serial_number %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Serial Number</label>
+                            <div><code>{{ scan.device.serial_number }}</code></div>
+                        </div>
+                        {% endif %}
+
+                        {% if scan.device.manufacturer %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Manufacturer</label>
+                            <div>{{ scan.device.manufacturer }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if scan.device.model %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Model</label>
+                            <div>{{ scan.device.model }}</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="info-group mb-2">
+                            <label class="info-label">Added Date</label>
+                            <div>{{ scan.device.date_added|date:"M d, Y" }}</div>
+                        </div>
+
+                        {% if scan.device.warranty_expiry %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Warranty</label>
+                            <div>
+                                {{ scan.device.warranty_expiry|date:"M d, Y" }}
+                                {% if scan.device.warranty_expiry < today %}
+                                    <span class="badge bg-danger">Expired</span>
+                                {% else %}
+                                    <span class="badge bg-success">Active</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mt-3">
+                        <a href="{% url 'device_detail' scan.device.id %}" class="btn btn-primary btn-sm w-100">
+                            <i class="fas fa-eye"></i> View Full Device Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Assignment -->
+            {% if current_assignment %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-user"></i> Current Assignment</h6>
+                </div>
+                <div class="card-body">
+                    {% if current_assignment.assigned_to_staff %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Assigned To</label>
+                            <div>
+                                <strong>{{ current_assignment.assigned_to_staff.get_full_name }}</strong><br>
+                                <small class="text-muted">{{ current_assignment.assigned_to_staff.designation }}</small>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if current_assignment.assigned_to_department %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Department</label>
+                            <div>{{ current_assignment.assigned_to_department.name }}</div>
+                        </div>
+                    {% endif %}
+
+                    {% if current_assignment.assigned_to_location %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Location</label>
+                            <div>{{ current_assignment.assigned_to_location.get_full_path }}</div>
+                        </div>
+                    {% endif %}
+
+                    <div class="info-group mb-2">
+                        <label class="info-label">Assigned Date</label>
+                        <div>{{ current_assignment.assigned_date|date:"M d, Y" }}</div>
+                    </div>
+
+                    {% if current_assignment.expected_return_date %}
+                        <div class="info-group mb-2">
+                            <label class="info-label">Expected Return</label>
+                            <div>
+                                {{ current_assignment.expected_return_date|date:"M d, Y" }}
+                                {% if current_assignment.expected_return_date < today %}
+                                    <span class="badge bg-danger">Overdue</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <div class="mt-3">
+                        <a href="{% url 'assignment_detail' current_assignment.id %}" class="btn btn-outline-primary btn-sm w-100">
+                            <i class="fas fa-eye"></i> View Assignment
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-cogs"></i> Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'qr_scan_mobile' %}" class="btn btn-success btn-sm">
+                            <i class="fas fa-mobile-alt"></i> Scan Another QR
+                        </a>
+                        <a href="{% url 'qr_generate' %}?device={{ scan.device.id }}" class="btn btn-info btn-sm">
+                            <i class="fas fa-qrcode"></i> Generate New QR
+                        </a>
+                        {% if scan.scanned_by == request.user or request.user.is_staff %}
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteScan()">
+                            <i class="fas fa-trash"></i> Delete Scan Record
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="delete-scan-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this scan record? This action cannot be undone.</p>
+                <div class="alert alert-warning">
+                    <small><strong>Note:</strong> This will only delete the scan record, not the device itself.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">Delete Scan Record</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    window.deleteScan = function() {
+        const modal = new bootstrap.Modal(document.getElementById('delete-scan-modal'));
+        modal.show();
+    };
+
+    document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+        fetch(`{% url 'qr_scan_delete' scan.id %}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '{% url "qr_scan_history" %}';
+            } else {
+                alert('Error deleting scan record: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting scan record');
+        });
+    });
+});
+</script>
+{% endblock %}

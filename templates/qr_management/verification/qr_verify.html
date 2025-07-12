@@ -1,0 +1,753 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block page_title %}QR Code Verification{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/qr_management.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="page-title">QR Code Verification</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'qr_management_index' %}">QR Management</a></li>
+                    <li class="breadcrumb-item active">Verification</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="action-buttons">
+            <a href="{% url 'qr_scan_mobile' %}" class="btn btn-success">
+                <i class="fas fa-mobile-alt"></i> Mobile Scanner
+            </a>
+            <a href="{% url 'qr_batch_verify' %}" class="btn btn-outline-primary">
+                <i class="fas fa-layer-group"></i> Batch Verify
+            </a>
+            <a href="{% url 'qr_management_index' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Verification Form -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-check-circle"></i> Verify QR Code</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Manual Input Method -->
+                    <div class="verification-method mb-4">
+                        <h6><i class="fas fa-keyboard"></i> Manual Input</h6>
+                        <form id="manual-verify-form" class="mt-3">
+                            {% csrf_token %}
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <label for="device-id-input" class="form-label">Device ID or QR Data</label>
+                                    <input type="text" id="device-id-input" class="form-control" 
+                                           placeholder="Enter device ID, asset tag, or paste QR code data..."
+                                           autocomplete="off">
+                                    <div class="form-text">
+                                        You can enter a device ID, asset tag, or paste complete QR code JSON data
+                                    </div>
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-search"></i> Verify
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="divider my-4">
+                        <hr>
+                        <span class="divider-text">OR</span>
+                    </div>
+
+                    <!-- File Upload Method -->
+                    <div class="verification-method mb-4">
+                        <h6><i class="fas fa-file-upload"></i> Upload QR Code Image</h6>
+                        <div class="mt-3">
+                            <div class="upload-area" id="qr-upload-area">
+                                <div class="upload-content">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <p class="mb-2">Drag and drop QR code image here</p>
+                                    <p class="text-muted mb-3">or click to browse</p>
+                                    <input type="file" id="qr-file-input" accept="image/*" style="display: none;">
+                                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('qr-file-input').click()">
+                                        <i class="fas fa-folder-open"></i> Choose File
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">Supported formats: PNG, JPG, JPEG, WebP</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="divider my-4">
+                        <hr>
+                        <span class="divider-text">OR</span>
+                    </div>
+
+                    <!-- Quick Search -->
+                    <div class="verification-method">
+                        <h6><i class="fas fa-search"></i> Quick Device Search</h6>
+                        <div class="mt-3">
+                            <label for="device-search" class="form-label">Search Device</label>
+                            <select id="device-search" class="form-select">
+                                <option value="">Search by device name or asset tag...</option>
+                                {% for device in devices %}
+                                <option value="{{ device.id }}" 
+                                        data-device-id="{{ device.device_id }}"
+                                        data-asset-tag="{{ device.asset_tag }}"
+                                        data-device-name="{{ device.device_name }}"
+                                        data-status="{{ device.status }}">
+                                    {{ device.device_name }} ({{ device.asset_tag }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-info mt-2" id="verify-selected-device" disabled>
+                                <i class="fas fa-check"></i> Verify Selected Device
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Verifications -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6><i class="fas fa-history"></i> Recent Verifications</h6>
+                </div>
+                <div class="card-body">
+                    {% if recent_verifications %}
+                    <div class="list-group list-group-flush">
+                        {% for verification in recent_verifications %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ verification.device.device_name }}</h6>
+                                    <p class="mb-1 text-muted">{{ verification.device.asset_tag }}</p>
+                                    <small>{{ verification.scanned_at|timesince }} ago</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-{% if verification.is_verified %}success{% else %}warning{% endif %}">
+                                        {% if verification.is_verified %}Verified{% else %}Pending{% endif %}
+                                    </span>
+                                    <br>
+                                    <small class="text-muted">
+                                        {% if verification.scanned_by %}
+                                            by {{ verification.scanned_by.get_full_name }}
+                                        {% else %}
+                                            Anonymous
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{% url 'qr_scan_history' %}" class="btn btn-outline-primary btn-sm">
+                            View All Verifications
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No recent verifications</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div class="col-md-4">
+            <div class="card" id="verification-results" style="display: none;">
+                <div class="card-header">
+                    <h6><i class="fas fa-clipboard-check"></i> Verification Result</h6>
+                </div>
+                <div class="card-body" id="verification-content">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+
+            <!-- Help Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-question-circle"></i> How to Verify</h6>
+                </div>
+                <div class="card-body">
+                    <div class="help-content">
+                        <div class="help-item mb-3">
+                            <div class="help-icon">
+                                <i class="fas fa-mobile-alt"></i>
+                            </div>
+                            <div class="help-text">
+                                <strong>Mobile Scanner</strong><br>
+                                <small>Use your device camera to scan QR codes in real-time</small>
+                            </div>
+                        </div>
+
+                        <div class="help-item mb-3">
+                            <div class="help-icon">
+                                <i class="fas fa-keyboard"></i>
+                            </div>
+                            <div class="help-text">
+                                <strong>Manual Input</strong><br>
+                                <small>Type device ID, asset tag, or paste QR data directly</small>
+                            </div>
+                        </div>
+
+                        <div class="help-item mb-3">
+                            <div class="help-icon">
+                                <i class="fas fa-image"></i>
+                            </div>
+                            <div class="help-text">
+                                <strong>Image Upload</strong><br>
+                                <small>Upload a photo of the QR code for verification</small>
+                            </div>
+                        </div>
+
+                        <div class="help-item">
+                            <div class="help-icon">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <div class="help-text">
+                                <strong>Quick Search</strong><br>
+                                <small>Find and verify devices by name or asset tag</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h6>QR Data Format</h6>
+                        <small class="text-muted">
+                            QR codes contain device information in JSON format including device ID, 
+                            asset tag, name, and verification URL.
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Panel -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-chart-bar"></i> Verification Stats</h6>
+                </div>
+                <div class="card-body">
+                    <div class="stats-row">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ total_devices }}</div>
+                            <div class="stat-label">Total Devices</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">{{ verified_today }}</div>
+                            <div class="stat-label">Verified Today</div>
+                        </div>
+                    </div>
+                    <div class="stats-row mt-2">
+                        <div class="stat-item">
+                            <div class="stat-number">{{ success_rate }}%</div>
+                            <div class="stat-label">Success Rate</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">{{ unique_scanners }}</div>
+                            <div class="stat-label">Active Scanners</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Verification Result Modal -->
+<div class="modal fade" id="verification-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" id="modal-header">
+                <h5 class="modal-title" id="modal-title">
+                    <i class="fas fa-check-circle"></i> Verification Result
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Modal content will be populated here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="view-device-btn" style="display: none;">
+                    View Device Details
+                </button>
+                <button type="button" class="btn btn-success" id="verify-another-btn">
+                    <i class="fas fa-plus"></i> Verify Another
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Elements
+    const manualForm = document.getElementById('manual-verify-form');
+    const deviceIdInput = document.getElementById('device-id-input');
+    const deviceSearch = document.getElementById('device-search');
+    const verifySelectedBtn = document.getElementById('verify-selected-device');
+    const qrFileInput = document.getElementById('qr-file-input');
+    const uploadArea = document.getElementById('qr-upload-area');
+    const verificationResults = document.getElementById('verification-results');
+    const verificationContent = document.getElementById('verification-content');
+
+    let currentDeviceId = null;
+
+    // Manual verification form
+    manualForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const input = deviceIdInput.value.trim();
+        if (input) {
+            verifyDevice(input);
+        }
+    });
+
+    // Device search selection
+    deviceSearch.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.value) {
+            currentDeviceId = selectedOption.getAttribute('data-device-id');
+            verifySelectedBtn.disabled = false;
+        } else {
+            currentDeviceId = null;
+            verifySelectedBtn.disabled = true;
+        }
+    });
+
+    // Verify selected device button
+    verifySelectedBtn.addEventListener('click', function() {
+        if (currentDeviceId) {
+            verifyDevice(currentDeviceId);
+        }
+    });
+
+    // File upload handling
+    qrFileInput.addEventListener('change', handleFileUpload);
+
+    // Drag and drop handling
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('drag-over');
+    });
+
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+    });
+
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            processImageFile(files[0]);
+        }
+    });
+
+    // Handle file upload
+    function handleFileUpload(e) {
+        const file = e.target.files[0];
+        if (file) {
+            processImageFile(file);
+        }
+    }
+
+    // Process uploaded image file
+    function processImageFile(file) {
+        if (!file.type.startsWith('image/')) {
+            showError('Please select a valid image file');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (qrCode) {
+                    verifyDevice(qrCode.data);
+                } else {
+                    showError('No QR code found in the uploaded image');
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Main verification function
+    function verifyDevice(input) {
+        showLoading();
+        
+        fetch('{% url "qr_verify_device" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                input: input,
+                method: 'manual'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showVerificationResult(data);
+                showModal(data);
+            } else {
+                showError(data.error || 'Verification failed');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Verification error:', error);
+            showError('An error occurred during verification');
+        });
+    }
+
+    // Show verification result in sidebar
+    function showVerificationResult(data) {
+        const device = data.device;
+        const assignment = data.current_assignment;
+        
+        verificationContent.innerHTML = `
+            <div class="verification-success text-center mb-3">
+                <i class="fas fa-check-circle fa-3x text-success mb-2"></i>
+                <h5 class="text-success">Verification Successful</h5>
+            </div>
+            
+            <div class="device-summary">
+                <h6>${device.device_name}</h6>
+                <p class="text-muted mb-3">${device.asset_tag}</p>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Status</label>
+                        <span class="badge bg-${getStatusColor(device.status)}">${device.status}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Category</label>
+                        <span>${device.category}</span>
+                    </div>
+                    ${assignment ? `
+                        <div class="info-item">
+                            <label>Assigned To</label>
+                            <span>${assignment.assigned_to_staff || assignment.assigned_to_department || 'Unassigned'}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Location</label>
+                            <span>${assignment.location || 'Unknown'}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm w-100" onclick="viewDeviceDetails('${device.id}')">
+                    <i class="fas fa-eye"></i> View Full Details
+                </button>
+            </div>
+        `;
+        
+        verificationResults.style.display = 'block';
+    }
+
+    // Show modal with detailed results
+    function showModal(data) {
+        const device = data.device;
+        const assignment = data.current_assignment;
+        const modal = document.getElementById('verification-modal');
+        const modalHeader = document.getElementById('modal-header');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const viewDeviceBtn = document.getElementById('view-device-btn');
+        
+        // Set success styling
+        modalHeader.className = 'modal-header bg-success text-white';
+        modalTitle.innerHTML = '<i class="fas fa-check-circle"></i> Verification Successful';
+        
+        modalBody.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Device Information</h6>
+                    <div class="device-info">
+                        <p><strong>Device Name:</strong> ${device.device_name}</p>
+                        <p><strong>Asset Tag:</strong> ${device.asset_tag}</p>
+                        <p><strong>Category:</strong> ${device.category}</p>
+                        <p><strong>Serial Number:</strong> ${device.serial_number || 'N/A'}</p>
+                        <p><strong>Status:</strong> 
+                            <span class="badge bg-${getStatusColor(device.status)}">${device.status}</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6>Current Assignment</h6>
+                    ${assignment ? `
+                        <div class="assignment-info">
+                            <p><strong>Assigned To:</strong> ${assignment.assigned_to_staff || assignment.assigned_to_department || 'Unassigned'}</p>
+                            <p><strong>Location:</strong> ${assignment.location || 'Unknown'}</p>
+                            <p><strong>Assigned Date:</strong> ${new Date(assignment.assigned_date).toLocaleDateString()}</p>
+                            ${assignment.expected_return_date ? `
+                                <p><strong>Expected Return:</strong> ${new Date(assignment.expected_return_date).toLocaleDateString()}</p>
+                            ` : ''}
+                        </div>
+                    ` : `
+                        <p class="text-muted">No current assignment</p>
+                    `}
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <h6>Verification Details</h6>
+                <div class="verification-meta">
+                    <p><strong>Verified At:</strong> ${new Date().toLocaleString()}</p>
+                    <p><strong>Verified By:</strong> ${data.verified_by || 'Current User'}</p>
+                    <p><strong>Method:</strong> Manual Input</p>
+                </div>
+            </div>
+        `;
+        
+        viewDeviceBtn.style.display = 'inline-block';
+        viewDeviceBtn.onclick = () => viewDeviceDetails(device.id);
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+    }
+
+    // Show error
+    function showError(message) {
+        const modal = document.getElementById('verification-modal');
+        const modalHeader = document.getElementById('modal-header');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const viewDeviceBtn = document.getElementById('view-device-btn');
+        
+        // Set error styling
+        modalHeader.className = 'modal-header bg-danger text-white';
+        modalTitle.innerHTML = '<i class="fas fa-times-circle"></i> Verification Failed';
+        
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <i class="fas fa-times-circle fa-3x text-danger mb-3"></i>
+                <h5 class="text-danger">Verification Failed</h5>
+                <p class="text-muted">${message}</p>
+                
+                <div class="mt-4">
+                    <h6>Troubleshooting Tips:</h6>
+                    <ul class="text-start text-muted">
+                        <li>Ensure the QR code is clearly visible and not damaged</li>
+                        <li>Check that the device ID or asset tag is correct</li>
+                        <li>Try using the mobile scanner for better accuracy</li>
+                        <li>Contact IT support if the problem persists</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+        
+        viewDeviceBtn.style.display = 'none';
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+    }
+
+    // Utility functions
+    function showLoading() {
+        const submitBtn = manualForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+        }
+    }
+
+    function hideLoading() {
+        const submitBtn = manualForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-search"></i> Verify';
+        }
+    }
+
+    function getStatusColor(status) {
+        switch (status.toLowerCase()) {
+            case 'available': return 'success';
+            case 'assigned': return 'warning';
+            case 'maintenance': return 'danger';
+            case 'retired': return 'secondary';
+            default: return 'info';
+        }
+    }
+
+    function getCsrfToken() {
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        return csrfInput ? csrfInput.value : '';
+    }
+
+    // Global functions
+    window.viewDeviceDetails = function(deviceId) {
+        window.location.href = `/inventory/devices/${deviceId}/`;
+    };
+
+    // Modal action handlers
+    document.getElementById('verify-another-btn').addEventListener('click', function() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('verification-modal'));
+        modal.hide();
+        
+        // Reset form
+        deviceIdInput.value = '';
+        deviceSearch.value = '';
+        verifySelectedBtn.disabled = true;
+        verificationResults.style.display = 'none';
+        qrFileInput.value = '';
+    });
+});
+</script>
+
+<style>
+.divider {
+    position: relative;
+    text-align: center;
+}
+
+.divider hr {
+    margin: 0;
+}
+
+.divider-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 0 1rem;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.upload-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    transition: border-color 0.2s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #667eea;
+}
+
+.upload-area.drag-over {
+    border-color: #667eea;
+    background-color: rgba(102, 126, 234, 0.05);
+}
+
+.help-content .help-item {
+    display: flex;
+    align-items: flex-start;
+}
+
+.help-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    color: #667eea;
+}
+
+.help-text {
+    flex: 1;
+}
+
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.stat-item {
+    text-align: center;
+    flex: 1;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.device-summary {
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.info-item label {
+    font-weight: 600;
+    color: #495057;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.verification-success i {
+    animation: pulse 2s infinite;
+}
+</style>
+{% endblock %}

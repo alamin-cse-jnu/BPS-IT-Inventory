@@ -1,0 +1,725 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QR Analytics Dashboard - BPS IT Inventory{% endblock %}
+
+{% block page_title %}QR Analytics Dashboard{% endblock %}
+
+{% block page_subtitle %}
+<p class="content-subtitle">Comprehensive analytics and insights for QR code usage</p>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .analytics-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .analytics-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .analytics-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .analytics-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .analytics-icon {
+        font-size: 1.5rem;
+        color: #6b7280;
+    }
+
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .metric-item {
+        text-align: center;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .metric-label {
+        font-size: 0.875rem;
+        color: #6b7280;
+        font-weight: 500;
+    }
+
+    .trend-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 500;
+        margin-left: 0.5rem;
+    }
+
+    .trend-up {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .trend-down {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .trend-neutral {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    .chart-container {
+        height: 300px;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+
+    .chart-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        background: #f9fafb;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .filters-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+
+    .filters-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        align-items: end;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filter-label {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .filter-select, .filter-input {
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        transition: border-color 0.2s ease;
+    }
+
+    .filter-select:focus, .filter-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .apply-filters-btn {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .apply-filters-btn:hover {
+        background: #2563eb;
+    }
+
+    .insights-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+
+    .insights-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .insight-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .insight-item:last-child {
+        border-bottom: none;
+    }
+
+    .insight-icon {
+        flex-shrink: 0;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+    }
+
+    .insight-icon.positive {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .insight-icon.warning {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .insight-icon.neutral {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+
+    .insight-content {
+        flex: 1;
+    }
+
+    .insight-title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .insight-description {
+        font-size: 0.875rem;
+        color: #6b7280;
+        line-height: 1.5;
+    }
+
+    .department-analytics {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .department-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .department-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .department-item:last-child {
+        border-bottom: none;
+    }
+
+    .department-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .department-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 8px;
+        background: #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6b7280;
+    }
+
+    .department-details h4 {
+        margin: 0 0 0.25rem 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .department-details p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .department-stats {
+        text-align: right;
+    }
+
+    .department-stats .metric-value {
+        font-size: 1.5rem;
+        margin-bottom: 0;
+    }
+
+    .export-section {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .export-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        color: #374151;
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    .export-btn:hover {
+        background: #f9fafb;
+        border-color: #9ca3af;
+        text-decoration: none;
+        color: #1f2937;
+    }
+
+    @media (max-width: 768px) {
+        .analytics-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .metric-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .filters-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .export-section {
+            flex-direction: column;
+        }
+
+        .department-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .department-stats {
+            text-align: left;
+            align-self: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Export Options -->
+    <div class="export-section">
+        <a href="{% url 'qr_management:qr_analytics' %}?export=pdf" class="export-btn">
+            <i class="fas fa-file-pdf"></i>
+            Export PDF
+        </a>
+        <a href="{% url 'qr_management:qr_analytics' %}?export=excel" class="export-btn">
+            <i class="fas fa-file-excel"></i>
+            Export Excel
+        </a>
+        <a href="{% url 'qr_management:qr_analytics' %}?export=csv" class="export-btn">
+            <i class="fas fa-file-csv"></i>
+            Export CSV
+        </a>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+        <h3 style="margin-bottom: 1.5rem; color: #1f2937;">Filter Analytics</h3>
+        <form method="get" id="analyticsFilters">
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label class="filter-label">Date Range</label>
+                    <select name="date_range" class="filter-select">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" {% if request.GET.date_range == '30' %}selected{% endif %}>Last 30 Days</option>
+                        <option value="90" {% if request.GET.date_range == '90' %}selected{% endif %}>Last 90 Days</option>
+                        <option value="365" {% if request.GET.date_range == '365' %}selected{% endif %}>Last Year</option>
+                        <option value="custom" {% if request.GET.date_range == 'custom' %}selected{% endif %}>Custom Range</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Department</label>
+                    <select name="department" class="filter-select">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                            <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>
+                                {{ dept.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Location</label>
+                    <select name="location" class="filter-select">
+                        <option value="">All Locations</option>
+                        {% for loc in locations %}
+                            <option value="{{ loc.id }}" {% if request.GET.location == loc.id|stringformat:"s" %}selected{% endif %}>
+                                {{ loc.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Device Category</label>
+                    <select name="category" class="filter-select">
+                        <option value="">All Categories</option>
+                        {% for cat in device_categories %}
+                            <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"s" %}selected{% endif %}>
+                                {{ cat.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <button type="submit" class="apply-filters-btn">
+                        <i class="fas fa-filter"></i>
+                        Apply Filters
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Key Metrics Grid -->
+    <div class="analytics-grid">
+        <!-- Scan Statistics -->
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h3 class="analytics-title">Scan Statistics</h3>
+                <i class="fas fa-qrcode analytics-icon"></i>
+            </div>
+            <div class="metric-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{{ total_scans|default:0 }}</div>
+                    <div class="metric-label">Total Scans</div>
+                    <span class="trend-indicator trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        +12%
+                    </span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ successful_scans|default:0 }}</div>
+                    <div class="metric-label">Successful</div>
+                    <span class="trend-indicator trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        +8%
+                    </span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ failed_scans|default:0 }}</div>
+                    <div class="metric-label">Failed</div>
+                    <span class="trend-indicator trend-down">
+                        <i class="fas fa-arrow-down"></i>
+                        -3%
+                    </span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ success_rate|default:0 }}%</div>
+                    <div class="metric-label">Success Rate</div>
+                    <span class="trend-indicator trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        +2%
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR Coverage -->
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h3 class="analytics-title">QR Coverage</h3>
+                <i class="fas fa-chart-pie analytics-icon"></i>
+            </div>
+            <div class="metric-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{{ total_devices|default:0 }}</div>
+                    <div class="metric-label">Total Devices</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ devices_with_qr|default:0 }}</div>
+                    <div class="metric-label">With QR Codes</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ qr_coverage_percentage|default:0 }}%</div>
+                    <div class="metric-label">Coverage</div>
+                    <span class="trend-indicator trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        +5%
+                    </span>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ recently_scanned|default:0 }}</div>
+                    <div class="metric-label">Recently Scanned</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Scan Trends -->
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h3 class="analytics-title">Daily Scan Trends</h3>
+                <i class="fas fa-chart-line analytics-icon"></i>
+            </div>
+            <div class="chart-container">
+                <div class="chart-placeholder">
+                    <div>
+                        <i class="fas fa-chart-line" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                        <p>Daily scan trends chart will be displayed here</p>
+                        <p style="font-size: 0.75rem; opacity: 0.7;">Chart.js integration required</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Activity -->
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h3 class="analytics-title">User Activity</h3>
+                <i class="fas fa-users analytics-icon"></i>
+            </div>
+            <div class="metric-grid">
+                <div class="metric-item">
+                    <div class="metric-value">{{ active_users|default:0 }}</div>
+                    <div class="metric-label">Active Users</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ avg_scans_per_user|default:0 }}</div>
+                    <div class="metric-label">Avg Scans/User</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ top_scanner_scans|default:0 }}</div>
+                    <div class="metric-label">Top Scanner</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">{{ new_users|default:0 }}</div>
+                    <div class="metric-label">New Users</div>
+                    <span class="trend-indicator trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        +15%
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Insights -->
+    <div class="insights-section">
+        <h3 style="margin-bottom: 1.5rem; color: #1f2937;">Analytics Insights</h3>
+        <ul class="insights-list">
+            <li class="insight-item">
+                <div class="insight-icon positive">
+                    <i class="fas fa-check"></i>
+                </div>
+                <div class="insight-content">
+                    <div class="insight-title">Scan Success Rate Improving</div>
+                    <div class="insight-description">
+                        Your QR code scan success rate has increased by 8% this month, reaching {{ success_rate|default:95 }}%. 
+                        This indicates better QR code quality and user training.
+                    </div>
+                </div>
+            </li>
+            
+            <li class="insight-item">
+                <div class="insight-icon warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="insight-content">
+                    <div class="insight-title">Low Coverage in Some Departments</div>
+                    <div class="insight-description">
+                        {{ departments_low_coverage|default:3 }} departments have QR coverage below 80%. 
+                        Consider prioritizing QR code generation for these areas.
+                    </div>
+                </div>
+            </li>
+            
+            <li class="insight-item">
+                <div class="insight-icon neutral">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <div class="insight-content">
+                    <div class="insight-title">Peak Scanning Hours</div>
+                    <div class="insight-description">
+                        Most QR code scans occur between 9-11 AM and 2-4 PM. 
+                        Consider scheduling maintenance activities during low-activity periods.
+                    </div>
+                </div>
+            </li>
+            
+            <li class="insight-item">
+                <div class="insight-icon positive">
+                    <i class="fas fa-trend-up"></i>
+                </div>
+                <div class="insight-content">
+                    <div class="insight-title">Mobile Scanning Adoption</div>
+                    <div class="insight-description">
+                        Mobile QR scanning has increased by 25% this quarter. 
+                        Users are embracing the mobile-first approach to inventory management.
+                    </div>
+                </div>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Department Analytics -->
+    <div class="department-analytics">
+        <h3 style="margin-bottom: 1.5rem; color: #1f2937;">Department Performance</h3>
+        <ul class="department-list">
+            {% for dept_stat in department_stats %}
+            <li class="department-item">
+                <div class="department-info">
+                    <div class="department-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div class="department-details">
+                        <h4>{{ dept_stat.department.name }}</h4>
+                        <p>{{ dept_stat.total_devices }} devices • {{ dept_stat.qr_coverage }}% QR coverage</p>
+                    </div>
+                </div>
+                <div class="department-stats">
+                    <div class="metric-value">{{ dept_stat.scan_count }}</div>
+                    <div class="metric-label">Scans This Month</div>
+                </div>
+            </li>
+            {% empty %}
+            <li class="insight-item">
+                <div class="insight-icon neutral">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <div class="insight-content">
+                    <div class="insight-title">No Department Data</div>
+                    <div class="insight-description">
+                        Department analytics will appear here once QR scanning activity begins.
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit form when filters change
+    const filterSelects = document.querySelectorAll('.filter-select');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            if (this.name !== 'date_range' || this.value !== 'custom') {
+                document.getElementById('analyticsFilters').submit();
+            }
+        });
+    });
+
+    // Animate metric values
+    const metricValues = document.querySelectorAll('.metric-value');
+    metricValues.forEach(metric => {
+        const finalValue = parseInt(metric.textContent);
+        if (!isNaN(finalValue) && finalValue > 0) {
+            let currentValue = 0;
+            const increment = Math.max(1, Math.ceil(finalValue / 30));
+            const timer = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= finalValue) {
+                    currentValue = finalValue;
+                    clearInterval(timer);
+                }
+                
+                if (metric.textContent.includes('%')) {
+                    metric.textContent = currentValue + '%';
+                } else {
+                    metric.textContent = currentValue.toLocaleString();
+                }
+            }, 50);
+        }
+    });
+
+    // Real-time data updates (placeholder)
+    function updateAnalytics() {
+        // Implementation for real-time updates
+        console.log('Updating analytics data...');
+    }
+
+    // Auto-refresh every 2 minutes
+    setInterval(updateAnalytics, 120000);
+
+    // Chart initialization placeholder
+    function initializeCharts() {
+        // Chart.js initialization would go here
+        console.log('Charts would be initialized here with Chart.js');
+    }
+
+    // Call chart initialization
+    initializeCharts();
+});
+</script>
+{% endblock %}

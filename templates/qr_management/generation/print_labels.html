@@ -1,0 +1,649 @@
+{% extends 'qr_management/base/qr_base.html' %}
+{% load static %}
+
+{% block title %}Print QR Labels - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.label-preview {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: #f9f9f9;
+}
+
+.qr-label {
+    display: inline-block;
+    text-align: center;
+    border: 1px solid #ccc;
+    padding: 8px;
+    margin: 2px;
+    background: white;
+    page-break-inside: avoid;
+}
+
+.qr-code {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 5px;
+    border: 1px solid #eee;
+}
+
+.label-text {
+    font-size: 8px;
+    font-weight: bold;
+    color: #333;
+    margin-top: 3px;
+    word-wrap: break-word;
+}
+
+.print-settings {
+    background: #f8f9fc;
+    border: 1px solid #e3e6f0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.device-selection {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e3e6f0;
+    border-radius: 4px;
+    padding: 10px;
+}
+
+.device-item {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+}
+
+.device-item:last-child {
+    border-bottom: none;
+}
+
+.device-checkbox {
+    margin-right: 10px;
+}
+
+.device-info {
+    flex: 1;
+}
+
+.device-name {
+    font-weight: 600;
+    color: #5a5c69;
+}
+
+.device-details {
+    font-size: 0.875rem;
+    color: #858796;
+}
+
+.label-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 5px;
+    margin-bottom: 20px;
+}
+
+.format-option {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #e3e6f0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.format-option:hover {
+    background: #f8f9fc;
+    border-color: #4e73df;
+}
+
+.format-option.active {
+    background: #4e73df;
+    color: white;
+    border-color: #4e73df;
+}
+
+.format-radio {
+    margin-right: 10px;
+}
+
+.format-info {
+    flex: 1;
+}
+
+.format-name {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.format-desc {
+    font-size: 0.875rem;
+    opacity: 0.8;
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .print-only {
+        display: block !important;
+    }
+    
+    .label-grid {
+        display: block;
+    }
+    
+    .qr-label {
+        display: inline-block;
+        width: auto;
+        margin: 2px;
+        border: 1px solid #000;
+    }
+    
+    .card {
+        border: none;
+        box-shadow: none;
+    }
+    
+    body {
+        font-size: 12px;
+    }
+}
+
+.custom-dimensions {
+    display: none;
+}
+
+.custom-dimensions.active {
+    display: block;
+}
+
+.progress-wrapper {
+    margin-top: 15px;
+}
+
+.generation-status {
+    text-align: center;
+    padding: 20px;
+    background: #f8f9fc;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.status-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.success {
+    color: #1cc88a;
+}
+
+.error {
+    color: #e74a3b;
+}
+
+.warning {
+    color: #f6c23e;
+}
+
+.info {
+    color: #36b9cc;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-print"></i>
+            Print QR Labels
+        </h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'qr_management:index' %}">QR Management</a></li>
+                <li class="breadcrumb-item active">Print Labels</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Print Settings Card -->
+    <div class="card shadow mb-4 no-print">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-cogs"></i>
+                Print Settings
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="post" id="print-form">
+                {% csrf_token %}
+                
+                <!-- Label Format Selection -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold text-gray-700 mb-3">Label Format</h6>
+                        <div class="format-options">
+                            {% for value, label in form.label_format.field.choices %}
+                            <div class="format-option" data-format="{{ value }}">
+                                <input type="radio" name="label_format" value="{{ value }}" 
+                                       class="format-radio" id="format_{{ value }}"
+                                       {% if form.label_format.value == value %}checked{% endif %}>
+                                <div class="format-info">
+                                    <div class="format-name">{{ label }}</div>
+                                    <div class="format-desc">
+                                        {% if value == 'avery_5160' %}30 labels per sheet (2.63" x 1")
+                                        {% elif value == 'avery_5167' %}80 labels per sheet (0.5" x 1.75")
+                                        {% elif value == 'avery_8160' %}30 labels per sheet (2.63" x 1")
+                                        {% elif value == 'custom' %}Custom dimensions
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Custom Dimensions -->
+                        <div class="custom-dimensions mt-3" id="custom-dimensions">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Width (inches)</label>
+                                    {{ form.custom_width }}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Height (inches)</label>
+                                    {{ form.custom_height }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="font-weight-bold text-gray-700 mb-3">Print Options</h6>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Paper Size</label>
+                            {{ form.paper_size }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Copies per Device</label>
+                            {{ form.copies_per_device }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="form-check">
+                                {{ form.include_device_info }}
+                                <label class="form-check-label" for="{{ form.include_device_info.id_for_label }}">
+                                    Include device information
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="form-check">
+                                {{ form.include_qr_data }}
+                                <label class="form-check-label" for="{{ form.include_qr_data.id_for_label }}">
+                                    Include QR data text
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Device Selection -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <h6 class="font-weight-bold text-gray-700 mb-3">
+                            Select Devices
+                            <span class="text-muted">(<span id="selected-count">0</span> selected)</span>
+                        </h6>
+                        
+                        <div class="mb-3">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="select-all">
+                                    <i class="fas fa-check-square"></i> Select All
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="select-none">
+                                    <i class="fas fa-square"></i> Select None
+                                </button>
+                                <button type="button" class="btn btn-outline-info btn-sm" id="select-available">
+                                    <i class="fas fa-filter"></i> Available Only
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="device-selection">
+                            {% for device in devices %}
+                            <div class="device-item">
+                                <input type="checkbox" name="devices" value="{{ device.id }}" 
+                                       class="device-checkbox form-check-input" id="device_{{ device.id }}">
+                                <label for="device_{{ device.id }}" class="device-info">
+                                    <div class="device-name">{{ device.device_name }}</div>
+                                    <div class="device-details">
+                                        ID: {{ device.device_id }} | 
+                                        Category: {{ device.category.name }} | 
+                                        Status: 
+                                        <span class="badge badge-{{ device.status|lower }}">
+                                            {{ device.get_status_display }}
+                                        </span>
+                                        {% if device.current_assignment %}
+                                        | Assigned to: {{ device.current_assignment.assigned_to.get_full_name }}
+                                        {% endif %}
+                                    </div>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary" id="generate-labels">
+                            <i class="fas fa-print"></i>
+                            Generate Labels
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="preview-labels">
+                            <i class="fas fa-eye"></i>
+                            Preview
+                        </button>
+                        <a href="{% url 'qr_management:index' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to QR Management
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Progress Card -->
+    <div class="card shadow mb-4 no-print" id="progress-card" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-info">
+                <i class="fas fa-hourglass-half"></i>
+                Generation Progress
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="progress-wrapper">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" id="generation-progress">
+                        <span class="sr-only">0% Complete</span>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <p class="mb-0" id="progress-text">Initializing...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    {% if messages %}
+    <div class="no-print">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Labels Preview/Print Area -->
+    <div class="card shadow mb-4" id="labels-output" style="display: none;">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-success">
+                <i class="fas fa-tags"></i>
+                Generated Labels
+            </h6>
+            <div class="no-print">
+                <button type="button" class="btn btn-success btn-sm" onclick="window.print()">
+                    <i class="fas fa-print"></i>
+                    Print Labels
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="download-pdf">
+                    <i class="fas fa-file-pdf"></i>
+                    Download PDF
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="label-grid" id="label-container">
+                <!-- Labels will be dynamically generated here -->
+            </div>
+            
+            <div class="print-summary no-print">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <small class="text-muted">Total Labels</small>
+                            <div class="font-weight-bold" id="total-labels">0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <small class="text-muted">Devices</small>
+                            <div class="font-weight-bold" id="device-count">0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <small class="text-muted">Format</small>
+                            <div class="font-weight-bold" id="format-display">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    <div class="card shadow mb-4 no-print" id="error-card" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Generation Errors
+            </h6>
+        </div>
+        <div class="card-body">
+            <div id="error-list"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Format option handling
+    $('.format-option').click(function() {
+        $('.format-option').removeClass('active');
+        $(this).addClass('active');
+        $(this).find('input[type="radio"]').prop('checked', true);
+        
+        if ($(this).data('format') === 'custom') {
+            $('#custom-dimensions').addClass('active');
+        } else {
+            $('#custom-dimensions').removeClass('active');
+        }
+    });
+
+    // Device selection handling
+    $('#select-all').click(function() {
+        $('.device-checkbox').prop('checked', true);
+        updateSelectedCount();
+    });
+
+    $('#select-none').click(function() {
+        $('.device-checkbox').prop('checked', false);
+        updateSelectedCount();
+    });
+
+    $('#select-available').click(function() {
+        $('.device-checkbox').prop('checked', false);
+        $('.device-item').each(function() {
+            const statusBadge = $(this).find('.badge');
+            if (statusBadge.hasClass('badge-available')) {
+                $(this).find('.device-checkbox').prop('checked', true);
+            }
+        });
+        updateSelectedCount();
+    });
+
+    $('.device-checkbox').change(function() {
+        updateSelectedCount();
+    });
+
+    function updateSelectedCount() {
+        const count = $('.device-checkbox:checked').length;
+        $('#selected-count').text(count);
+    }
+
+    // Form submission
+    $('#print-form').submit(function(e) {
+        e.preventDefault();
+        
+        const selectedDevices = $('.device-checkbox:checked');
+        if (selectedDevices.length === 0) {
+            alert('Please select at least one device to generate labels.');
+            return;
+        }
+
+        generateLabels();
+    });
+
+    // Preview functionality
+    $('#preview-labels').click(function() {
+        const selectedDevices = $('.device-checkbox:checked');
+        if (selectedDevices.length === 0) {
+            alert('Please select at least one device to preview labels.');
+            return;
+        }
+
+        previewLabels();
+    });
+
+    function generateLabels() {
+        $('#progress-card').show();
+        $('#labels-output').hide();
+        $('#error-card').hide();
+        
+        const formData = new FormData($('#print-form')[0]);
+        
+        $.ajax({
+            url: '{% url "qr_management:qr_print_labels" %}',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhr: function() {
+                const xhr = new window.XMLHttpRequest();
+                xhr.upload.addEventListener('progress', function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        updateProgress(percentComplete, 'Uploading...');
+                    }
+                });
+                return xhr;
+            },
+            success: function(response) {
+                if (response.success) {
+                    displayLabels(response.labels);
+                    updateSummary(response.summary);
+                    $('#progress-card').hide();
+                    $('#labels-output').show();
+                } else {
+                    displayErrors(response.errors);
+                    $('#progress-card').hide();
+                    $('#error-card').show();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error generating labels:', error);
+                displayErrors(['An error occurred while generating labels. Please try again.']);
+                $('#progress-card').hide();
+                $('#error-card').show();
+            }
+        });
+    }
+
+    function previewLabels() {
+        // Similar to generateLabels but for preview
+        generateLabels();
+    }
+
+    function updateProgress(percentage, message) {
+        $('#generation-progress').css('width', percentage + '%');
+        $('#progress-text').text(message);
+    }
+
+    function displayLabels(labels) {
+        const container = $('#label-container');
+        container.empty();
+        
+        labels.forEach(function(label) {
+            const labelHtml = `
+                <div class="qr-label">
+                    <div class="qr-code">
+                        <img src="data:image/png;base64,${label.qr_code}" alt="QR Code" style="width: 100%; height: 100%;">
+                    </div>
+                    <div class="label-text">
+                        <div>${label.device_name}</div>
+                        <div>${label.device_id}</div>
+                        ${label.include_info ? `<div class="small">${label.category}</div>` : ''}
+                    </div>
+                </div>
+            `;
+            container.append(labelHtml);
+        });
+    }
+
+    function updateSummary(summary) {
+        $('#total-labels').text(summary.total_labels);
+        $('#device-count').text(summary.device_count);
+        $('#format-display').text(summary.format);
+    }
+
+    function displayErrors(errors) {
+        const errorList = $('#error-list');
+        errorList.empty();
+        
+        errors.forEach(function(error) {
+            errorList.append(`
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    ${error}
+                </div>
+            `);
+        });
+    }
+
+    // Download PDF functionality
+    $('#download-pdf').click(function() {
+        // Implementation for PDF download
+        window.location.href = '{% url "qr_management:qr_print_labels" %}?format=pdf';
+    });
+
+    // Initialize
+    updateSelectedCount();
+});
+</script>
+{% endblock %}

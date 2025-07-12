@@ -115,11 +115,11 @@ def qr_scan_history(request):
             }
         }
         
-        return render(request, 'qr_management/scan_history.html', context)
+        return render(request, 'qr_management/scanning/scan_history.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading scan history: {str(e)}")
-        return render(request, 'qr_management/scan_history.html', {})
+        return render(request, 'qr_management/scanning/scan_history.html', {})
 
 @login_required
 def qr_index(request):
@@ -449,7 +449,7 @@ def qr_print_labels(request):
         ]
     }
     
-    return render(request, 'qr_management/print_labels.html', context)
+    return render(request, 'qr_management/generation/print_labels.html', context)
 
 @login_required
 def qr_verify(request, device_id):
@@ -482,7 +482,7 @@ def qr_verify(request, device_id):
             'timestamp': timezone.now(),
         }
         
-        return render(request, 'qr_management/verify.html', context)
+        return render(request, 'qr_management/verification/qr_verify.html', context)
         
     except Exception as e:
         # Create failed scan record
@@ -507,7 +507,7 @@ def qr_verify(request, device_id):
             'device_id': device_id,
             'verification_successful': False,
         }
-        return render(request, 'qr_management/verify.html', context)
+        return render(request, 'qr_management/verification/qr_verify.html', context)
 
 @login_required
 def qr_scan_mobile(request):
@@ -604,7 +604,7 @@ def qr_scan_mobile(request):
             'scan_types': scan_types,
         }
         
-        return render(request, 'qr_management/mobile_scan.html', context)
+        return render(request, 'qr_management/scanning/scan_mobile.html', context)
         
     except Exception as e:
         if request.method == 'POST':
@@ -693,11 +693,11 @@ def qr_scan_history(request):
             }
         }
         
-        return render(request, 'qr_management/scan_history.html', context)
+        return render(request, 'qr_management/scanning/scan_history.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading scan history: {str(e)}")
-        return render(request, 'qr_management/scan_history.html', {})
+        return render(request, 'qr_management/scanning/scan_history.html', {})
 
 @login_required
 def qr_scan_detail(request, scan_id):
@@ -715,7 +715,7 @@ def qr_scan_detail(request, scan_id):
             'scan': scan,
         }
         
-        return render(request, 'qr_management/scan_detail.html', context)
+        return render(request, 'qr_management/scanning/scan_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading scan details: {str(e)}")
@@ -806,7 +806,7 @@ def qr_batch_verify(request):
         'search': search,
     }
     
-    return render(request, 'qr_management/batch_verify.html', context)
+    return render(request, 'qr_management/verification/batch_verify.html', context)
 
 @login_required
 def qr_analytics(request):
@@ -886,8 +886,8 @@ def qr_analytics(request):
             'end_date': end_date,
         }
         
-        return render(request, 'qr_management/analytics.html', context)
+        return render(request, 'qr_management/analytics/analytics.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading QR analytics: {str(e)}")
-        return render(request, 'qr_management/analytics.html', {})
+        return render(request, 'qr_management/analytics/analytics.html', {})
