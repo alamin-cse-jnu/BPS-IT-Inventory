@@ -1,0 +1,389 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Room - {{ room.room_number }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-container {
+        max-width: 600px;
+        margin: 2rem auto;
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    
+    .delete-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .delete-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 2rem;
+    }
+    
+    .delete-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .delete-header .text-muted {
+        opacity: 0.9;
+        margin-top: 0.5rem;
+    }
+    
+    .delete-content {
+        padding: 2rem;
+    }
+    
+    .room-info {
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border-left: 4px solid #0066cc;
+    }
+    
+    .room-hierarchy {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .room-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.375rem;
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .room-details h5 {
+        margin: 0 0 0.5rem 0;
+        color: #212529;
+        font-weight: 600;
+    }
+    
+    .room-breadcrumb {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .room-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .warning-section {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .warning-section h5 {
+        color: #856404;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .warning-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .warning-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .warning-list li {
+        color: #856404;
+        margin-bottom: 0.5rem;
+    }
+    
+    .danger-section {
+        background: #f8d7da;
+        border: 1px solid #f5c2c7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .danger-section h5 {
+        color: #721c24;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .danger-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .danger-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .danger-list li {
+        color: #721c24;
+        margin-bottom: 0.5rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+    
+    .btn-delete {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-delete:hover {
+        background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+    }
+    
+    .btn-cancel {
+        background: #6c757d;
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+    
+    .btn-cancel:hover {
+        background: #5a6268;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .count-badge {
+        background: #17a2b8;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    @media (max-width: 768px) {
+        .delete-container {
+            margin: 1rem;
+            border-radius: 0.375rem;
+        }
+        
+        .delete-header,
+        .delete-content {
+            padding: 1.5rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .btn-delete,
+        .btn-cancel {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:building_list' %}">Buildings</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:building_detail' room.department.floor.building.id %}">{{ room.department.floor.building.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:block_detail' room.department.floor.block.id %}">{{ room.department.floor.block.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:floor_detail' room.department.floor.id %}">{{ room.department.floor.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:department_detail' room.department.id %}">{{ room.department.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:room_list' %}">Rooms</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:room_detail' room.id %}">{{ room.room_number }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Delete</li>
+        </ol>
+    </nav>
+
+    <div class="delete-container">
+        <!-- Delete Header -->
+        <div class="delete-header">
+            <div class="delete-icon">
+                <i class="fas fa-door-open"></i>
+            </div>
+            <h2>Delete Room</h2>
+            <p class="text-muted mb-0">This action cannot be undone</p>
+        </div>
+
+        <!-- Delete Content -->
+        <div class="delete-content">
+            <!-- Room Information -->
+            <div class="room-info">
+                <div class="room-hierarchy">
+                    <div class="room-icon">
+                        <i class="fas fa-door-open"></i>
+                    </div>
+                    <div class="room-details">
+                        <h5>Room {{ room.room_number }}</h5>
+                        {% if room.room_name %}
+                            <p class="room-breadcrumb">{{ room.room_name }}</p>
+                        {% endif %}
+                        <p class="room-breadcrumb">{{ room.department.floor.building.name }} › {{ room.department.floor.block.name }} › {{ room.department.floor.name }} › {{ room.department.name }}</p>
+                        <p class="room-meta">
+                            Capacity: {{ room.capacity }} person(s)
+                            {% if room.created_at %}
+                                | Created: {{ room.created_at|date:"M d, Y" }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning Section -->
+            {% if room.locations.exists %}
+            <div class="warning-section">
+                <h5>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Warning: Dependencies Found
+                </h5>
+                <p>Deleting this room will also affect:</p>
+                <ul class="warning-list">
+                    {% if room.locations.count > 0 %}
+                        <li><span class="count-badge">{{ room.locations.count }}</span> Location(s) will be deleted</li>
+                    {% endif %}
+                    {% if total_devices > 0 %}
+                        <li><span class="count-badge">{{ total_devices }}</span> Device(s) will lose their room assignment</li>
+                    {% endif %}
+                    {% if total_assignments > 0 %}
+                        <li><span class="count-badge">{{ total_assignments }}</span> Staff assignment(s) will be affected</li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Danger Section -->
+            <div class="danger-section">
+                <h5>
+                    <i class="fas fa-skull-crossbones"></i>
+                    Permanent Deletion
+                </h5>
+                <p>This action will permanently delete:</p>
+                <ul class="danger-list">
+                    <li>Room information and settings</li>
+                    <li>All location assignments within this room</li>
+                    <li>Historical data and audit trails</li>
+                    <li>Any associated QR codes or tracking data</li>
+                </ul>
+                <p class="mb-0"><strong>This action cannot be undone!</strong></p>
+            </div>
+
+            <!-- Confirmation Form -->
+            <form method="post" id="deleteForm">
+                {% csrf_token %}
+                <div class="action-buttons">
+                    <a href="{% url 'inventory:room_detail' room.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-delete" id="confirmDelete">
+                        <i class="fas fa-trash-alt me-2"></i>Delete Room
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Confirmation dialog
+    $('#deleteForm').on('submit', function(e) {
+        const roomNumber = "{{ room.room_number|escapejs }}";
+        const roomName = "{{ room.room_name|default_if_none:''|escapejs }}";
+        const departmentName = "{{ room.department.name|escapejs }}";
+        
+        const displayName = roomName ? `"${roomName}" (${roomNumber})` : roomNumber;
+        
+        if (!confirm(`Are you absolutely sure you want to delete room ${displayName} from ${departmentName}?\n\nThis action cannot be undone and will remove all associated locations and device assignments.`)) {
+            e.preventDefault();
+        }
+    });
+    
+    // Double-click protection
+    $('#confirmDelete').on('click', function() {
+        $(this).prop('disabled', true);
+        setTimeout(() => {
+            $(this).prop('disabled', false);
+        }, 3000);
+    });
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        // Escape key to cancel
+        if (e.key === 'Escape') {
+            window.location.href = "{% url 'inventory:room_detail' room.id %}";
+        }
+    });
+});
+</script>
+{% endblock %>}

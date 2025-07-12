@@ -1,0 +1,715 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ vendor.name }} - Vendor Details - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .vendor-detail-header {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .vendor-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-right: 1.5rem;
+        flex-shrink: 0;
+    }
+    
+    .vendor-info h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 2rem;
+        font-weight: 600;
+    }
+    
+    .vendor-meta {
+        display: flex;
+        gap: 2rem;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+        opacity: 0.9;
+    }
+    
+    .status-badge {
+        padding: 0.375rem 1rem;
+        border-radius: 50px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-active {
+        background: rgba(255, 255, 255, 0.2);
+        color: #d4edda;
+    }
+    
+    .status-inactive {
+        background: rgba(255, 255, 255, 0.2);
+        color: #f8d7da;
+    }
+    
+    .detail-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+        border: 1px solid #e9ecef;
+    }
+    
+    .detail-card-header {
+        background: #f8f9fa;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: #495057;
+        display: flex;
+        align-items: center;
+    }
+    
+    .detail-card-header i {
+        margin-right: 0.75rem;
+        color: #17a2b8;
+    }
+    
+    .detail-card-body {
+        padding: 1.5rem;
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .info-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+        font-size: 1rem;
+        color: #495057;
+        word-break: break-word;
+    }
+    
+    .info-value a {
+        color: #17a2b8;
+        text-decoration: none;
+    }
+    
+    .info-value a:hover {
+        text-decoration: underline;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        text-align: center;
+        border: 1px solid #dee2e6;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #17a2b8;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .btn-action {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-edit {
+        background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
+        color: white;
+    }
+    
+    .btn-edit:hover {
+        background: linear-gradient(135deg, #ffb300 0%, #ff8f00 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+    }
+    
+    .btn-delete {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+    }
+    
+    .btn-delete:hover {
+        background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+    }
+    
+    .btn-back {
+        background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+        color: white;
+    }
+    
+    .btn-back:hover {
+        background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .table-responsive {
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        border: none;
+        font-weight: 600;
+        color: #495057;
+        padding: 1rem 0.75rem;
+    }
+    
+    .table td {
+        border: none;
+        padding: 1rem 0.75rem;
+        vertical-align: middle;
+    }
+    
+    .table tbody tr {
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .device-link {
+        color: #17a2b8;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    .device-link:hover {
+        text-decoration: underline;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .vendor-type-badge {
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+    }
+    
+    .type-hardware {
+        background: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .type-software {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .type-service {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .type-maintenance {
+        background: #fce4ec;
+        color: #c2185b;
+    }
+    
+    .type-consultant {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+    
+    .device-status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-available {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-assigned {
+        background: #cce5ff;
+        color: #004085;
+    }
+    
+    .status-maintenance {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-disposed {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .maintenance-status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .maintenance-scheduled {
+        background: #cce5ff;
+        color: #004085;
+    }
+    
+    .maintenance-progress {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .maintenance-completed {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .maintenance-overdue {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .notes-section {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+    
+    .notes-section h6 {
+        margin-bottom: 1rem;
+        color: #495057;
+        font-weight: 600;
+    }
+    
+    .notes-content {
+        color: #6c757d;
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Vendor Header -->
+<div class="vendor-detail-header">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center">
+            <div class="vendor-avatar">
+                {{ vendor.name|first|upper }}
+            </div>
+            <div class="vendor-info flex-grow-1">
+                <h1>{{ vendor.name }}</h1>
+                <div class="vendor-meta">
+                    <span class="vendor-type-badge type-{{ vendor.vendor_type|lower }}">
+                        {{ vendor.get_vendor_type_display }}
+                    </span>
+                    <span class="status-badge {% if vendor.is_active %}status-active{% else %}status-inactive{% endif %}">
+                        {% if vendor.is_active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                    <span><i class="fas fa-calendar-plus me-1"></i>Added {{ vendor.created_at|date:"M d, Y" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <a href="{% url 'inventory:vendor_edit' vendor.id %}" class="btn-action btn-edit">
+            <i class="fas fa-edit"></i>Edit Vendor
+        </a>
+        <button type="button" class="btn-action btn-delete" data-bs-toggle="modal" data-bs-target="#deleteModal">
+            <i class="fas fa-trash"></i>Delete Vendor
+        </button>
+        <a href="{% url 'inventory:vendor_list' %}" class="btn-action btn-back">
+            <i class="fas fa-arrow-left"></i>Back to List
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Basic Information -->
+        <div class="col-lg-8">
+            <div class="detail-card">
+                <div class="detail-card-header">
+                    <h5><i class="fas fa-info-circle"></i>Basic Information</h5>
+                </div>
+                <div class="detail-card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Vendor Name</span>
+                            <span class="info-value">{{ vendor.name }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Vendor Type</span>
+                            <span class="info-value">
+                                <span class="vendor-type-badge type-{{ vendor.vendor_type|lower }}">
+                                    {{ vendor.get_vendor_type_display }}
+                                </span>
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Contact Person</span>
+                            <span class="info-value">{{ vendor.contact_person|default:"Not specified" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Email Address</span>
+                            <span class="info-value">
+                                {% if vendor.email %}
+                                <a href="mailto:{{ vendor.email }}">{{ vendor.email }}</a>
+                                {% else %}
+                                Not specified
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Phone Number</span>
+                            <span class="info-value">
+                                {% if vendor.phone %}
+                                <a href="tel:{{ vendor.phone }}">{{ vendor.phone }}</a>
+                                {% else %}
+                                Not specified
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Website</span>
+                            <span class="info-value">
+                                {% if vendor.website %}
+                                <a href="{{ vendor.website }}" target="_blank" rel="noopener">
+                                    {{ vendor.website }} <i class="fas fa-external-link-alt ms-1"></i>
+                                </a>
+                                {% else %}
+                                Not specified
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Tax ID</span>
+                            <span class="info-value">{{ vendor.tax_id|default:"Not specified" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status</span>
+                            <span class="info-value">
+                                <span class="status-badge {% if vendor.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                    {% if vendor.is_active %}Active{% else %}Inactive{% endif %}
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {% if vendor.address %}
+                    <div class="info-item mt-3">
+                        <span class="info-label">Address</span>
+                        <span class="info-value">{{ vendor.address|linebreaks }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="col-lg-4">
+            <div class="detail-card">
+                <div class="detail-card-header">
+                    <h5><i class="fas fa-chart-bar"></i>Statistics</h5>
+                </div>
+                <div class="detail-card-body">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-number">{{ vendor.device_count|default:0 }}</span>
+                            <span class="stat-label">Total Devices</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number">{{ vendor.maintenance_count|default:0 }}</span>
+                            <span class="stat-label">Maintenance Jobs</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number">{{ vendor.active_contracts|default:0 }}</span>
+                            <span class="stat-label">Active Contracts</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number">${{ vendor.total_value|default:0|floatformat:0 }}</span>
+                            <span class="stat-label">Total Value</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Devices -->
+    <div class="detail-card">
+        <div class="detail-card-header">
+            <h5><i class="fas fa-laptop"></i>Devices from this Vendor</h5>
+        </div>
+        <div class="detail-card-body">
+            {% if vendor.devices.exists %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Device ID</th>
+                            <th>Device Name</th>
+                            <th>Model</th>
+                            <th>Serial Number</th>
+                            <th>Status</th>
+                            <th>Purchase Date</th>
+                            <th>Warranty</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in vendor.devices.all|slice:":10" %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'inventory:device_detail' device.device_id %}" class="device-link">
+                                    {{ device.device_id }}
+                                </a>
+                            </td>
+                            <td>{{ device.device_name }}</td>
+                            <td>{{ device.model|default:"N/A" }}</td>
+                            <td>{{ device.serial_number|default:"N/A" }}</td>
+                            <td>
+                                <span class="device-status status-{{ device.status|lower }}">
+                                    {{ device.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ device.purchase_date|date:"M d, Y"|default:"N/A" }}</td>
+                            <td>
+                                {% if device.warranty_end_date %}
+                                    {% if device.warranty_end_date > today %}
+                                    <span class="text-success">{{ device.warranty_end_date|date:"M d, Y" }}</span>
+                                    {% else %}
+                                    <span class="text-danger">Expired</span>
+                                    {% endif %}
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'inventory:device_detail' device.device_id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if vendor.devices.count > 10 %}
+            <div class="text-center mt-3">
+                <p class="text-muted">Showing 10 of {{ vendor.devices.count }} devices</p>
+                <a href="{% url 'inventory:device_list' %}?vendor={{ vendor.id }}" class="btn btn-outline-primary">
+                    View All Devices
+                </a>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-laptop"></i>
+                <h5>No Devices</h5>
+                <p>No devices are currently associated with this vendor.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Maintenance Records -->
+    <div class="detail-card">
+        <div class="detail-card-header">
+            <h5><i class="fas fa-tools"></i>Maintenance Services</h5>
+        </div>
+        <div class="detail-card-body">
+            {% if vendor.maintenance_schedules.exists %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Maintenance Type</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Scheduled Date</th>
+                            <th>Cost</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for maintenance in vendor.maintenance_schedules.all|slice:":10" %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'inventory:device_detail' maintenance.device.device_id %}" class="device-link">
+                                    {{ maintenance.device.device_id }}
+                                </a>
+                            </td>
+                            <td>{{ maintenance.get_maintenance_type_display }}</td>
+                            <td>{{ maintenance.description|truncatechars:50 }}</td>
+                            <td>
+                                <span class="maintenance-status maintenance-{{ maintenance.status|lower }}">
+                                    {{ maintenance.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ maintenance.next_due_date|date:"M d, Y"|default:"N/A" }}</td>
+                            <td>
+                                {% if maintenance.estimated_cost %}
+                                ${{ maintenance.estimated_cost|floatformat:2 }}
+                                {% else %}
+                                N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'inventory:maintenance_detail' maintenance.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if vendor.maintenance_schedules.count > 10 %}
+            <div class="text-center mt-3">
+                <p class="text-muted">Showing 10 of {{ vendor.maintenance_schedules.count }} maintenance records</p>
+                <a href="{% url 'inventory:maintenance_list' %}?vendor={{ vendor.id }}" class="btn btn-outline-primary">
+                    View All Maintenance
+                </a>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-tools"></i>
+                <h5>No Maintenance Records</h5>
+                <p>No maintenance services are currently associated with this vendor.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Additional Notes -->
+    {% if vendor.notes %}
+    <div class="detail-card">
+        <div class="detail-card-header">
+            <h5><i class="fas fa-sticky-note"></i>Additional Notes</h5>
+        </div>
+        <div class="detail-card-body">
+            <div class="notes-content">{{ vendor.notes }}</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle text-danger me-2"></i>Delete Vendor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>{{ vendor.name }}</strong>?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone. 
+                    {% if vendor.devices.exists or vendor.maintenance_schedules.exists %}
+                    This vendor has associated devices or maintenance records that will be affected.
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'inventory:vendor_delete' vendor.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i>Delete Vendor
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

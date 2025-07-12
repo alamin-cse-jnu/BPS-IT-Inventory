@@ -1,0 +1,385 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Floor - {{ floor.name }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-container {
+        max-width: 600px;
+        margin: 2rem auto;
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    
+    .delete-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .delete-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 2rem;
+    }
+    
+    .delete-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .delete-header .text-muted {
+        opacity: 0.9;
+        margin-top: 0.5rem;
+    }
+    
+    .delete-content {
+        padding: 2rem;
+    }
+    
+    .floor-info {
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border-left: 4px solid #0066cc;
+    }
+    
+    .floor-hierarchy {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .floor-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.375rem;
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .floor-details h5 {
+        margin: 0 0 0.5rem 0;
+        color: #212529;
+        font-weight: 600;
+    }
+    
+    .floor-breadcrumb {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .floor-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .warning-section {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .warning-section h5 {
+        color: #856404;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .warning-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .warning-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .warning-list li {
+        color: #856404;
+        margin-bottom: 0.5rem;
+    }
+    
+    .danger-section {
+        background: #f8d7da;
+        border: 1px solid #f5c2c7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .danger-section h5 {
+        color: #721c24;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .danger-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .danger-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .danger-list li {
+        color: #721c24;
+        margin-bottom: 0.5rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+    }
+    
+    .btn-delete {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-delete:hover {
+        background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+    }
+    
+    .btn-cancel {
+        background: #6c757d;
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+    
+    .btn-cancel:hover {
+        background: #5a6268;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .count-badge {
+        background: #17a2b8;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    @media (max-width: 768px) {
+        .delete-container {
+            margin: 1rem;
+            border-radius: 0.375rem;
+        }
+        
+        .delete-header,
+        .delete-content {
+            padding: 1.5rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .btn-delete,
+        .btn-cancel {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:building_list' %}">Buildings</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:building_detail' floor.building.id %}">{{ floor.building.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:block_detail' floor.block.id %}">{{ floor.block.name }}</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:floor_list' %}">Floors</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:floor_detail' floor.id %}">{{ floor.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Delete</li>
+        </ol>
+    </nav>
+
+    <div class="delete-container">
+        <!-- Delete Header -->
+        <div class="delete-header">
+            <div class="delete-icon">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <h2>Delete Floor</h2>
+            <p class="text-muted mb-0">This action cannot be undone</p>
+        </div>
+
+        <!-- Delete Content -->
+        <div class="delete-content">
+            <!-- Floor Information -->
+            <div class="floor-info">
+                <div class="floor-hierarchy">
+                    <div class="floor-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="floor-details">
+                        <h5>{{ floor.name }}</h5>
+                        <p class="floor-breadcrumb">{{ floor.building.name }} › {{ floor.block.name }} › {{ floor.name }}</p>
+                        <p class="floor-meta">
+                            Floor Number: {{ floor.floor_number }}
+                            {% if floor.description %}
+                                | {{ floor.description }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning Section -->
+            {% if floor.departments.exists or floor.locations.exists %}
+            <div class="warning-section">
+                <h5>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Warning: Dependencies Found
+                </h5>
+                <p>Deleting this floor will also affect:</p>
+                <ul class="warning-list">
+                    {% if floor.departments.count > 0 %}
+                        <li><span class="count-badge">{{ floor.departments.count }}</span> Department(s) will be deleted</li>
+                    {% endif %}
+                    {% if total_rooms > 0 %}
+                        <li><span class="count-badge">{{ total_rooms }}</span> Room(s) will be deleted</li>
+                    {% endif %}
+                    {% if floor.locations.count > 0 %}
+                        <li><span class="count-badge">{{ floor.locations.count }}</span> Location(s) will be deleted</li>
+                    {% endif %}
+                    {% if total_devices > 0 %}
+                        <li><span class="count-badge">{{ total_devices }}</span> Device(s) will lose their location assignment</li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Danger Section -->
+            <div class="danger-section">
+                <h5>
+                    <i class="fas fa-skull-crossbones"></i>
+                    Permanent Deletion
+                </h5>
+                <p>This action will permanently delete:</p>
+                <ul class="danger-list">
+                    <li>Floor information and settings</li>
+                    <li>All associated departments and rooms</li>
+                    <li>All location assignments within this floor</li>
+                    <li>Historical data and audit trails</li>
+                </ul>
+                <p class="mb-0"><strong>This action cannot be undone!</strong></p>
+            </div>
+
+            <!-- Confirmation Form -->
+            <form method="post" id="deleteForm">
+                {% csrf_token %}
+                <div class="action-buttons">
+                    <a href="{% url 'inventory:floor_detail' floor.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-delete" id="confirmDelete">
+                        <i class="fas fa-trash-alt me-2"></i>Delete Floor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Confirmation dialog
+    $('#deleteForm').on('submit', function(e) {
+        const floorName = "{{ floor.name|escapejs }}";
+        const buildingName = "{{ floor.building.name|escapejs }}";
+        const blockName = "{{ floor.block.name|escapejs }}";
+        
+        if (!confirm(`Are you absolutely sure you want to delete the floor "${floorName}" from ${buildingName} - ${blockName}?\n\nThis action cannot be undone and will remove all associated departments, rooms, and locations.`)) {
+            e.preventDefault();
+        }
+    });
+    
+    // Double-click protection
+    $('#confirmDelete').on('click', function() {
+        $(this).prop('disabled', true);
+        setTimeout(() => {
+            $(this).prop('disabled', false);
+        }, 3000);
+    });
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        // Escape key to cancel
+        if (e.key === 'Escape') {
+            window.location.href = "{% url 'inventory:floor_detail' floor.id %}";
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,735 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+{% if form.instance.pk %}Edit Vendor{% else %}Add New Vendor{% endif %} - {{ block.super }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-header {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .form-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.75rem;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .form-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+        border: 1px solid #e9ecef;
+    }
+    
+    .form-card-header {
+        background: #f8f9fa;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .form-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: #495057;
+        display: flex;
+        align-items: center;
+    }
+    
+    .form-card-header i {
+        margin-right: 0.75rem;
+        color: #17a2b8;
+    }
+    
+    .form-card-body {
+        padding: 1.5rem;
+    }
+    
+    .form-floating {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-floating > .form-control,
+    .form-floating > .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1rem 0.75rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .form-floating > .form-control:focus,
+    .form-floating > .form-select:focus {
+        border-color: #17a2b8;
+        box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+        outline: none;
+    }
+    
+    .form-floating > label {
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .form-control.is-invalid,
+    .form-select.is-invalid {
+        border-color: #dc3545;
+        background-image: none;
+    }
+    
+    .form-control.is-invalid:focus,
+    .form-select.is-invalid:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+    
+    .invalid-feedback {
+        display: block;
+        font-size: 0.875rem;
+        color: #dc3545;
+        margin-top: 0.5rem;
+    }
+    
+    .form-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .form-help i {
+        margin-right: 0.5rem;
+        color: #17a2b8;
+    }
+    
+    .action-buttons {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        align-items: center;
+        border: 1px solid #e9ecef;
+    }
+    
+    .btn-action {
+        padding: 0.75rem 2rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 1rem;
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-color: #28a745;
+    }
+    
+    .btn-save:hover {
+        background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+    
+    .btn-cancel {
+        background: white;
+        color: #6c757d;
+        border-color: #dee2e6;
+    }
+    
+    .btn-cancel:hover {
+        background: #f8f9fa;
+        color: #495057;
+        border-color: #adb5bd;
+        text-decoration: none;
+    }
+    
+    .required-asterisk {
+        color: #dc3545;
+        margin-left: 0.25rem;
+    }
+    
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+    
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .btn-action {
+            justify-content: center;
+        }
+    }
+    
+    .vendor-type-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .vendor-type-option {
+        position: relative;
+    }
+    
+    .vendor-type-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        cursor: pointer;
+    }
+    
+    .vendor-type-label {
+        display: block;
+        padding: 1rem;
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    
+    .vendor-type-option input[type="radio"]:checked + .vendor-type-label {
+        border-color: #17a2b8;
+        background: #e8f4f8;
+        color: #0c5460;
+    }
+    
+    .vendor-type-label:hover {
+        border-color: #17a2b8;
+        background: #f8fafb;
+    }
+    
+    .vendor-type-icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        display: block;
+        color: #17a2b8;
+    }
+    
+    .vendor-type-name {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    
+    .vendor-type-desc {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .status-toggle {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        border: 2px solid #e9ecef;
+    }
+    
+    .status-toggle input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        accent-color: #17a2b8;
+    }
+    
+    .status-label {
+        font-weight: 600;
+        color: #495057;
+        margin: 0;
+    }
+    
+    .status-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin: 0;
+    }
+    
+    .form-section {
+        margin-bottom: 2rem;
+    }
+    
+    .form-section:last-child {
+        margin-bottom: 0;
+    }
+    
+    .address-textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+    
+    .character-counter {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-align: right;
+        margin-top: 0.5rem;
+    }
+    
+    .url-preview {
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 0.25rem;
+        border: 1px solid #dee2e6;
+        font-size: 0.875rem;
+    }
+    
+    .url-preview a {
+        color: #17a2b8;
+        text-decoration: none;
+    }
+    
+    .url-preview a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Form Header -->
+<div class="form-header">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center">
+            <div class="form-icon">
+                <i class="fas fa-{% if form.instance.pk %}edit{% else %}plus{% endif %}"></i>
+            </div>
+            <div>
+                <h1 class="h2 mb-1">
+                    {% if form.instance.pk %}
+                    Edit Vendor: {{ form.instance.name }}
+                    {% else %}
+                    Add New Vendor
+                    {% endif %}
+                </h1>
+                <p class="mb-0 opacity-75">
+                    {% if form.instance.pk %}
+                    Update vendor information and contact details
+                    {% else %}
+                    Enter vendor information and contact details
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        
+        <!-- Basic Information -->
+        <div class="form-card">
+            <div class="form-card-header">
+                <h5><i class="fas fa-info-circle"></i>Basic Information</h5>
+            </div>
+            <div class="form-card-body">
+                <div class="form-section">
+                    <div class="form-grid">
+                        <div class="form-floating">
+                            {{ form.name }}
+                            <label for="{{ form.name.id_for_label }}">
+                                Vendor Name <span class="required-asterisk">*</span>
+                            </label>
+                            {% if form.name.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.name.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-help">
+                                <i class="fas fa-info-circle"></i>
+                                Enter the official name of the vendor or supplier
+                            </div>
+                        </div>
+                        
+                        <div class="form-floating">
+                            {{ form.contact_person }}
+                            <label for="{{ form.contact_person.id_for_label }}">Contact Person</label>
+                            {% if form.contact_person.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.contact_person.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-help">
+                                <i class="fas fa-user"></i>
+                                Primary contact person at this vendor
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vendor Type Selection -->
+                <div class="form-section">
+                    <label class="form-label">
+                        Vendor Type <span class="required-asterisk">*</span>
+                    </label>
+                    <div class="vendor-type-options">
+                        <div class="vendor-type-option">
+                            <input type="radio" name="{{ form.vendor_type.name }}" value="HARDWARE_SUPPLIER" 
+                                   id="type_hardware" {% if form.vendor_type.value == 'HARDWARE_SUPPLIER' %}checked{% endif %}>
+                            <label for="type_hardware" class="vendor-type-label">
+                                <i class="fas fa-microchip vendor-type-icon"></i>
+                                <div class="vendor-type-name">Hardware Supplier</div>
+                                <div class="vendor-type-desc">Computer hardware, peripherals</div>
+                            </label>
+                        </div>
+                        <div class="vendor-type-option">
+                            <input type="radio" name="{{ form.vendor_type.name }}" value="SOFTWARE_VENDOR" 
+                                   id="type_software" {% if form.vendor_type.value == 'SOFTWARE_VENDOR' %}checked{% endif %}>
+                            <label for="type_software" class="vendor-type-label">
+                                <i class="fas fa-code vendor-type-icon"></i>
+                                <div class="vendor-type-name">Software Vendor</div>
+                                <div class="vendor-type-desc">Software licenses, applications</div>
+                            </label>
+                        </div>
+                        <div class="vendor-type-option">
+                            <input type="radio" name="{{ form.vendor_type.name }}" value="SERVICE_PROVIDER" 
+                                   id="type_service" {% if form.vendor_type.value == 'SERVICE_PROVIDER' %}checked{% endif %}>
+                            <label for="type_service" class="vendor-type-label">
+                                <i class="fas fa-handshake vendor-type-icon"></i>
+                                <div class="vendor-type-name">Service Provider</div>
+                                <div class="vendor-type-desc">IT services, cloud services</div>
+                            </label>
+                        </div>
+                        <div class="vendor-type-option">
+                            <input type="radio" name="{{ form.vendor_type.name }}" value="MAINTENANCE_CONTRACTOR" 
+                                   id="type_maintenance" {% if form.vendor_type.value == 'MAINTENANCE_CONTRACTOR' %}checked{% endif %}>
+                            <label for="type_maintenance" class="vendor-type-label">
+                                <i class="fas fa-tools vendor-type-icon"></i>
+                                <div class="vendor-type-name">Maintenance</div>
+                                <div class="vendor-type-desc">Repair, maintenance services</div>
+                            </label>
+                        </div>
+                        <div class="vendor-type-option">
+                            <input type="radio" name="{{ form.vendor_type.name }}" value="CONSULTANT" 
+                                   id="type_consultant" {% if form.vendor_type.value == 'CONSULTANT' %}checked{% endif %}>
+                            <label for="type_consultant" class="vendor-type-label">
+                                <i class="fas fa-user-tie vendor-type-icon"></i>
+                                <div class="vendor-type-name">Consultant</div>
+                                <div class="vendor-type-desc">IT consulting, advisory</div>
+                            </label>
+                        </div>
+                    </div>
+                    {% if form.vendor_type.errors %}
+                        <div class="invalid-feedback">
+                            {{ form.vendor_type.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="form-card">
+            <div class="form-card-header">
+                <h5><i class="fas fa-address-book"></i>Contact Information</h5>
+            </div>
+            <div class="form-card-body">
+                <div class="form-section">
+                    <div class="form-grid">
+                        <div class="form-floating">
+                            {{ form.email }}
+                            <label for="{{ form.email.id_for_label }}">Email Address</label>
+                            {% if form.email.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.email.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-help">
+                                <i class="fas fa-envelope"></i>
+                                Primary email for vendor communications
+                            </div>
+                        </div>
+                        
+                        <div class="form-floating">
+                            {{ form.phone }}
+                            <label for="{{ form.phone.id_for_label }}">Phone Number</label>
+                            {% if form.phone.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.phone.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-help">
+                                <i class="fas fa-phone"></i>
+                                Include country code if international
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-floating">
+                        {{ form.website }}
+                        <label for="{{ form.website.id_for_label }}">Website URL</label>
+                        {% if form.website.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.website.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-help">
+                            <i class="fas fa-globe"></i>
+                            Company website (include https://)
+                        </div>
+                        <div id="website-preview" class="url-preview" style="display: none;">
+                            <i class="fas fa-external-link-alt me-1"></i>
+                            <a href="#" target="_blank" rel="noopener">Preview website</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-floating">
+                        {{ form.address }}
+                        <label for="{{ form.address.id_for_label }}">Business Address</label>
+                        {% if form.address.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.address.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-help">
+                            <i class="fas fa-map-marker-alt"></i>
+                            Full business address including city, state, and postal code
+                        </div>
+                        <div class="character-counter">
+                            <span id="address-count">0</span> / 500 characters
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Information -->
+        <div class="form-card">
+            <div class="form-card-header">
+                <h5><i class="fas fa-briefcase"></i>Business Information</h5>
+            </div>
+            <div class="form-card-body">
+                <div class="form-section">
+                    <div class="form-floating">
+                        {{ form.tax_id }}
+                        <label for="{{ form.tax_id.id_for_label }}">Tax ID / Business Registration</label>
+                        {% if form.tax_id.errors %}
+                            <div class="invalid-feedback">
+                                {{ form.tax_id.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <div class="form-help">
+                            <i class="fas fa-id-card"></i>
+                            Tax identification number or business registration number
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Toggle -->
+                <div class="form-section">
+                    <label class="form-label">Vendor Status</label>
+                    <div class="status-toggle">
+                        {{ form.is_active }}
+                        <div>
+                            <div class="status-label">Active Vendor</div>
+                            <div class="status-help">Enable this vendor for new purchases and services</div>
+                        </div>
+                    </div>
+                    {% if form.is_active.errors %}
+                        <div class="invalid-feedback">
+                            {{ form.is_active.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="{% if form.instance.pk %}{% url 'inventory:vendor_detail' form.instance.pk %}{% else %}{% url 'inventory:vendor_list' %}{% endif %}" 
+               class="btn-action btn-cancel">
+                <i class="fas fa-times"></i>Cancel
+            </a>
+            <button type="submit" class="btn-action btn-save">
+                <i class="fas fa-save"></i>
+                {% if form.instance.pk %}Update Vendor{% else %}Create Vendor{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Website URL preview
+    const websiteInput = document.getElementById('{{ form.website.id_for_label }}');
+    const websitePreview = document.getElementById('website-preview');
+    
+    if (websiteInput && websitePreview) {
+        websiteInput.addEventListener('input', function() {
+            const url = this.value.trim();
+            if (url && isValidUrl(url)) {
+                const link = websitePreview.querySelector('a');
+                link.href = url;
+                link.textContent = url.length > 50 ? url.substring(0, 50) + '...' : url;
+                websitePreview.style.display = 'block';
+            } else {
+                websitePreview.style.display = 'none';
+            }
+        });
+        
+        // Initial check
+        if (websiteInput.value.trim()) {
+            websiteInput.dispatchEvent(new Event('input'));
+        }
+    }
+    
+    // Address character counter
+    const addressInput = document.getElementById('{{ form.address.id_for_label }}');
+    const addressCounter = document.getElementById('address-count');
+    
+    if (addressInput && addressCounter) {
+        addressInput.addEventListener('input', function() {
+            addressCounter.textContent = this.value.length;
+            if (this.value.length > 450) {
+                addressCounter.style.color = '#dc3545';
+            } else if (this.value.length > 400) {
+                addressCounter.style.color = '#ffc107';
+            } else {
+                addressCounter.style.color = '#6c757d';
+            }
+        });
+        
+        // Initial count
+        addressCounter.textContent = addressInput.value.length;
+    }
+    
+    // Form validation
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // Clear previous validation states
+            const inputs = form.querySelectorAll('.form-control, .form-select');
+            inputs.forEach(input => {
+                input.classList.remove('is-invalid');
+            });
+            
+            // Basic client-side validation
+            let isValid = true;
+            
+            // Required fields
+            const requiredFields = [
+                { field: '{{ form.name.id_for_label }}', message: 'Vendor name is required' },
+                { field: '{{ form.vendor_type.name }}', message: 'Please select a vendor type', type: 'radio' }
+            ];
+            
+            requiredFields.forEach(req => {
+                if (req.type === 'radio') {
+                    const radios = form.querySelectorAll(`input[name="${req.field}"]`);
+                    const checked = Array.from(radios).some(radio => radio.checked);
+                    if (!checked) {
+                        isValid = false;
+                        showValidationError(req.message);
+                    }
+                } else {
+                    const field = document.getElementById(req.field);
+                    if (field && !field.value.trim()) {
+                        field.classList.add('is-invalid');
+                        showValidationError(req.message);
+                        isValid = false;
+                    }
+                }
+            });
+            
+            // Email validation
+            const emailField = document.getElementById('{{ form.email.id_for_label }}');
+            if (emailField && emailField.value.trim() && !isValidEmail(emailField.value)) {
+                emailField.classList.add('is-invalid');
+                showValidationError('Please enter a valid email address');
+                isValid = false;
+            }
+            
+            // Website validation
+            if (websiteInput && websiteInput.value.trim() && !isValidUrl(websiteInput.value)) {
+                websiteInput.classList.add('is-invalid');
+                showValidationError('Please enter a valid website URL');
+                isValid = false;
+            }
+            
+            if (!isValid) {
+                e.preventDefault();
+            }
+        });
+    }
+    
+    // Helper functions
+    function isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+    
+    function isValidUrl(string) {
+        try {
+            const url = new URL(string);
+            return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (_) {
+            return false;
+        }
+    }
+    
+    function showValidationError(message) {
+        // Create toast notification or alert
+        console.error('Validation Error:', message);
+        // You can implement a toast notification system here
+    }
+    
+    // Auto-format phone number
+    const phoneInput = document.getElementById('{{ form.phone.id_for_label }}');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            // Basic phone number formatting
+            let value = this.value.replace(/\D/g, '');
+            if (value.length >= 10) {
+                if (value.length === 10) {
+                    value = value.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+                } else if (value.length === 11 && value[0] === '1') {
+                    value = value.replace(/(\d{1})(\d{3})(\d{3})(\d{4})/, '+$1 ($2) $3-$4');
+                }
+                this.value = value;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

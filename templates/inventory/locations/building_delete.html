@@ -1,0 +1,603 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Building - {{ building.name }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-container {
+        max-width: 700px;
+        margin: 2rem auto;
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    
+    .delete-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .delete-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 2rem;
+    }
+    
+    .delete-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+    
+    .delete-header .text-muted {
+        opacity: 0.9;
+        margin-top: 0.5rem;
+    }
+    
+    .delete-content {
+        padding: 2rem;
+    }
+    
+    .building-info {
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border-left: 4px solid #0066cc;
+    }
+    
+    .building-hierarchy {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .building-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.375rem;
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .building-details h5 {
+        margin: 0 0 0.5rem 0;
+        color: #212529;
+        font-weight: 600;
+    }
+    
+    .building-code {
+        color: #6c757d;
+        font-size: 0.875rem;
+        font-family: 'Courier New', monospace;
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .building-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .warning-section {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .warning-section h5 {
+        color: #856404;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .warning-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .warning-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .warning-list li {
+        color: #856404;
+        margin-bottom: 0.5rem;
+    }
+    
+    .danger-section {
+        background: #f8d7da;
+        border: 1px solid #f5c2c7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .danger-section h5 {
+        color: #721c24;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .danger-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .danger-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .danger-list li {
+        color: #721c24;
+        margin-bottom: 0.5rem;
+    }
+    
+    .confirmation-section {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .confirmation-section h5 {
+        color: #1976d2;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .confirmation-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .form-check {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .form-check-input {
+        margin-right: 0.75rem;
+    }
+    
+    .form-check-label {
+        color: #1976d2;
+        font-weight: 500;
+        margin: 0;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .btn-delete {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-delete:hover {
+        background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+    }
+    
+    .btn-delete:disabled {
+        background: #6c757d;
+        transform: none;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+    
+    .btn-cancel {
+        background: #6c757d;
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+    
+    .btn-cancel:hover {
+        background: #5a6268;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+    }
+    
+    .count-badge {
+        background: #17a2b8;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 1rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+    
+    .loading-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 0.5rem;
+        text-align: center;
+        max-width: 300px;
+    }
+    
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #dc3545;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    @media (max-width: 768px) {
+        .delete-container {
+            margin: 1rem;
+            border-radius: 0.375rem;
+        }
+        
+        .delete-header,
+        .delete-content {
+            padding: 1.5rem;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .btn-delete,
+        .btn-cancel {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+        
+        .building-hierarchy {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .building-icon {
+            margin: 0 0 1rem 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:building_list' %}">Buildings</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:building_detail' building.id %}">{{ building.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Delete</li>
+        </ol>
+    </nav>
+
+    <div class="delete-container">
+        <!-- Delete Header -->
+        <div class="delete-header">
+            <div class="delete-icon">
+                <i class="fas fa-building"></i>
+            </div>
+            <h2>Delete Building</h2>
+            <p class="text-muted mb-0">This action cannot be undone</p>
+        </div>
+
+        <!-- Delete Content -->
+        <div class="delete-content">
+            <!-- Building Information -->
+            <div class="building-info">
+                <div class="building-hierarchy">
+                    <div class="building-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div class="building-details">
+                        <h5>{{ building.name }}</h5>
+                        <p class="building-code">Building Code: {{ building.code }}</p>
+                        <p class="building-meta">
+                            {% if building.address %}
+                                Address: {{ building.address }}
+                            {% endif %}
+                            {% if building.created_at %}
+                                | Created: {{ building.created_at|date:"M d, Y" }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning Section -->
+            {% if building.blocks.exists or building.locations.exists or total_devices > 0 %}
+            <div class="warning-section">
+                <h5>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Critical Warning: Dependencies Found
+                </h5>
+                <p><strong>Deleting this building will cascade delete ALL of the following:</strong></p>
+                <ul class="warning-list">
+                    {% if building.blocks.count > 0 %}
+                        <li><span class="count-badge">{{ building.blocks.count }}</span> Block(s) will be permanently deleted</li>
+                    {% endif %}
+                    {% if building.floors.count > 0 %}
+                        <li><span class="count-badge">{{ building.floors.count }}</span> Floor(s) will be permanently deleted</li>
+                    {% endif %}
+                    {% if total_departments > 0 %}
+                        <li><span class="count-badge">{{ total_departments }}</span> Department(s) will be permanently deleted</li>
+                    {% endif %}
+                    {% if building.locations.count > 0 %}
+                        <li><span class="count-badge">{{ building.locations.count }}</span> Location(s) will be permanently deleted</li>
+                    {% endif %}
+                    {% if total_devices > 0 %}
+                        <li><span class="count-badge">{{ total_devices }}</span> Device(s) will lose their location assignment</li>
+                    {% endif %}
+                    {% if total_staff > 0 %}
+                        <li><span class="count-badge">{{ total_staff }}</span> Staff assignment(s) will be affected</li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Danger Section -->
+            <div class="danger-section">
+                <h5>
+                    <i class="fas fa-skull-crossbones"></i>
+                    Permanent Deletion Warning
+                </h5>
+                <p><strong>This action will permanently and irreversibly delete:</strong></p>
+                <ul class="danger-list">
+                    <li>Building information and all metadata</li>
+                    <li>Complete hierarchical structure (blocks, floors, departments)</li>
+                    <li>All location assignments and references</li>
+                    <li>Historical data and audit trails</li>
+                    <li>Associated QR codes and tracking data</li>
+                    <li>All related reports and analytics data</li>
+                </ul>
+                <p class="mb-0"><strong>⚠️ THIS ACTION CANNOT BE UNDONE! ⚠️</strong></p>
+            </div>
+
+            <!-- Confirmation Section -->
+            {% if can_delete %}
+            <div class="confirmation-section">
+                <h5>
+                    <i class="fas fa-shield-alt"></i>
+                    Safety Confirmation Required
+                </h5>
+                <p>Please confirm that you understand the consequences:</p>
+                
+                <form method="post" id="deleteForm">
+                    {% csrf_token %}
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="confirmUnderstanding" name="confirm_understanding" required>
+                        <label class="form-check-label" for="confirmUnderstanding">
+                            I understand this will permanently delete the entire building structure
+                        </label>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="confirmDevices" name="confirm_devices" required>
+                        <label class="form-check-label" for="confirmDevices">
+                            I understand all devices will lose their location assignments
+                        </label>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="confirmBackup" name="confirm_backup" required>
+                        <label class="form-check-label" for="confirmBackup">
+                            I have backed up any necessary information
+                        </label>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="confirmAuthorization" name="confirm_authorization" required>
+                        <label class="form-check-label" for="confirmAuthorization">
+                            I am authorized to delete this building and all its contents
+                        </label>
+                    </div>
+
+                    <div class="action-buttons">
+                        <a href="{% url 'inventory:building_detail' building.id %}" class="btn-cancel">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn-delete" id="deleteButton" disabled>
+                            <i class="fas fa-trash-alt me-2"></i>Delete Building
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <div class="danger-section">
+                <h5>
+                    <i class="fas fa-ban"></i>
+                    Cannot Delete Building
+                </h5>
+                <p>This building cannot be deleted because:</p>
+                <ul class="danger-list">
+                    {% if has_active_assignments %}
+                        <li>It has active device assignments</li>
+                    {% endif %}
+                    {% if has_maintenance_records %}
+                        <li>It has ongoing maintenance records</li>
+                    {% endif %}
+                    {% if has_financial_records %}
+                        <li>It has associated financial records</li>
+                    {% endif %}
+                </ul>
+                <p class="mb-0">Please resolve these dependencies before attempting to delete the building.</p>
+                
+                <div class="action-buttons">
+                    <a href="{% url 'inventory:building_detail' building.id %}" class="btn-cancel">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Building
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h5>Deleting Building...</h5>
+            <p class="text-muted">Please wait while we process your request.</p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    const form = $('#deleteForm');
+    const deleteButton = $('#deleteButton');
+    const checkboxes = $('input[type="checkbox"]');
+    const loadingOverlay = $('#loadingOverlay');
+    
+    // Only run if form exists
+    if (form.length) {
+        // Enable/disable delete button based on all checkboxes
+        function updateDeleteButton() {
+            const allChecked = checkboxes.length === checkboxes.filter(':checked').length;
+            deleteButton.prop('disabled', !allChecked);
+        }
+        
+        // Check all checkboxes on change
+        checkboxes.on('change', updateDeleteButton);
+        
+        // Handle form submission
+        form.on('submit', function(e) {
+            e.preventDefault();
+            
+            const buildingName = "{{ building.name|escapejs }}";
+            const confirmMessage = `FINAL WARNING!\n\nYou are about to permanently delete building "${buildingName}" and ALL of its contents.\n\nThis includes:\n- All blocks and floors\n- All departments and locations\n- All device assignments\n- All historical data\n\nThis action CANNOT be undone!\n\nType "DELETE BUILDING" to confirm:`;
+            
+            const userInput = prompt(confirmMessage);
+            if (userInput !== 'DELETE BUILDING') {
+                alert('Deletion cancelled. You must type "DELETE BUILDING" exactly to confirm.');
+                return false;
+            }
+            
+            // Show loading overlay
+            loadingOverlay.show();
+            deleteButton.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i>Deleting...');
+            
+            // Submit the form
+            this.submit();
+        });
+        
+        // Double-click protection
+        deleteButton.on('click', function() {
+            $(this).prop('disabled', true);
+            setTimeout(() => {
+                updateDeleteButton();
+            }, 3000);
+        });
+    }
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        // Escape key to cancel
+        if (e.key === 'Escape') {
+            window.location.href = "{% url 'inventory:building_detail' building.id %}";
+        }
+    });
+    
+    // Prevent accidental navigation away
+    let formChanged = false;
+    checkboxes.on('change', function() {
+        formChanged = true;
+    });
+    
+    $(window).on('beforeunload', function(e) {
+        if (formChanged && form.length) {
+            e.preventDefault();
+            return 'You have made changes. Are you sure you want to leave?';
+        }
+    });
+    
+    // Remove beforeunload when form is submitted
+    if (form.length) {
+        form.on('submit', function() {
+            $(window).off('beforeunload');
+        });
+    }
+});
+</script>
+{% endblock %}
