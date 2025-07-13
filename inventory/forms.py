@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import date, timedelta
 import re
-
+from django.db.models import Q
 from .models import (
     Device, Assignment, Staff, Location, Building, Block, Floor, 
     Department, Room, DeviceType, DeviceCategory, DeviceSubCategory, 
@@ -492,7 +492,7 @@ class StaffForm(forms.ModelForm):
         # If editing, include current user
         if self.instance.pk and self.instance.user:
             self.fields['user'].queryset = User.objects.filter(
-                models.Q(staff__isnull=True) | models.Q(pk=self.instance.user.pk)
+                Q(staff__isnull=True) | Q(pk=self.instance.user.pk)
             )
 
 # ================================

@@ -8,14 +8,14 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from inventory.models import (
-    Building, Floor, Department, Room, Location,
+    Building, Block, Floor, Department, Room, Location,
     DeviceCategory, DeviceSubCategory, DeviceType, 
     Vendor, Staff
 )
 from authentication.models import UserRole, UserRoleAssignment
 
 class Command(BaseCommand):
-    help = 'Initial setup for BPS IT Inventory Management System'
+    help = 'Initial setup for BPS IT Inventory Management System with Block support'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -38,7 +38,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write(
-            self.style.SUCCESS('🏛️ Setting up BPS IT Inventory Management System...')
+            self.style.SUCCESS('🏛️ Setting up BPS IT Inventory Management System with Block Support...')
         )
 
         try:
@@ -47,7 +47,7 @@ class Command(BaseCommand):
                 if options['reset_data']:
                     self.reset_data()
                 
-                # Create organizational structure
+                # Create organizational structure with blocks
                 self.create_organization_structure()
                 
                 # Create user roles
@@ -65,6 +65,9 @@ class Command(BaseCommand):
                     options['admin_password']
                 )
 
+            # Display setup summary
+            self.display_setup_summary()
+            
             self.stdout.write(
                 self.style.SUCCESS('✅ BPS IT Inventory System setup completed successfully!')
             )
@@ -86,7 +89,7 @@ class Command(BaseCommand):
         models_to_clear = [
             UserRoleAssignment, Staff, DeviceType, DeviceSubCategory, 
             DeviceCategory, Vendor, Location, Room, Department, 
-            Floor, Building, UserRole
+            Floor, Block, Building, UserRole
         ]
         
         for model in models_to_clear:
@@ -98,10 +101,10 @@ class Command(BaseCommand):
                 self.stdout.write(f'  Warning: Could not clear {model.__name__}: {e}')
 
     def create_organization_structure(self):
-        """Create Bangladesh Parliament Secretariat organizational structure"""
-        self.stdout.write('🏢 Creating organizational structure...')
+        """Create Bangladesh Parliament Secretariat organizational structure with blocks"""
+        self.stdout.write('🏢 Creating organizational structure with blocks...')
         
-        # Main Parliament Building - Fixed code length
+        # Main Parliament Building
         main_building, created = Building.objects.get_or_create(
             code='BPS-MAIN-BLDG',
             defaults={
@@ -113,18 +116,67 @@ class Command(BaseCommand):
         )
         self.stdout.write(f'  {"Created" if created else "Found"} building: {main_building.name}')
 
-        # Create floors
-        floors_data = [
-            {'floor_number': 0, 'name': 'Ground Floor', 'description': 'Reception, Security, Public Areas'},
-            {'floor_number': 1, 'name': 'First Floor', 'description': 'Administrative Offices, Security Department'},
-            {'floor_number': 2, 'name': 'Second Floor', 'description': 'Administration Department, Finance'},
-            {'floor_number': 3, 'name': 'Third Floor', 'description': 'IT Department, Senior Management Offices'},
-            {'floor_number': 4, 'name': 'Fourth Floor', 'description': 'Legal Affairs, Committee Rooms, Archives'},
+        # Create blocks within the main building
+        blocks_data = [
+            {'code': 'EB', 'name': 'East Block', 'description': 'Eastern section of Parliament Building'},
+            {'code': 'WB', 'name': 'West Block', 'description': 'Western section of Parliament Building'},
+            {'code': 'NB', 'name': 'North Block', 'description': 'Northern section of Parliament Building'},
+            {'code': 'SB', 'name': 'South Block', 'description': 'Southern section of Parliament Building'},
+            {'code': 'PB', 'name': 'Parliament Block', 'description': 'Parliament Block of Parliament Building'},
         ]
 
+        blocks = {}
+        for block_data in blocks_data:
+            block, created = Block.objects.get_or_create(
+                building=main_building,
+                code=block_data['code'],
+                defaults={
+                    'name': block_data['name'],
+                    'description': block_data['description'],
+                    'is_active': True
+                }
+            )
+            blocks[block_data['code']] = block
+            if created:
+                self.stdout.write(f'    Created block: {block.name} ({block.code})')
+
+        # Create floors for each block
+        floors_data = [
+            # East Block - IT and Administration
+            {'block_code': 'EB', 'floor_number': 0, 'name': 'Ground Floor', 'description': 'Reception, Security Check'},
+            {'block_code': 'EB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Security Department, Guard Offices'},
+            {'block_code': 'EB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Administration Department'},
+            {'block_code': 'EB', 'floor_number': 3, 'name': 'Third Floor', 'description': 'IT Department'},
+            {'block_code': 'EB', 'floor_number': 4, 'name': 'Fourth Floor', 'description': 'Senior Management, Director Offices'},
+            
+            # West Block - Legislative Affairs
+            {'block_code': 'WB', 'floor_number': 0, 'name': 'Ground Floor', 'description': 'Session Hall Ground Level, Public Gallery'},
+            {'block_code': 'WB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Main Session Hall, Speaker Chamber'},
+            {'block_code': 'WB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Committee Rooms, MP Lounges'},
+            {'block_code': 'WB', 'floor_number': 3, 'name': 'Third Floor', 'description': 'Parliamentary Services, Protocol'},
+            
+            # North Block - Legal and Security
+            {'block_code': 'NB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Legal Affairs Department'},
+            {'block_code': 'NB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Security Control Center'},
+            {'block_code': 'NB', 'floor_number': 3, 'name': 'Third Floor', 'description': 'Legal Research, Documentation'},
+            
+            # South Block - Archives and Services
+            {'block_code': 'SB', 'floor_number': 0, 'name': 'Ground Floor', 'description': 'Public Services, Information Desk'},
+            {'block_code': 'SB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Archives Department'},
+            {'block_code': 'SB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Records Management'},
+            
+            # Central Block - Main Administration
+            {'block_code': 'CB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Secretary Office'},
+            {'block_code': 'CB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Administrative Hub'},
+            {'block_code': 'CB', 'floor_number': 3, 'name': 'Third Floor', 'description': 'Offices'},
+        ]
+
+        floors = {}
         for floor_data in floors_data:
+            block = blocks[floor_data['block_code']]
             floor, created = Floor.objects.get_or_create(
                 building=main_building,
+                block=block,
                 floor_number=floor_data['floor_number'],
                 defaults={
                     'name': floor_data['name'],
@@ -132,13 +184,15 @@ class Command(BaseCommand):
                     'is_active': True
                 }
             )
+            floors[f"{floor_data['block_code']}-{floor_data['floor_number']}"] = floor
             if created:
-                self.stdout.write(f'    Created floor: {floor.name}')
+                self.stdout.write(f'      Created floor: {block.name} - {floor.name}')
 
-        # Create departments with proper codes
+        # Create departments with proper block assignments
         departments_data = [
-            # IT Department (Floor 3)
+            # East Block Departments
             {
+                'block_code': 'EB',
                 'floor_number': 3,
                 'name': 'Information Technology Department',
                 'code': 'BPS-IT-DEPT',
@@ -146,8 +200,8 @@ class Command(BaseCommand):
                 'contact_email': 'it@parliament.gov.bd',
                 'contact_phone': '+880-2-9559022'
             },
-            # Administration Department (Floor 2)
             {
+                'block_code': 'EB',
                 'floor_number': 2,
                 'name': 'Administration Department',
                 'code': 'BPS-ADMIN-DEPT',
@@ -155,8 +209,8 @@ class Command(BaseCommand):
                 'contact_email': 'admin@parliament.gov.bd',
                 'contact_phone': '+880-2-9559011'
             },
-            # Finance Department (Floor 2)
             {
+                'block_code': 'EB',
                 'floor_number': 2,
                 'name': 'Finance Department',
                 'code': 'BPS-FIN-DEPT',
@@ -164,8 +218,8 @@ class Command(BaseCommand):
                 'contact_email': 'finance@parliament.gov.bd',
                 'contact_phone': '+880-2-9559012'
             },
-            # Security Department (Floor 1)
             {
+                'block_code': 'EB',
                 'floor_number': 1,
                 'name': 'Security Department',
                 'code': 'BPS-SEC-DEPT',
@@ -173,22 +227,52 @@ class Command(BaseCommand):
                 'contact_email': 'security@parliament.gov.bd',
                 'contact_phone': '+880-2-9559013'
             },
-            # Legal Affairs Department (Floor 4)
+            # North Block Departments
             {
-                'floor_number': 4,
+                'block_code': 'NB',
+                'floor_number': 1,
                 'name': 'Legal Affairs Department',
                 'code': 'BPS-LEGAL-DEPT',
                 'head_of_department': 'Legal Adviser',
                 'contact_email': 'legal@parliament.gov.bd',
                 'contact_phone': '+880-2-9559014'
             },
+            # South Block Departments
+            {
+                'block_code': 'SB',
+                'floor_number': 1,
+                'name': 'Archives Department',
+                'code': 'BPS-ARCH-DEPT',
+                'head_of_department': 'Chief Archivist',
+                'contact_email': 'archives@parliament.gov.bd',
+                'contact_phone': '+880-2-9559015'
+            },
+            # West Block Departments
+            {
+                'block_code': 'WB',
+                'floor_number': 3,
+                'name': 'Parliamentary Services Department',
+                'code': 'BPS-PARL-DEPT',
+                'head_of_department': 'Director (Parliamentary Services)',
+                'contact_email': 'parliamentary@parliament.gov.bd',
+                'contact_phone': '+880-2-9559016'
+            },
+            # Central Block Departments
+            {
+                'block_code': 'CB',
+                'floor_number': 2,
+                'name': 'Executive Administration',
+                'code': 'BPS-EXEC-DEPT',
+                'head_of_department': 'Secretary',
+                'contact_email': 'secretary@parliament.gov.bd',
+                'contact_phone': '+880-2-9559001'
+            },
         ]
 
+        departments = {}
         for dept_data in departments_data:
-            floor = Floor.objects.get(
-                building=main_building, 
-                floor_number=dept_data['floor_number']
-            )
+            floor_key = f"{dept_data['block_code']}-{dept_data['floor_number']}"
+            floor = floors[floor_key]
             
             dept, created = Department.objects.get_or_create(
                 code=dept_data['code'],
@@ -201,43 +285,62 @@ class Command(BaseCommand):
                     'is_active': True
                 }
             )
+            departments[dept_data['code']] = dept
             if created:
-                self.stdout.write(f'    Created department: {dept.name}')
+                self.stdout.write(f'        Created department: {dept.name} in {floor.block.name}')
 
             # Create sample rooms for each department
             self.create_department_rooms(dept)
 
     def create_department_rooms(self, department):
-        """Create rooms for a department"""
+        """Create rooms for a department with block-aware naming"""
+        block_code = department.floor.block.code
+        floor_num = department.floor.floor_number
+        
         rooms_config = {
             'BPS-IT-DEPT': [
-                {'room_number': 'IT-301', 'room_name': 'IT Director Office', 'capacity': 5},
-                {'room_number': 'IT-302', 'room_name': 'Server Room', 'capacity': 10},
-                {'room_number': 'IT-303', 'room_name': 'IT Support Office', 'capacity': 4},
-                {'room_number': 'IT-304', 'room_name': 'Network Operations Center', 'capacity': 3},
-                {'room_number': 'IT-305', 'room_name': 'Development Lab', 'capacity': 6},
+                {'room_number': f'IT-{block_code}{floor_num}01', 'room_name': 'IT Director Office', 'capacity': 5},
+                {'room_number': f'IT-{block_code}{floor_num}02', 'room_name': 'Server Room', 'capacity': 10},
+                {'room_number': f'IT-{block_code}{floor_num}03', 'room_name': 'IT Support Office', 'capacity': 4},
+                {'room_number': f'IT-{block_code}{floor_num}04', 'room_name': 'Network Operations Center', 'capacity': 3},
+                {'room_number': f'IT-{block_code}{floor_num}05', 'room_name': 'Development Lab', 'capacity': 6},
             ],
             'BPS-ADMIN-DEPT': [
-                {'room_number': 'AD-201', 'room_name': 'Deputy Secretary Office', 'capacity': 3},
-                {'room_number': 'AD-202', 'room_name': 'Administrative Office', 'capacity': 8},
-                {'room_number': 'AD-203', 'room_name': 'HR Office', 'capacity': 4},
-                {'room_number': 'AD-204', 'room_name': 'General Administration', 'capacity': 6},
+                {'room_number': f'AD-{block_code}{floor_num}01', 'room_name': 'Deputy Secretary Office', 'capacity': 3},
+                {'room_number': f'AD-{block_code}{floor_num}02', 'room_name': 'Administrative Office', 'capacity': 8},
+                {'room_number': f'AD-{block_code}{floor_num}03', 'room_name': 'HR Office', 'capacity': 4},
+                {'room_number': f'AD-{block_code}{floor_num}04', 'room_name': 'General Administration', 'capacity': 6},
             ],
             'BPS-FIN-DEPT': [
-                {'room_number': 'FN-205', 'room_name': 'Deputy Secretary Finance Office', 'capacity': 2},
-                {'room_number': 'FN-206', 'room_name': 'Accounts Office', 'capacity': 6},
-                {'room_number': 'FN-207', 'room_name': 'Audit Office', 'capacity': 3},
-                {'room_number': 'FN-208', 'room_name': 'Budget Planning', 'capacity': 4},
+                {'room_number': f'FN-{block_code}{floor_num}01', 'room_name': 'Deputy Secretary Finance Office', 'capacity': 2},
+                {'room_number': f'FN-{block_code}{floor_num}02', 'room_name': 'Accounts Office', 'capacity': 6},
+                {'room_number': f'FN-{block_code}{floor_num}03', 'room_name': 'Audit Office', 'capacity': 3},
+                {'room_number': f'FN-{block_code}{floor_num}04', 'room_name': 'Budget Planning', 'capacity': 4},
             ],
             'BPS-SEC-DEPT': [
-                {'room_number': 'SC-101', 'room_name': 'Security Control Room', 'capacity': 3},
-                {'room_number': 'SC-102', 'room_name': 'Guard Room', 'capacity': 4},
-                {'room_number': 'SC-103', 'room_name': 'Security Office', 'capacity': 2},
+                {'room_number': f'SC-{block_code}{floor_num}01', 'room_name': 'Security Control Room', 'capacity': 3},
+                {'room_number': f'SC-{block_code}{floor_num}02', 'room_name': 'Guard Room', 'capacity': 4},
+                {'room_number': f'SC-{block_code}{floor_num}03', 'room_name': 'Security Office', 'capacity': 2},
             ],
             'BPS-LEGAL-DEPT': [
-                {'room_number': 'LG-401', 'room_name': 'Legal Adviser Office', 'capacity': 2},
-                {'room_number': 'LG-402', 'room_name': 'Legal Documentation', 'capacity': 3},
-                {'room_number': 'LG-403', 'room_name': 'Legal Research', 'capacity': 4},
+                {'room_number': f'LG-{block_code}{floor_num}01', 'room_name': 'Legal Adviser Office', 'capacity': 2},
+                {'room_number': f'LG-{block_code}{floor_num}02', 'room_name': 'Legal Documentation', 'capacity': 3},
+                {'room_number': f'LG-{block_code}{floor_num}03', 'room_name': 'Legal Research', 'capacity': 4},
+            ],
+            'BPS-ARCH-DEPT': [
+                {'room_number': f'AR-{block_code}{floor_num}01', 'room_name': 'Chief Archivist Office', 'capacity': 2},
+                {'room_number': f'AR-{block_code}{floor_num}02', 'room_name': 'Archive Storage', 'capacity': 8},
+                {'room_number': f'AR-{block_code}{floor_num}03', 'room_name': 'Document Processing', 'capacity': 4},
+            ],
+            'BPS-PARL-DEPT': [
+                {'room_number': f'PS-{block_code}{floor_num}01', 'room_name': 'Director Office', 'capacity': 3},
+                {'room_number': f'PS-{block_code}{floor_num}02', 'room_name': 'Parliamentary Affairs', 'capacity': 6},
+                {'room_number': f'PS-{block_code}{floor_num}03', 'room_name': 'Protocol Office', 'capacity': 4},
+            ],
+            'BPS-EXEC-DEPT': [
+                {'room_number': f'EX-{block_code}{floor_num}01', 'room_name': 'Secretary Office', 'capacity': 2},
+                {'room_number': f'EX-{block_code}{floor_num}02', 'room_name': 'Executive Suite', 'capacity': 5},
+                {'room_number': f'EX-{block_code}{floor_num}03', 'room_name': 'Executive Meeting Room', 'capacity': 10},
             ],
         }
 
@@ -253,19 +356,20 @@ class Command(BaseCommand):
                     }
                 )
                 if created:
-                    # Create location for each room
+                    # Create location for each room (now with block support)
                     location, loc_created = Location.objects.get_or_create(
                         building=department.floor.building,
+                        block=department.floor.block,
                         floor=department.floor,
                         department=department,
                         room=room,
                         defaults={
-                            'description': f"{room_data['room_name']} - {room_data['room_number']}",
+                            'description': f"{room_data['room_name']} - {room_data['room_number']} in {department.floor.block.name}",
                             'is_active': True
                         }
                     )
                     if loc_created:
-                        self.stdout.write(f'      Created room: {room.room_number} - {room.room_name}')
+                        self.stdout.write(f'          Created room: {room.room_number} - {room.room_name} in {department.floor.block.name}')
 
     def create_user_roles(self):
         """Create user roles for the BPS system"""
@@ -696,6 +800,16 @@ class Command(BaseCommand):
                 'website': 'https://www.cisco.com.bd',
                 'tax_id': 'TIN-CISCO-BD-001',
             },
+            {
+                'name': 'HP Enterprise Bangladesh',
+                'vendor_type': 'HARDWARE_SUPPLIER',
+                'contact_person': 'Enterprise Sales Team',
+                'email': 'enterprise@hpe.com.bd',
+                'phone': '+880-2-6543210',
+                'address': 'Uttara, Dhaka, Bangladesh',
+                'website': 'https://www.hpe.com.bd',
+                'tax_id': 'TIN-HPE-BD-001',
+            },
         ]
 
         for vendor_data in vendors_data:
@@ -721,7 +835,7 @@ class Command(BaseCommand):
                 
                 # Update user details
                 user.email = 'admin@parliament.gov.bd'
-                user.first_name = 'Alamin'
+                user.first_name = 'Al-Amin'
                 user.last_name = 'Hossain'
                 user.is_superuser = True
                 user.is_staff = True
@@ -779,12 +893,13 @@ class Command(BaseCommand):
 
     def display_setup_summary(self):
         """Display setup summary statistics"""
-        self.stdout.write('\n' + '='*60)
-        self.stdout.write(self.style.SUCCESS('📊 SETUP SUMMARY'))
-        self.stdout.write('='*60)
+        self.stdout.write('\n' + '='*70)
+        self.stdout.write(self.style.SUCCESS('📊 BPS SETUP SUMMARY WITH BLOCK SUPPORT'))
+        self.stdout.write('='*70)
         
         # Count created objects
         buildings_count = Building.objects.count()
+        blocks_count = Block.objects.count()
         floors_count = Floor.objects.count()
         departments_count = Department.objects.count()
         rooms_count = Room.objects.count()
@@ -797,6 +912,7 @@ class Command(BaseCommand):
         users_count = User.objects.count()
         
         self.stdout.write(f'🏢 Buildings Created: {buildings_count}')
+        self.stdout.write(f'🧱 Blocks Created: {blocks_count}')
         self.stdout.write(f'🏬 Floors Created: {floors_count}')
         self.stdout.write(f'🏛️ Departments Created: {departments_count}')
         self.stdout.write(f'🚪 Rooms Created: {rooms_count}')
@@ -808,58 +924,34 @@ class Command(BaseCommand):
         self.stdout.write(f'👥 User Roles: {roles_count}')
         self.stdout.write(f'👤 Users: {users_count}')
         
-        self.stdout.write('\n' + '='*60)
+        # Display block summary
+        self.stdout.write('\n' + '='*70)
+        self.stdout.write(self.style.SUCCESS('🧱 BLOCK STRUCTURE SUMMARY'))
+        self.stdout.write('='*70)
+        
+        for building in Building.objects.all():
+            self.stdout.write(f'\n🏢 {building.name}:')
+            for block in building.blocks.all():
+                floors_in_block = block.floors.count()
+                departments_in_block = sum(floor.departments.count() for floor in block.floors.all())
+                self.stdout.write(f'  🧱 {block.name} ({block.code}): {floors_in_block} floors, {departments_in_block} departments')
+        
+        self.stdout.write('\n' + '='*70)
         self.stdout.write(self.style.SUCCESS('🎯 NEXT STEPS'))
-        self.stdout.write('='*60)
+        self.stdout.write('='*70)
         self.stdout.write('1. 🌐 Access the system at: http://localhost:8000')
         self.stdout.write('2. 🔑 Login with the admin credentials provided above')
         self.stdout.write('3. 📱 Start adding devices through the web interface')
         self.stdout.write('4. 👥 Create additional user accounts and assign roles')
         self.stdout.write('5. 🏷️ Generate QR codes for existing devices')
         self.stdout.write('6. 📊 Begin device assignments and tracking')
-        self.stdout.write('\n' + '='*60)
-
-    def handle(self, *args, **options):
-        self.stdout.write(
-            self.style.SUCCESS('🏛️ Setting up BPS IT Inventory Management System...')
-        )
-
-        try:
-            with transaction.atomic():
-                # Reset data if requested
-                if options['reset_data']:
-                    self.reset_data()
-                
-                # Create organizational structure
-                self.create_organization_structure()
-                
-                # Create user roles
-                self.create_user_roles()
-                
-                # Create device categories and types
-                self.create_device_categories()
-                
-                # Create sample vendors
-                self.create_sample_vendors()
-                
-                # Create superuser (IT Administrator)
-                self.create_superuser(
-                    options['admin_username'], 
-                    options['admin_password']
-                )
-
-            # Display setup summary
-            self.display_setup_summary()
-            
-            self.stdout.write(
-                self.style.SUCCESS('✅ BPS IT Inventory System setup completed successfully!')
-            )
-            self.stdout.write(
-                self.style.WARNING(f'🔑 Admin Login: {options["admin_username"]} / {options["admin_password"]}')
-            )
-            
-        except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f'❌ Setup failed: {str(e)}')
-            )
-            raise
+        self.stdout.write('7. 🧱 Explore the new block-based location hierarchy')
+        self.stdout.write('\n' + '='*70)
+        
+        # Location hierarchy examples
+        self.stdout.write(self.style.SUCCESS('📍 LOCATION HIERARCHY EXAMPLES'))
+        self.stdout.write('='*70)
+        sample_locations = Location.objects.all()[:3]
+        for loc in sample_locations:
+            self.stdout.write(f'  📍 {loc}')
+        self.stdout.write('\n' + '='*70)
