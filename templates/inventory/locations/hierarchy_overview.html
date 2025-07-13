@@ -1,0 +1,805 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Location Hierarchy Overview - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hierarchy-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .hierarchy-stats {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        display: block;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+    
+    .hierarchy-controls {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 1px solid #e9ecef;
+    }
+    
+    .view-toggle {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .view-toggle .btn {
+        border-radius: 0.375rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .view-toggle .btn.active {
+        background: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+    
+    .hierarchy-container {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+        border: 1px solid #e9ecef;
+        min-height: 600px;
+    }
+    
+    .tree-view {
+        font-family: monospace;
+        line-height: 1.8;
+    }
+    
+    .tree-node {
+        position: relative;
+        padding: 0.25rem 0;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .tree-node:hover {
+        background: #f8f9fa;
+        border-radius: 0.25rem;
+    }
+    
+    .tree-node.expanded > .tree-children {
+        display: block;
+    }
+    
+    .tree-node.collapsed > .tree-children {
+        display: none;
+    }
+    
+    .tree-toggle {
+        display: inline-block;
+        width: 20px;
+        text-align: center;
+        color: #6c757d;
+        margin-right: 0.5rem;
+    }
+    
+    .tree-icon {
+        margin-right: 0.5rem;
+        width: 16px;
+        text-align: center;
+    }
+    
+    .tree-label {
+        color: #212529;
+        font-weight: 500;
+    }
+    
+    .tree-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-left: 0.5rem;
+    }
+    
+    .tree-children {
+        margin-left: 2rem;
+        border-left: 2px solid #e9ecef;
+        padding-left: 1rem;
+    }
+    
+    .level-1 { margin-left: 0; }
+    .level-2 { margin-left: 1.5rem; }
+    .level-3 { margin-left: 3rem; }
+    .level-4 { margin-left: 4.5rem; }
+    .level-5 { margin-left: 6rem; }
+    
+    .building-node {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        color: white;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+    }
+    
+    .building-node .tree-label {
+        color: white;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .building-node .tree-meta {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .block-node {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 0.5rem 0.75rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+    }
+    
+    .floor-node {
+        background: #f3e5f5;
+        border-left: 4px solid #9c27b0;
+        padding: 0.5rem 0.75rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+    }
+    
+    .department-node {
+        background: #e8f5e8;
+        border-left: 4px solid #4caf50;
+        padding: 0.5rem 0.75rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+    }
+    
+    .room-node {
+        background: #fff3e0;
+        border-left: 4px solid #ff9800;
+        padding: 0.5rem 0.75rem;
+        margin: 0.25rem 0;
+        border-radius: 0.25rem;
+    }
+    
+    .grid-view {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .location-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        transition: all 0.2s ease;
+    }
+    
+    .location-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    
+    .location-card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .location-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        color: white;
+        font-size: 1.25rem;
+    }
+    
+    .building-icon { background: linear-gradient(135deg, #007bff, #0056b3); }
+    .block-icon { background: linear-gradient(135deg, #2196f3, #1976d2); }
+    .floor-icon { background: linear-gradient(135deg, #9c27b0, #7b1fa2); }
+    .department-icon { background: linear-gradient(135deg, #4caf50, #388e3c); }
+    .room-icon { background: linear-gradient(135deg, #ff9800, #f57c00); }
+    
+    .location-title {
+        font-weight: 600;
+        color: #212529;
+        margin: 0;
+    }
+    
+    .location-subtitle {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .location-stats {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .location-stat {
+        text-align: center;
+        flex: 1;
+    }
+    
+    .location-stat-number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #28a745;
+        display: block;
+    }
+    
+    .location-stat-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-transform: uppercase;
+    }
+    
+    .search-controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .search-input {
+        flex: 1;
+        min-width: 300px;
+    }
+    
+    .filter-dropdown {
+        min-width: 150px;
+    }
+    
+    .hierarchy-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .map-view {
+        position: relative;
+        min-height: 500px;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .map-building {
+        position: absolute;
+        background: rgba(0, 123, 255, 0.1);
+        border: 2px solid #007bff;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .map-building:hover {
+        background: rgba(0, 123, 255, 0.2);
+        transform: scale(1.05);
+    }
+    
+    .map-building-label {
+        position: absolute;
+        bottom: 5px;
+        left: 5px;
+        background: rgba(0, 123, 255, 0.9);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .breadcrumb-nav {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .hierarchy-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .breadcrumb-item {
+        color: #6c757d;
+        text-decoration: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s ease;
+    }
+    
+    .breadcrumb-item:hover {
+        background: #e9ecef;
+        color: #495057;
+    }
+    
+    .breadcrumb-item.active {
+        background: #28a745;
+        color: white;
+    }
+    
+    .breadcrumb-separator {
+        color: #dee2e6;
+        margin: 0 0.25rem;
+    }
+    
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .quick-stat-card {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+        transition: transform 0.2s ease;
+    }
+    
+    .quick-stat-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .quick-stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #28a745;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .quick-stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .quick-stat-change {
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .quick-stat-change.positive {
+        color: #28a745;
+    }
+    
+    .quick-stat-change.negative {
+        color: #dc3545;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:location_list' %}">Locations</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Hierarchy Overview</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="hierarchy-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-0">
+                        <i class="fas fa-sitemap me-3"></i>
+                        Location Hierarchy Overview
+                    </h1>
+                    <p class="mb-0 mt-2 opacity-75">
+                        Complete organizational structure and location management
+                    </p>
+                    <div class="hierarchy-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_buildings }}</span>
+                            <div class="stat-label">Buildings</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_blocks }}</span>
+                            <div class="stat-label">Blocks</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_floors }}</span>
+                            <div class="stat-label">Floors</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_departments }}</span>
+                            <div class="stat-label">Departments</div>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_rooms }}</span>
+                            <div class="stat-label">Rooms</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="hierarchy-actions">
+                        <a href="{% url 'inventory:hierarchy_export' %}" class="btn btn-light">
+                            <i class="fas fa-download me-2"></i>Export
+                        </a>
+                        <a href="{% url 'inventory:location_create' %}" class="btn btn-light">
+                            <i class="fas fa-plus me-2"></i>Add Location
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Statistics -->
+    <div class="quick-stats">
+        <div class="quick-stat-card">
+            <span class="quick-stat-number">{{ total_locations }}</span>
+            <div class="quick-stat-label">Total Locations</div>
+            <div class="quick-stat-change positive">
+                <i class="fas fa-arrow-up"></i> {{ locations_growth }}% this month
+            </div>
+        </div>
+        
+        <div class="quick-stat-card">
+            <span class="quick-stat-number">{{ active_assignments }}</span>
+            <div class="quick-stat-label">Active Assignments</div>
+            <div class="quick-stat-change">
+                <i class="fas fa-info-circle"></i> Across all locations
+            </div>
+        </div>
+        
+        <div class="quick-stat-card">
+            <span class="quick-stat-number">{{ utilization_rate }}%</span>
+            <div class="quick-stat-label">Space Utilization</div>
+            <div class="quick-stat-change {{ utilization_trend|yesno:'positive,negative' }}">
+                <i class="fas fa-arrow-{{ utilization_trend|yesno:'up,down' }}"></i> {{ utilization_change }}% from last month
+            </div>
+        </div>
+        
+        <div class="quick-stat-card">
+            <span class="quick-stat-number">{{ maintenance_requests }}</span>
+            <div class="quick-stat-label">Pending Maintenance</div>
+            <div class="quick-stat-change">
+                <i class="fas fa-clock"></i> Location-based requests
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="hierarchy-controls">
+        <div class="search-controls">
+            <div class="search-input">
+                <input type="text" class="form-control" id="hierarchySearch" placeholder="Search locations, departments, rooms...">
+            </div>
+            <select class="form-select filter-dropdown" id="levelFilter">
+                <option value="">All Levels</option>
+                <option value="building">Buildings Only</option>
+                <option value="block">Blocks Only</option>
+                <option value="floor">Floors Only</option>
+                <option value="department">Departments Only</option>
+                <option value="room">Rooms Only</option>
+            </select>
+            <select class="form-select filter-dropdown" id="statusFilter">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+        </div>
+        
+        <div class="view-toggle">
+            <button class="btn btn-outline-primary active" data-view="tree">
+                <i class="fas fa-sitemap me-1"></i>Tree View
+            </button>
+            <button class="btn btn-outline-primary" data-view="grid">
+                <i class="fas fa-th me-1"></i>Grid View
+            </button>
+            <button class="btn btn-outline-primary" data-view="map">
+                <i class="fas fa-map me-1"></i>Map View
+            </button>
+        </div>
+    </div>
+
+    <!-- Hierarchy Display -->
+    <div class="hierarchy-container">
+        <!-- Tree View -->
+        <div id="treeView" class="view-content">
+            {% for building in buildings %}
+            <div class="tree-node building-node expanded" data-level="building" data-id="{{ building.id }}">
+                <span class="tree-toggle">
+                    <i class="fas fa-minus"></i>
+                </span>
+                <span class="tree-icon">
+                    <i class="fas fa-building"></i>
+                </span>
+                <span class="tree-label">{{ building.name }}</span>
+                <span class="tree-meta">({{ building.code }}) - {{ building.blocks.count }} blocks</span>
+                
+                <div class="tree-children">
+                    {% for block in building.blocks.all %}
+                    <div class="tree-node block-node collapsed" data-level="block" data-id="{{ block.id }}">
+                        <span class="tree-toggle">
+                            <i class="fas fa-plus"></i>
+                        </span>
+                        <span class="tree-icon">
+                            <i class="fas fa-th-large"></i>
+                        </span>
+                        <span class="tree-label">{{ block.name }}</span>
+                        <span class="tree-meta">({{ block.code }}) - {{ block.floors.count }} floors</span>
+                        
+                        <div class="tree-children">
+                            {% for floor in block.floors.all %}
+                            <div class="tree-node floor-node collapsed" data-level="floor" data-id="{{ floor.id }}">
+                                <span class="tree-toggle">
+                                    <i class="fas fa-plus"></i>
+                                </span>
+                                <span class="tree-icon">
+                                    <i class="fas fa-layer-group"></i>
+                                </span>
+                                <span class="tree-label">{{ floor.name }}</span>
+                                <span class="tree-meta">({{ floor.floor_number }}) - {{ floor.departments.count }} departments</span>
+                                
+                                <div class="tree-children">
+                                    {% for department in floor.departments.all %}
+                                    <div class="tree-node department-node collapsed" data-level="department" data-id="{{ department.id }}">
+                                        <span class="tree-toggle">
+                                            <i class="fas fa-plus"></i>
+                                        </span>
+                                        <span class="tree-icon">
+                                            <i class="fas fa-users"></i>
+                                        </span>
+                                        <span class="tree-label">{{ department.name }}</span>
+                                        <span class="tree-meta">({{ department.code }}) - {{ department.rooms.count }} rooms</span>
+                                        
+                                        <div class="tree-children">
+                                            {% for room in department.rooms.all %}
+                                            <div class="tree-node room-node" data-level="room" data-id="{{ room.id }}">
+                                                <span class="tree-toggle"></span>
+                                                <span class="tree-icon">
+                                                    <i class="fas fa-door-open"></i>
+                                                </span>
+                                                <span class="tree-label">{{ room.name }}</span>
+                                                <span class="tree-meta">({{ room.room_number }}) - {{ room.room_type|default:"General" }}</span>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% empty %}
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="fas fa-sitemap"></i>
+                </div>
+                <h5>No Location Hierarchy Found</h5>
+                <p>Start by creating your first building to establish the organizational structure.</p>
+                <a href="{% url 'inventory:building_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Create Building
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Grid View -->
+        <div id="gridView" class="view-content grid-view" style="display: none;">
+            {% for building in buildings %}
+            <div class="location-card" data-level="building">
+                <div class="location-card-header">
+                    <div class="location-icon building-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div>
+                        <h6 class="location-title">{{ building.name }}</h6>
+                        <p class="location-subtitle">{{ building.code }} - Building</p>
+                    </div>
+                </div>
+                <div class="location-stats">
+                    <div class="location-stat">
+                        <span class="location-stat-number">{{ building.blocks.count }}</span>
+                        <div class="location-stat-label">Blocks</div>
+                    </div>
+                    <div class="location-stat">
+                        <span class="location-stat-number">{{ building.total_floors }}</span>
+                        <div class="location-stat-label">Floors</div>
+                    </div>
+                    <div class="location-stat">
+                        <span class="location-stat-number">{{ building.total_rooms }}</span>
+                        <div class="location-stat-label">Rooms</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Map View -->
+        <div id="mapView" class="view-content map-view" style="display: none;">
+            {% for building in buildings %}
+            <div class="map-building" 
+                 style="left: {{ building.map_x|default:'10' }}%; top: {{ building.map_y|default:'10' }}%; width: {{ building.map_width|default:'150' }}px; height: {{ building.map_height|default:'100' }}px;"
+                 data-building="{{ building.id }}">
+                <div class="map-building-label">{{ building.name }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // View toggle functionality
+    $('.view-toggle .btn').on('click', function() {
+        const view = $(this).data('view');
+        
+        // Update active button
+        $('.view-toggle .btn').removeClass('active');
+        $(this).addClass('active');
+        
+        // Show/hide views
+        $('.view-content').hide();
+        $(`#${view}View`).show();
+    });
+    
+    // Tree node toggle
+    $(document).on('click', '.tree-toggle', function(e) {
+        e.stopPropagation();
+        const node = $(this).closest('.tree-node');
+        const isExpanded = node.hasClass('expanded');
+        
+        if (isExpanded) {
+            node.removeClass('expanded').addClass('collapsed');
+            $(this).find('i').removeClass('fa-minus').addClass('fa-plus');
+        } else {
+            node.removeClass('collapsed').addClass('expanded');
+            $(this).find('i').removeClass('fa-plus').addClass('fa-minus');
+        }
+    });
+    
+    // Search functionality
+    $('#hierarchySearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        
+        $('.tree-node').each(function() {
+            const text = $(this).find('.tree-label').text().toLowerCase();
+            const match = text.includes(searchTerm);
+            
+            if (searchTerm === '' || match) {
+                $(this).show();
+                // Show parent nodes if child matches
+                $(this).parents('.tree-node').show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+    
+    // Level filter
+    $('#levelFilter').on('change', function() {
+        const level = $(this).val();
+        
+        if (level === '') {
+            $('.tree-node').show();
+        } else {
+            $('.tree-node').hide();
+            $(`.tree-node[data-level="${level}"]`).show();
+            // Show parent nodes
+            $(`.tree-node[data-level="${level}"]`).parents('.tree-node').show();
+        }
+    });
+    
+    // Status filter
+    $('#statusFilter').on('change', function() {
+        const status = $(this).val();
+        // Implementation depends on how status is stored in data attributes
+    });
+    
+    // Tree node click (for navigation)
+    $('.tree-node').on('click', function(e) {
+        if ($(e.target).hasClass('tree-toggle') || $(e.target).parent().hasClass('tree-toggle')) {
+            return;
+        }
+        
+        const level = $(this).data('level');
+        const id = $(this).data('id');
+        
+        // Navigate to detail page based on level
+        let url = '';
+        switch(level) {
+            case 'building':
+                url = `{% url 'inventory:building_detail' 0 %}`.replace('0', id);
+                break;
+            case 'floor':
+                url = `{% url 'inventory:floor_detail' 0 %}`.replace('0', id);
+                break;
+            case 'department':
+                url = `{% url 'inventory:department_detail' 0 %}`.replace('0', id);
+                break;
+            case 'room':
+                url = `{% url 'inventory:room_detail' 0 %}`.replace('0', id);
+                break;
+        }
+        
+        if (url) {
+            window.location.href = url;
+        }
+    });
+    
+    // Map building click
+    $('.map-building').on('click', function() {
+        const buildingId = $(this).data('building');
+        const url = `{% url 'inventory:building_detail' 0 %}`.replace('0', buildingId);
+        window.location.href = url;
+    });
+    
+    // Expand all / Collapse all
+    $(document).on('keydown', function(e) {
+        if (e.ctrlKey) {
+            if (e.key === 'e') {
+                e.preventDefault();
+                // Expand all
+                $('.tree-node').removeClass('collapsed').addClass('expanded');
+                $('.tree-toggle i').removeClass('fa-plus').addClass('fa-minus');
+            } else if (e.key === 'c') {
+                e.preventDefault();
+                // Collapse all
+                $('.tree-node').removeClass('expanded').addClass('collapsed');
+                $('.tree-toggle i').removeClass('fa-minus').addClass('fa-plus');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
