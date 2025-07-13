@@ -1,0 +1,712 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Vendors - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .vendors-header {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .vendors-stats {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        display: block;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+    
+    .vendor-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+        position: relative;
+    }
+    
+    .vendor-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    
+    .vendor-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .vendor-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.75rem;
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .vendor-info h5 {
+        margin: 0 0 0.25rem 0;
+        font-weight: 600;
+        color: #212529;
+    }
+    
+    .vendor-type {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin: 0;
+    }
+    
+    .vendor-contact {
+        color: #495057;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .vendor-contact i {
+        margin-right: 0.5rem;
+        color: #6c757d;
+        width: 16px;
+    }
+    
+    .vendor-stats {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .vendor-stat {
+        text-align: center;
+    }
+    
+    .vendor-stat-number {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #495057;
+        display: block;
+    }
+    
+    .vendor-stat-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .vendor-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .filter-section {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .table-responsive {
+        border-radius: 0.5rem;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        border: none;
+        font-weight: 600;
+        color: #495057;
+        padding: 1rem 0.75rem;
+    }
+    
+    .table td {
+        border: none;
+        padding: 1rem 0.75rem;
+        vertical-align: middle;
+    }
+    
+    .table tbody tr {
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .vendor-logo {
+        width: 40px;
+        height: 40px;
+        border-radius: 0.5rem;
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        margin-right: 0.75rem;
+    }
+    
+    .vendor-name {
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.25rem;
+    }
+    
+    .contact-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-action {
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .btn-view {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .btn-view:hover {
+        background: #bbdefb;
+        color: #1565c0;
+    }
+    
+    .btn-edit {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .btn-edit:hover {
+        background: #ffe0b2;
+        color: #ef6c00;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .search-input {
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        transition: border-color 0.3s ease;
+    }
+    
+    .search-input:focus {
+        border-color: #17a2b8;
+        box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+        outline: none;
+    }
+    
+    .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        transition: border-color 0.3s ease;
+    }
+    
+    .form-select:focus {
+        border-color: #17a2b8;
+        box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+        outline: none;
+    }
+    
+    .grid-view .vendor-card {
+        height: 100%;
+    }
+    
+    .list-view .table-responsive {
+        background: white;
+        border-radius: 0.5rem;
+    }
+    
+    .view-toggle {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .view-toggle-btn {
+        padding: 0.5rem 1rem;
+        border: 2px solid #e9ecef;
+        border-radius: 0.375rem;
+        background: white;
+        color: #6c757d;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .view-toggle-btn.active {
+        border-color: #17a2b8;
+        background: #17a2b8;
+        color: white;
+    }
+    
+    .vendor-type-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .type-hardware {
+        background: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .type-software {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .type-service {
+        background: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .type-maintenance {
+        background: #fce4ec;
+        color: #c2185b;
+    }
+    
+    .type-consultant {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="vendors-header">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h2 mb-2">
+                    <i class="fas fa-truck me-3"></i>Vendor Management
+                </h1>
+                <p class="mb-0 opacity-75">Manage suppliers, service providers, and business partners</p>
+                <div class="vendors-stats">
+                    <div class="stat-item">
+                        <span class="stat-number">{{ total_vendors|default:0 }}</span>
+                        <span class="stat-label">Total Vendors</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ active_vendors|default:0 }}</span>
+                        <span class="stat-label">Active</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ hardware_vendors|default:0 }}</span>
+                        <span class="stat-label">Hardware</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">{{ service_vendors|default:0 }}</span>
+                        <span class="stat-label">Service</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <a href="{% url 'inventory:vendor_create' %}" class="btn btn-light btn-lg">
+                    <i class="fas fa-plus me-2"></i>Add New Vendor
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters & Search -->
+<div class="container-fluid">
+    <div class="filter-section">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="search" class="form-label">Search Vendors</label>
+                <input type="text" 
+                       class="form-control search-input" 
+                       id="search" 
+                       name="search" 
+                       value="{{ request.GET.search }}" 
+                       placeholder="Search by name, contact person, or email...">
+            </div>
+            <div class="col-md-2">
+                <label for="vendor_type" class="form-label">Vendor Type</label>
+                <select class="form-select" id="vendor_type" name="vendor_type">
+                    <option value="">All Types</option>
+                    <option value="HARDWARE_SUPPLIER" {% if request.GET.vendor_type == 'HARDWARE_SUPPLIER' %}selected{% endif %}>Hardware Supplier</option>
+                    <option value="SOFTWARE_VENDOR" {% if request.GET.vendor_type == 'SOFTWARE_VENDOR' %}selected{% endif %}>Software Vendor</option>
+                    <option value="SERVICE_PROVIDER" {% if request.GET.vendor_type == 'SERVICE_PROVIDER' %}selected{% endif %}>Service Provider</option>
+                    <option value="MAINTENANCE_CONTRACTOR" {% if request.GET.vendor_type == 'MAINTENANCE_CONTRACTOR' %}selected{% endif %}>Maintenance</option>
+                    <option value="CONSULTANT" {% if request.GET.vendor_type == 'CONSULTANT' %}selected{% endif %}>Consultant</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">All Status</option>
+                    <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-2"></i>Filter
+                </button>
+            </div>
+            <div class="col-md-2">
+                <div class="view-toggle">
+                    <button type="button" class="view-toggle-btn active" data-view="grid">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button type="button" class="view-toggle-btn" data-view="list">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Grid View -->
+    <div id="grid-view" class="grid-view">
+        <div class="row">
+            {% for vendor in vendors %}
+            <div class="col-lg-6 col-xl-4">
+                <div class="vendor-card">
+                    <div class="status-badge {% if vendor.is_active %}status-active{% else %}status-inactive{% endif %}">
+                        {% if vendor.is_active %}Active{% else %}Inactive{% endif %}
+                    </div>
+                    
+                    <div class="vendor-header">
+                        <div class="vendor-icon">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="vendor-info">
+                            <h5>{{ vendor.name }}</h5>
+                            <div class="vendor-type-badge type-{{ vendor.vendor_type|lower }}">
+                                {{ vendor.get_vendor_type_display }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if vendor.contact_person %}
+                    <div class="vendor-contact">
+                        <i class="fas fa-user"></i>
+                        <span>{{ vendor.contact_person }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    {% if vendor.email %}
+                    <div class="vendor-contact">
+                        <i class="fas fa-envelope"></i>
+                        <a href="mailto:{{ vendor.email }}" class="text-decoration-none">{{ vendor.email }}</a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if vendor.phone %}
+                    <div class="vendor-contact">
+                        <i class="fas fa-phone"></i>
+                        <a href="tel:{{ vendor.phone }}" class="text-decoration-none">{{ vendor.phone }}</a>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="vendor-stats">
+                        <div class="vendor-stat">
+                            <span class="vendor-stat-number">{{ vendor.device_count|default:0 }}</span>
+                            <span class="vendor-stat-label">Devices</span>
+                        </div>
+                        <div class="vendor-stat">
+                            <span class="vendor-stat-number">{{ vendor.maintenance_count|default:0 }}</span>
+                            <span class="vendor-stat-label">Services</span>
+                        </div>
+                        <div class="vendor-stat">
+                            <span class="vendor-stat-number">{{ vendor.contract_value|default:0 }}</span>
+                            <span class="vendor-stat-label">Contracts</span>
+                        </div>
+                    </div>
+                    
+                    <div class="vendor-actions">
+                        <a href="{% url 'inventory:vendor_detail' vendor.id %}" class="btn-action btn-view">
+                            <i class="fas fa-eye"></i>View
+                        </a>
+                        <a href="{% url 'inventory:vendor_edit' vendor.id %}" class="btn-action btn-edit">
+                            <i class="fas fa-edit"></i>Edit
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="empty-state">
+                    <i class="fas fa-truck"></i>
+                    <h4>No Vendors Found</h4>
+                    <p>No vendors match your current filters. Try adjusting your search criteria or add a new vendor.</p>
+                    <a href="{% url 'inventory:vendor_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add First Vendor
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- List View -->
+    <div id="list-view" class="list-view" style="display: none;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Vendor</th>
+                        <th>Type</th>
+                        <th>Contact Information</th>
+                        <th>Statistics</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vendor in vendors %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="vendor-logo">
+                                    {{ vendor.name|first|upper }}
+                                </div>
+                                <div>
+                                    <div class="vendor-name">{{ vendor.name }}</div>
+                                    {% if vendor.website %}
+                                    <a href="{{ vendor.website }}" target="_blank" class="text-muted text-decoration-none small">
+                                        <i class="fas fa-external-link-alt me-1"></i>{{ vendor.website|slice:":30" }}
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="vendor-type-badge type-{{ vendor.vendor_type|lower }}">
+                                {{ vendor.get_vendor_type_display }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="contact-info">
+                                {% if vendor.contact_person %}
+                                <span><i class="fas fa-user me-1"></i>{{ vendor.contact_person }}</span>
+                                {% endif %}
+                                {% if vendor.email %}
+                                <a href="mailto:{{ vendor.email }}" class="text-decoration-none">
+                                    <i class="fas fa-envelope me-1"></i>{{ vendor.email }}
+                                </a>
+                                {% endif %}
+                                {% if vendor.phone %}
+                                <a href="tel:{{ vendor.phone }}" class="text-decoration-none">
+                                    <i class="fas fa-phone me-1"></i>{{ vendor.phone }}
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-3">
+                                <small class="text-muted">
+                                    <strong>{{ vendor.device_count|default:0 }}</strong> devices
+                                </small>
+                                <small class="text-muted">
+                                    <strong>{{ vendor.maintenance_count|default:0 }}</strong> services
+                                </small>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge {% if vendor.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if vendor.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <a href="{% url 'inventory:vendor_detail' vendor.id %}" class="btn-action btn-view">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'inventory:vendor_edit' vendor.id %}" class="btn-action btn-edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <i class="fas fa-truck"></i>
+                                <h4>No Vendors Found</h4>
+                                <p>No vendors match your current filters.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav aria-label="Vendor pagination" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.vendor_type %}vendor_type={{ request.GET.vendor_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ page_obj.previous_page_number }}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active">
+                <span class="page-link">{{ num }}</span>
+            </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.vendor_type %}vendor_type={{ request.GET.vendor_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ num }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.vendor_type %}vendor_type={{ request.GET.vendor_type }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ page_obj.next_page_number }}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // View toggle functionality
+    const viewToggleBtns = document.querySelectorAll('.view-toggle-btn');
+    const gridView = document.getElementById('grid-view');
+    const listView = document.getElementById('list-view');
+    
+    viewToggleBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const view = this.dataset.view;
+            
+            // Update button states
+            viewToggleBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Toggle views
+            if (view === 'grid') {
+                gridView.style.display = 'block';
+                listView.style.display = 'none';
+            } else {
+                gridView.style.display = 'none';
+                listView.style.display = 'block';
+            }
+            
+            // Save preference
+            localStorage.setItem('vendorViewMode', view);
+        });
+    });
+    
+    // Restore saved view preference
+    const savedView = localStorage.getItem('vendorViewMode');
+    if (savedView) {
+        const btn = document.querySelector(`[data-view="${savedView}"]`);
+        if (btn) {
+            btn.click();
+        }
+    }
+    
+    // Auto-submit form on filter change
+    const filterSelects = document.querySelectorAll('#vendor_type, #status');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            this.form.submit();
+        });
+    });
+});
+</script>
+{% endblock %}

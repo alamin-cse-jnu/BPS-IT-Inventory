@@ -1,0 +1,598 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Department - {{ department.name }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-header {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .delete-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+    
+    .delete-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .delete-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .card-body {
+        padding: 2rem;
+    }
+    
+    .department-info {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border-left: 4px solid #dc3545;
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .info-value {
+        color: #212529;
+    }
+    
+    .warning-section {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .warning-section h5 {
+        color: #856404;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .warning-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .warning-list {
+        color: #856404;
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .blocker-section {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .blocker-section h5 {
+        color: #721c24;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .blocker-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .blocker-list {
+        color: #721c24;
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .alternative-actions {
+        background: #e7f1ff;
+        border: 1px solid #b8daff;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .alternative-actions h5 {
+        color: #004085;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .alternative-actions h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .alternative-list {
+        margin: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .alternative-list li {
+        margin-bottom: 0.5rem;
+        color: #004085;
+    }
+    
+    .alternative-list a {
+        color: #0066cc;
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .alternative-list a:hover {
+        text-decoration: underline;
+    }
+    
+    .room-item, .assignment-item {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 0.25rem;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .room-info, .assignment-info {
+        flex: 1;
+    }
+    
+    .room-name, .assignment-device {
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .room-meta, .assignment-meta {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .confirmation-section {
+        background: #e3f2fd;
+        border: 1px solid #bbdefb;
+        border-radius: 0.375rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .confirmation-section h5 {
+        color: #1976d2;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .confirmation-section h5 i {
+        margin-right: 0.5rem;
+    }
+    
+    .form-check {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .form-check-input {
+        margin-right: 0.75rem;
+    }
+    
+    .form-check-label {
+        color: #1976d2;
+        font-weight: 500;
+        margin: 0;
+    }
+    
+    .delete-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .btn-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+    }
+    
+    .btn-danger:hover {
+        background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+    }
+    
+    .btn-danger:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+    }
+    
+    .impact-summary {
+        background: #fff;
+        border: 2px solid #dc3545;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .impact-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .impact-item {
+        text-align: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+    }
+    
+    .impact-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #dc3545;
+        display: block;
+    }
+    
+    .impact-label {
+        color: #6c757d;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:location_list' %}">Locations</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:department_list' %}">Departments</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:department_detail' department.id %}">{{ department.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Delete</li>
+        </ol>
+    </nav>
+
+    <!-- Delete Header -->
+    <div class="delete-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="delete-icon">
+                        <i class="fas fa-trash-alt"></i>
+                    </div>
+                    <h1 class="mb-0">Delete Department</h1>
+                    <p class="mb-0 mt-2 opacity-75">
+                        Permanently remove "{{ department.name }}" from the system
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'inventory:department_detail' department.id %}" class="btn btn-light">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Department
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="delete-container">
+        <!-- Department Information -->
+        <div class="department-info">
+            <h5>
+                <i class="fas fa-users me-2"></i>
+                Department to be Deleted
+            </h5>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Name:</span>
+                    <span class="info-value">{{ department.name }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Code:</span>
+                    <span class="info-value">{{ department.code }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Location:</span>
+                    <span class="info-value">{{ department.floor.building.name }} - {{ department.floor.name }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Created:</span>
+                    <span class="info-value">{{ department.created_at|date:"M d, Y" }}</span>
+                </div>
+                {% if department.head_of_department %}
+                <div class="info-item">
+                    <span class="info-label">Department Head:</span>
+                    <span class="info-value">{{ department.head_of_department }}</span>
+                </div>
+                {% endif %}
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">
+                        <span class="badge {% if department.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ department.is_active|yesno:"Active,Inactive" }}
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Impact Summary -->
+        <div class="impact-summary">
+            <h5>
+                <i class="fas fa-chart-bar me-2"></i>
+                Deletion Impact Summary
+            </h5>
+            <div class="impact-grid">
+                <div class="impact-item">
+                    <span class="impact-number">{{ department.rooms.count }}</span>
+                    <div class="impact-label">Rooms Affected</div>
+                </div>
+                <div class="impact-item">
+                    <span class="impact-number">{{ department.staff_count|default:0 }}</span>
+                    <div class="impact-label">Staff Members</div>
+                </div>
+                <div class="impact-item">
+                    <span class="impact-number">{{ department.active_assignments|default:0 }}</span>
+                    <div class="impact-label">Active Assignments</div>
+                </div>
+                <div class="impact-item">
+                    <span class="impact-number">{{ department.assignment_history_count|default:0 }}</span>
+                    <div class="impact-label">Assignment Records</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deletion Blockers -->
+        {% if has_blockers %}
+        <div class="blocker-section">
+            <h5>
+                <i class="fas fa-ban"></i>
+                Cannot Delete Department
+            </h5>
+            <p>This department cannot be deleted due to the following active dependencies:</p>
+            <ul class="blocker-list">
+                {% if active_assignments %}
+                    <li>{{ active_assignments.count }} active device assignment(s)</li>
+                {% endif %}
+                {% if pending_maintenance %}
+                    <li>{{ pending_maintenance.count }} pending maintenance request(s)</li>
+                {% endif %}
+                {% if recent_activity %}
+                    <li>Recent activity within the last 30 days</li>
+                {% endif %}
+            </ul>
+            
+            {% if active_assignments %}
+            <div class="mt-3">
+                <h6>Active Assignments:</h6>
+                {% for assignment in active_assignments|slice:":5" %}
+                <div class="assignment-item">
+                    <div class="assignment-info">
+                        <div class="assignment-device">{{ assignment.device.name }}</div>
+                        <div class="assignment-meta">
+                            Assigned to: {% if assignment.staff %}{{ assignment.staff.full_name }}{% else %}Department Pool{% endif %}
+                            | Since: {{ assignment.assigned_date|date:"M d, Y" }}
+                        </div>
+                    </div>
+                    <span class="status-badge">Active</span>
+                </div>
+                {% endfor %}
+                {% if active_assignments.count > 5 %}
+                <div class="text-muted">... and {{ active_assignments.count|add:"-5" }} more</div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Rooms Affected -->
+        {% if department.rooms.all %}
+        <div class="warning-section">
+            <h5>
+                <i class="fas fa-door-open"></i>
+                Rooms in This Department
+            </h5>
+            <p>The following rooms will be affected by this deletion:</p>
+            <div class="mt-3">
+                {% for room in department.rooms.all %}
+                <div class="room-item">
+                    <div class="room-info">
+                        <div class="room-name">{{ room.name }}</div>
+                        <div class="room-meta">
+                            Room {{ room.room_number }} | {{ room.room_type|default:"General" }}
+                        </div>
+                    </div>
+                    <span class="status-badge {% if room.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                        {{ room.is_active|yesno:"Active,Inactive" }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not has_blockers %}
+        <!-- Warning Section -->
+        <div class="warning-section">
+            <h5>
+                <i class="fas fa-exclamation-triangle"></i>
+                Warning: Permanent Action
+            </h5>
+            <p>Deleting this department will permanently remove:</p>
+            <ul class="warning-list">
+                <li>Department information and organizational structure</li>
+                <li>All rooms assigned to this department</li>
+                <li>Historical assignment records (kept for audit purposes)</li>
+                <li>Department-specific permissions and settings</li>
+                <li>Staff department associations</li>
+            </ul>
+        </div>
+
+        <!-- Alternative Actions -->
+        <div class="alternative-actions">
+            <h5>
+                <i class="fas fa-lightbulb"></i>
+                Consider These Alternatives
+            </h5>
+            <ul class="alternative-list">
+                <li><a href="{% url 'inventory:department_edit' department.id %}">Deactivate instead</a> - Keep records but mark as inactive</li>
+                <li><a href="{% url 'inventory:department_edit' department.id %}">Rename department</a> - Update name and information</li>
+                <li><a href="{% url 'inventory:department_detail' department.id %}">Export data</a> - Download department records before deletion</li>
+                <li><a href="{% url 'inventory:department_merge' department.id %}">Merge with another department</a> - Consolidate departments</li>
+            </ul>
+        </div>
+
+        <!-- Confirmation Form -->
+        <div class="delete-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-shield-alt me-2"></i>
+                    Deletion Confirmation
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="deleteForm">
+                    {% csrf_token %}
+                    
+                    <div class="confirmation-section">
+                        <h5>
+                            <i class="fas fa-check-circle"></i>
+                            Confirm Your Action
+                        </h5>
+                        
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="confirmDelete" name="confirm_delete" required>
+                            <label class="form-check-label" for="confirmDelete">
+                                I understand that this action is permanent and cannot be undone
+                            </label>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="confirmBackup" name="confirm_backup" required>
+                            <label class="form-check-label" for="confirmBackup">
+                                I have exported or backed up any necessary data
+                            </label>
+                        </div>
+                        
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="confirmResponsibility" name="confirm_responsibility" required>
+                            <label class="form-check-label" for="confirmResponsibility">
+                                I take full responsibility for this deletion
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="delete-actions">
+                        <a href="{% url 'inventory:department_detail' department.id %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        
+                        <button type="submit" class="btn btn-danger" id="deleteButton" disabled>
+                            <i class="fas fa-trash-alt me-2"></i>Delete Department Permanently
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Enable/disable delete button based on checkboxes
+    const checkboxes = $('input[type="checkbox"]');
+    const deleteButton = $('#deleteButton');
+    
+    checkboxes.on('change', function() {
+        const allChecked = checkboxes.length === checkboxes.filter(':checked').length;
+        deleteButton.prop('disabled', !allChecked);
+    });
+    
+    // Add confirmation dialog
+    $('#deleteForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        const departmentName = "{{ department.name }}";
+        
+        if (confirm(`Are you absolutely sure you want to delete the department "${departmentName}"?\n\nThis action cannot be undone and will permanently remove all associated data.`)) {
+            if (confirm(`Last chance! Type the department name to confirm:\n\nExpected: ${departmentName}`)) {
+                const userInput = prompt(`Please type "${departmentName}" to confirm deletion:`);
+                
+                if (userInput === departmentName) {
+                    this.submit();
+                } else {
+                    alert('Department name did not match. Deletion cancelled.');
+                }
+            }
+        }
+    });
+    
+    // Auto-focus first checkbox
+    $('#confirmDelete').focus();
+});
+</script>
+{% endblock %}

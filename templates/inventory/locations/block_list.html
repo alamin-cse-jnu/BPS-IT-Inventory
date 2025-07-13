@@ -1,19 +1,19 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Rooms - {{ block.super }}{% endblock %}
+{% block title %}Blocks - {{ block.super }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .rooms-header {
-        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+    .blocks-header {
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
         color: white;
         padding: 2rem 0;
         margin-bottom: 2rem;
         border-radius: 0.5rem;
     }
     
-    .rooms-stats {
+    .blocks-stats {
         display: flex;
         gap: 2rem;
         margin-top: 1rem;
@@ -34,7 +34,7 @@
         opacity: 0.9;
     }
     
-    .room-card {
+    .block-card {
         background: white;
         border-radius: 0.75rem;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
@@ -45,22 +45,22 @@
         position: relative;
     }
     
-    .room-card:hover {
+    .block-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
     }
     
-    .room-header {
+    .block-header {
         display: flex;
         align-items: center;
         margin-bottom: 1rem;
     }
     
-    .room-icon {
+    .block-icon {
         width: 60px;
         height: 60px;
         border-radius: 0.75rem;
-        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
         color: white;
         display: flex;
         align-items: center;
@@ -68,21 +68,23 @@
         font-size: 1.5rem;
         margin-right: 1rem;
         flex-shrink: 0;
+        font-weight: 700;
     }
     
-    .room-info h5 {
+    .block-info h5 {
         margin: 0 0 0.25rem 0;
         font-weight: 600;
         color: #212529;
     }
     
-    .room-subtitle {
+    .block-code {
         color: #6c757d;
         font-size: 0.875rem;
+        font-family: 'Courier New', monospace;
         margin: 0;
     }
     
-    .room-location {
+    .block-building {
         color: #495057;
         font-size: 0.9rem;
         margin-bottom: 0.5rem;
@@ -90,27 +92,20 @@
         align-items: center;
     }
     
-    .room-location i {
+    .block-building i {
         margin-right: 0.5rem;
         color: #6c757d;
         width: 16px;
     }
     
-    .room-department {
+    .block-description {
         color: #6c757d;
         font-size: 0.875rem;
+        line-height: 1.4;
         margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
     }
     
-    .room-department i {
-        margin-right: 0.5rem;
-        color: #6c757d;
-        width: 16px;
-    }
-    
-    .room-metrics {
+    .block-metrics {
         display: flex;
         gap: 1.5rem;
         padding: 1rem 0;
@@ -127,7 +122,7 @@
     .metric-number {
         font-size: 1.5rem;
         font-weight: 600;
-        color: #fd7e14;
+        color: #28a745;
         display: block;
     }
     
@@ -139,38 +134,23 @@
         margin-top: 0.25rem;
     }
     
-    .capacity-badge {
-        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 50px;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        font-size: 0.875rem;
-    }
-    
-    .capacity-badge i {
-        margin-right: 0.5rem;
-    }
-    
-    .room-actions {
+    .block-actions {
         display: flex;
         gap: 0.5rem;
         justify-content: flex-end;
     }
     
     .btn-outline-primary {
-        border-color: #fd7e14;
-        color: #fd7e14;
+        border-color: #28a745;
+        color: #28a745;
     }
     
     .btn-outline-primary:hover {
-        background-color: #fd7e14;
-        border-color: #fd7e14;
+        background-color: #28a745;
+        border-color: #28a745;
     }
     
-    .room-status {
+    .block-status {
         position: absolute;
         top: 1rem;
         right: 1rem;
@@ -225,8 +205,8 @@
         margin-bottom: 1rem;
     }
     
-    .btn-add-room {
-        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+    .btn-add-block {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
         border: none;
         color: white;
         padding: 0.75rem 1.5rem;
@@ -235,11 +215,11 @@
         transition: all 0.2s ease;
     }
     
-    .btn-add-room:hover {
-        background: linear-gradient(135deg, #20a23a 0%, #1e7e34 100%);
+    .btn-add-block:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
         color: white;
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
     }
     
     .breadcrumb {
@@ -254,7 +234,7 @@
     }
     
     .breadcrumb-item a {
-        color: #fd7e14;
+        color: #28a745;
         text-decoration: none;
     }
     
@@ -264,16 +244,6 @@
     
     .breadcrumb-item.active {
         color: #6c757d;
-    }
-    
-    .department-badge {
-        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 50px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-right: 0.5rem;
     }
     
     .building-badge {
@@ -286,22 +256,13 @@
         margin-right: 0.5rem;
     }
     
-    .floor-badge {
-        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
-        color: white;
-        padding: 0.25rem 0.75rem;
-        border-radius: 50px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-    
     @media (max-width: 768px) {
-        .rooms-stats {
+        .blocks-stats {
             flex-direction: column;
             gap: 1rem;
         }
         
-        .room-metrics {
+        .block-metrics {
             flex-direction: column;
             gap: 1rem;
         }
@@ -311,11 +272,11 @@
             gap: 1rem;
         }
         
-        .room-actions {
+        .block-actions {
             flex-direction: column;
         }
         
-        .rooms-header {
+        .blocks-header {
             padding: 1.5rem 0;
             margin-bottom: 1.5rem;
         }
@@ -329,42 +290,42 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Rooms</li>
+            <li class="breadcrumb-item active" aria-current="page">Blocks</li>
         </ol>
     </nav>
 
     <!-- Header -->
-    <div class="rooms-header">
+    <div class="blocks-header">
         <div class="container-fluid">
             <div class="row align-items-center">
                 <div class="col-md-8">
                     <h1 class="mb-0">
-                        <i class="fas fa-door-open me-3"></i>Room Management
+                        <i class="fas fa-th-large me-3"></i>Block Management
                     </h1>
-                    <p class="mb-0 mt-2 opacity-75">Manage individual rooms within departments</p>
+                    <p class="mb-0 mt-2 opacity-75">Manage building blocks and their organizational structure</p>
                     
-                    <div class="rooms-stats">
+                    <div class="blocks-stats">
                         <div class="stat-item">
-                            <span class="stat-number">{{ total_rooms }}</span>
-                            <span class="stat-label">Total Rooms</span>
+                            <span class="stat-number">{{ total_blocks }}</span>
+                            <span class="stat-label">Total Blocks</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number">{{ active_rooms }}</span>
+                            <span class="stat-number">{{ active_blocks }}</span>
                             <span class="stat-label">Active</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number">{{ total_capacity }}</span>
-                            <span class="stat-label">Total Capacity</span>
+                            <span class="stat-number">{{ total_floors }}</span>
+                            <span class="stat-label">Total Floors</span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-number">{{ occupied_rooms|default:0 }}</span>
-                            <span class="stat-label">Occupied</span>
+                            <span class="stat-number">{{ total_departments }}</span>
+                            <span class="stat-label">Departments</span>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4 text-end">
-                    <a href="{% url 'inventory:room_add' %}" class="btn btn-add-room">
-                        <i class="fas fa-plus me-2"></i>Add Room
+                    <a href="{% url 'inventory:block_add' %}" class="btn btn-add-block">
+                        <i class="fas fa-plus me-2"></i>Add Block
                     </a>
                 </div>
             </div>
@@ -376,24 +337,13 @@
         <form method="GET" class="filter-form">
             <div class="filter-row">
                 <div class="filter-group">
-                    <label for="search" class="form-label">Search Rooms</label>
+                    <label for="search" class="form-label">Search Blocks</label>
                     <input type="text" 
                            id="search" 
                            name="search" 
                            class="form-control" 
-                           placeholder="Search by room number, name, or department..."
+                           placeholder="Search by name, code, or description..."
                            value="{{ request.GET.search }}">
-                </div>
-                <div class="filter-group">
-                    <label for="department" class="form-label">Department</label>
-                    <select id="department" name="department" class="form-select">
-                        <option value="">All Departments</option>
-                        {% for department in departments %}
-                            <option value="{{ department.id }}" {% if request.GET.department == department.id|stringformat:"s" %}selected{% endif %}>
-                                {{ department.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
                 </div>
                 <div class="filter-group">
                     <label for="building" class="form-label">Building</label>
@@ -407,21 +357,21 @@
                     </select>
                 </div>
                 <div class="filter-group">
-                    <label for="capacity" class="form-label">Min Capacity</label>
-                    <input type="number" 
-                           id="capacity" 
-                           name="capacity" 
-                           class="form-control" 
-                           placeholder="Min capacity..."
-                           value="{{ request.GET.capacity }}"
-                           min="1">
-                </div>
-                <div class="filter-group">
                     <label for="status" class="form-label">Status</label>
                     <select id="status" name="status" class="form-select">
                         <option value="">All Status</option>
                         <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
                         <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="sort" class="form-label">Sort By</label>
+                    <select id="sort" name="sort" class="form-select">
+                        <option value="name" {% if request.GET.sort == 'name' %}selected{% endif %}>Name A-Z</option>
+                        <option value="-name" {% if request.GET.sort == '-name' %}selected{% endif %}>Name Z-A</option>
+                        <option value="code" {% if request.GET.sort == 'code' %}selected{% endif %}>Code A-Z</option>
+                        <option value="building__name" {% if request.GET.sort == 'building__name' %}selected{% endif %}>Building A-Z</option>
+                        <option value="-created_at" {% if request.GET.sort == '-created_at' %}selected{% endif %}>Newest First</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -433,81 +383,74 @@
         </form>
     </div>
 
-    <!-- Rooms List -->
-    {% if rooms %}
+    <!-- Blocks List -->
+    {% if blocks %}
         <div class="row">
-            {% for room in rooms %}
+            {% for block in blocks %}
                 <div class="col-lg-6 col-xl-4">
-                    <div class="room-card position-relative">
+                    <div class="block-card position-relative">
                         <!-- Status Badge -->
-                        <div class="room-status">
-                            <span class="status-badge {% if room.is_active %}status-active{% else %}status-inactive{% endif %}">
-                                {% if room.is_active %}Active{% else %}Inactive{% endif %}
+                        <div class="block-status">
+                            <span class="status-badge {% if block.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if block.is_active %}Active{% else %}Inactive{% endif %}
                             </span>
                         </div>
 
-                        <!-- Room Header -->
-                        <div class="room-header">
-                            <div class="room-icon">
-                                <i class="fas fa-door-open"></i>
+                        <!-- Block Header -->
+                        <div class="block-header">
+                            <div class="block-icon">
+                                {{ block.code }}
                             </div>
-                            <div class="room-info">
-                                <h5>{{ room.room_number }}</h5>
-                                <p class="room-subtitle">
-                                    {% if room.room_name %}{{ room.room_name }}{% else %}No name specified{% endif %}
-                                </p>
+                            <div class="block-info">
+                                <h5>{{ block.name }}</h5>
+                                <p class="block-code">{{ block.code }}</p>
                             </div>
                         </div>
 
-                        <!-- Room Content -->
-                        <div class="room-content">
-                            <div class="room-location">
+                        <!-- Block Content -->
+                        <div class="block-content">
+                            <div class="block-building">
                                 <i class="fas fa-building"></i>
-                                <span class="building-badge">{{ room.department.floor.building.code }}</span>
-                                <span class="floor-badge">{{ room.department.floor.name }}</span>
+                                <span class="building-badge">{{ block.building.code }}</span>
+                                {{ block.building.name }}
                             </div>
                             
-                            <div class="room-department">
-                                <i class="fas fa-users"></i>
-                                <span class="department-badge">{{ room.department.code }}</span>
-                                {{ room.department.name }}
+                            {% if block.description %}
+                                <div class="block-description">
+                                    {{ block.description|truncatechars:120 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Block Metrics -->
+                        <div class="block-metrics">
+                            <div class="metric-item">
+                                <span class="metric-number">{{ block.floors.count }}</span>
+                                <span class="metric-label">Floors</span>
                             </div>
-                            
-                            <div class="capacity-badge">
-                                <i class="fas fa-users"></i>
-                                Capacity: {{ room.capacity }}
+                            <div class="metric-item">
+                                <span class="metric-number">{{ block.departments_count|default:0 }}</span>
+                                <span class="metric-label">Departments</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-number">{{ block.locations.count }}</span>
+                                <span class="metric-label">Locations</span>
                             </div>
                         </div>
 
-                        <!-- Room Metrics -->
-                        <div class="room-metrics">
-                            <div class="metric-item">
-                                <span class="metric-number">{{ room.devices_count|default:0 }}</span>
-                                <span class="metric-label">Devices</span>
-                            </div>
-                            <div class="metric-item">
-                                <span class="metric-number">{{ room.staff_count|default:0 }}</span>
-                                <span class="metric-label">Staff</span>
-                            </div>
-                            <div class="metric-item">
-                                <span class="metric-number">{{ room.utilization|default:0 }}%</span>
-                                <span class="metric-label">Utilization</span>
-                            </div>
-                        </div>
-
-                        <!-- Room Actions -->
-                        <div class="room-actions">
-                            <a href="{% url 'inventory:room_detail' room.id %}" 
+                        <!-- Block Actions -->
+                        <div class="block-actions">
+                            <a href="{% url 'inventory:block_detail' block.id %}" 
                                class="btn btn-outline-primary btn-sm">
                                 <i class="fas fa-eye me-1"></i>View
                             </a>
-                            <a href="{% url 'inventory:room_edit' room.id %}" 
+                            <a href="{% url 'inventory:block_edit' block.id %}" 
                                class="btn btn-outline-secondary btn-sm">
                                 <i class="fas fa-edit me-1"></i>Edit
                             </a>
-                            <a href="{% url 'inventory:location_add' %}?room={{ room.id }}" 
+                            <a href="{% url 'inventory:floor_add' %}?block={{ block.id }}" 
                                class="btn btn-outline-info btn-sm">
-                                <i class="fas fa-map-marker-alt me-1"></i>Assign
+                                <i class="fas fa-plus me-1"></i>Add Floor
                             </a>
                         </div>
                     </div>
@@ -516,33 +459,33 @@
         </div>
 
         <!-- Pagination -->
-        {% if rooms.has_other_pages %}
+        {% if blocks.has_other_pages %}
             <div class="d-flex justify-content-center mt-4">
-                <nav aria-label="Rooms pagination">
+                <nav aria-label="Blocks pagination">
                     <ul class="pagination">
-                        {% if rooms.has_previous %}
+                        {% if blocks.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.capacity %}capacity={{ request.GET.capacity }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ rooms.previous_page_number }}" aria-label="Previous">
+                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort }}&{% endif %}page={{ blocks.previous_page_number }}" aria-label="Previous">
                                     <span aria-hidden="true">&laquo;</span>
                                 </a>
                             </li>
                         {% endif %}
 
-                        {% for num in rooms.paginator.page_range %}
-                            {% if rooms.number == num %}
+                        {% for num in blocks.paginator.page_range %}
+                            {% if blocks.number == num %}
                                 <li class="page-item active">
                                     <span class="page-link">{{ num }}</span>
                                 </li>
-                            {% elif num > rooms.number|add:'-3' and num < rooms.number|add:'3' %}
+                            {% elif num > blocks.number|add:'-3' and num < blocks.number|add:'3' %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.capacity %}capacity={{ request.GET.capacity }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                    <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort }}&{% endif %}page={{ num }}">{{ num }}</a>
                                 </li>
                             {% endif %}
                         {% endfor %}
 
-                        {% if rooms.has_next %}
+                        {% if blocks.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.capacity %}capacity={{ request.GET.capacity }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}page={{ rooms.next_page_number }}" aria-label="Next">
+                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.building %}building={{ request.GET.building }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort }}&{% endif %}page={{ blocks.next_page_number }}" aria-label="Next">
                                     <span aria-hidden="true">&raquo;</span>
                                 </a>
                             </li>
@@ -555,12 +498,12 @@
         <!-- Empty State -->
         <div class="empty-state">
             <div class="empty-icon">
-                <i class="fas fa-door-open"></i>
+                <i class="fas fa-th-large"></i>
             </div>
-            <h3>No Rooms Found</h3>
-            <p>There are no rooms matching your search criteria.</p>
-            <a href="{% url 'inventory:room_add' %}" class="btn btn-add-room">
-                <i class="fas fa-plus me-2"></i>Add First Room
+            <h3>No Blocks Found</h3>
+            <p>There are no blocks matching your search criteria.</p>
+            <a href="{% url 'inventory:block_add' %}" class="btn btn-add-block">
+                <i class="fas fa-plus me-2"></i>Add First Block
             </a>
         </div>
     {% endif %}
@@ -585,60 +528,35 @@ $(document).ready(function() {
         }, 500);
     });
     
-    // Capacity input with debounce
-    let capacityTimeout;
-    $('#capacity').on('input', function() {
-        clearTimeout(capacityTimeout);
-        const form = $(this).closest('form');
-        capacityTimeout = setTimeout(function() {
-            form.submit();
-        }, 1000);
-    });
-    
-    // Room card hover effects
-    $('.room-card').hover(
+    // Block card hover effects
+    $('.block-card').hover(
         function() {
-            $(this).find('.room-actions').addClass('show');
+            $(this).find('.block-actions').addClass('show');
         },
         function() {
-            $(this).find('.room-actions').removeClass('show');
+            $(this).find('.block-actions').removeClass('show');
         }
     );
     
-    // Department change cascades to building filter
-    $('#department').on('change', function() {
-        const departmentId = $(this).val();
+    // Building filter change
+    $('#building').on('change', function() {
+        const buildingId = $(this).val();
         
-        if (departmentId) {
-            // Auto-select the building for this department
-            const option = $(this).find('option:selected');
-            const departmentText = option.text();
-            
-            // You can implement AJAX call here to get the building for this department
-            // For now, we'll just submit the form
+        if (buildingId) {
+            // You can implement additional filtering here
             $(this).closest('form').submit();
         }
     });
     
-    // Sort rooms by room number
-    function sortRoomCards() {
+    // Sort blocks visually by code
+    function sortBlockCards() {
         const container = $('.row').first();
         const cards = container.children('.col-lg-6').get();
         
         cards.sort(function(a, b) {
-            const roomA = $(a).find('h5').text().trim();
-            const roomB = $(b).find('h5').text().trim();
-            
-            // Try to sort numerically if possible
-            const numA = roomA.match(/\d+/);
-            const numB = roomB.match(/\d+/);
-            
-            if (numA && numB) {
-                return parseInt(numA[0]) - parseInt(numB[0]);
-            }
-            
-            // Fallback to alphabetical sort
-            return roomA.localeCompare(roomB);
+            const codeA = $(a).find('.block-code').text().trim();
+            const codeB = $(b).find('.block-code').text().trim();
+            return codeA.localeCompare(codeB);
         });
         
         $.each(cards, function(idx, card) {
@@ -646,17 +564,17 @@ $(document).ready(function() {
         });
     }
     
-    // Apply sorting
-    if ($('.room-card').length > 0) {
-        sortRoomCards();
+    // Apply sorting if no sort parameter is set
+    if (!new URLSearchParams(window.location.search).has('sort') && $('.block-card').length > 0) {
+        sortBlockCards();
     }
     
     // Keyboard shortcuts
     $(document).on('keydown', function(e) {
-        // Ctrl+N or Cmd+N to add new room
+        // Ctrl+N or Cmd+N to add new block
         if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
             e.preventDefault();
-            window.location.href = "{% url 'inventory:room_add' %}";
+            window.location.href = "{% url 'inventory:block_add' %}";
         }
         
         // ESC to clear search
@@ -684,43 +602,34 @@ $(document).ready(function() {
     }, observerOptions);
     
     // Set initial state and observe cards
-    $('.room-card').each(function() {
+    $('.block-card').each(function() {
         this.style.opacity = '0';
         this.style.transform = 'translateY(20px)';
         this.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
         observer.observe(this);
     });
     
-    // Capacity color coding
-    $('.capacity-badge').each(function() {
-        const capacity = parseInt($(this).text().match(/\d+/)[0]);
-        
-        if (capacity >= 20) {
-            $(this).removeClass('btn-success').addClass('btn-primary');
-        } else if (capacity >= 10) {
-            $(this).removeClass('btn-success').addClass('btn-info');
-        } else if (capacity >= 5) {
-            $(this).removeClass('btn-success').addClass('btn-warning');
-        } else {
-            $(this).removeClass('btn-success').addClass('btn-secondary');
+    // Block code formatting in icons
+    $('.block-icon').each(function() {
+        const code = $(this).text().trim();
+        if (code.length > 4) {
+            $(this).css('font-size', '1rem');
+        } else if (code.length > 2) {
+            $(this).css('font-size', '1.25rem');
         }
     });
     
-    // Room utilization color coding
+    // Dynamic metric highlighting
     $('.metric-number').each(function() {
-        const parent = $(this).parent();
-        if (parent.find('.metric-label').text().includes('Utilization')) {
-            const utilization = parseInt($(this).text());
-            
-            if (utilization >= 80) {
-                $(this).css('color', '#dc3545'); // Red
-            } else if (utilization >= 60) {
-                $(this).css('color', '#fd7e14'); // Orange
-            } else if (utilization >= 40) {
-                $(this).css('color', '#ffc107'); // Yellow
-            } else {
-                $(this).css('color', '#28a745'); // Green
-            }
+        const value = parseInt($(this).text());
+        const label = $(this).siblings('.metric-label').text().toLowerCase();
+        
+        if (label.includes('floor') && value > 5) {
+            $(this).css('color', '#007bff');
+        } else if (label.includes('department') && value > 10) {
+            $(this).css('color', '#6f42c1');
+        } else if (label.includes('location') && value > 20) {
+            $(this).css('color', '#fd7e14');
         }
     });
 });

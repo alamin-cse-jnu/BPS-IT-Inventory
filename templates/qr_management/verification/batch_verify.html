@@ -1,0 +1,1034 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block page_title %}Batch QR Verification{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/qr_management.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="page-title">Batch QR Verification</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'qr_management_index' %}">QR Management</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'qr_verify' %}">Verification</a></li>
+                    <li class="breadcrumb-item active">Batch Verify</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="action-buttons">
+            <a href="{% url 'qr_verify' %}" class="btn btn-outline-primary">
+                <i class="fas fa-check-circle"></i> Single Verify
+            </a>
+            <a href="{% url 'qr_scan_mobile' %}" class="btn btn-success">
+                <i class="fas fa-mobile-alt"></i> Mobile Scanner
+            </a>
+            <a href="{% url 'qr_management_index' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Input Methods -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-layer-group"></i> Batch Verification Methods</h5>
+                </div>
+                <div class="card-body">
+                    <!-- File Upload Method -->
+                    <div class="verification-method mb-4">
+                        <h6><i class="fas fa-file-upload"></i> Upload CSV/Excel File</h6>
+                        <p class="text-muted">Upload a file containing device IDs, asset tags, or QR data</p>
+                        
+                        <form id="file-upload-form" enctype="multipart/form-data" class="mt-3">
+                            {% csrf_token %}
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <input type="file" class="form-control" id="batch-file" 
+                                           accept=".csv,.xlsx,.xls,.txt" required>
+                                    <div class="form-text">
+                                        Supported formats: CSV, Excel (.xlsx, .xls), Text files
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-upload"></i> Upload & Verify
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div class="mt-3">
+                            <h6>File Format Requirements:</h6>
+                            <ul class="text-muted">
+                                <li>CSV: First column should contain device IDs or asset tags</li>
+                                <li>Excel: Column A should contain device identifiers</li>
+                                <li>Text: One device identifier per line</li>
+                                <li>Headers are optional and will be auto-detected</li>
+                            </ul>
+                            
+                            <button type="button" class="btn btn-outline-info btn-sm" id="download-template">
+                                <i class="fas fa-download"></i> Download Template
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="divider my-4">
+                        <hr>
+                        <span class="divider-text">OR</span>
+                    </div>
+
+                    <!-- Manual Text Input -->
+                    <div class="verification-method mb-4">
+                        <h6><i class="fas fa-keyboard"></i> Manual Text Input</h6>
+                        <p class="text-muted">Enter device identifiers manually, one per line</p>
+                        
+                        <form id="manual-batch-form" class="mt-3">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="batch-input" class="form-label">Device Identifiers</label>
+                                <textarea class="form-control" id="batch-input" rows="8" 
+                                          placeholder="Enter device IDs, asset tags, or QR data (one per line)&#10;Example:&#10;DEV-001&#10;LAPTOP-BPS-123&#10;TAB-456&#10;{&quot;deviceId&quot;: &quot;DEV-789&quot;, ...}"></textarea>
+                                <div class="form-text">
+                                    <span id="line-count">0 lines</span> | 
+                                    You can paste device IDs, asset tags, or complete QR JSON data
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ignore-duplicates" checked>
+                                        <label class="form-check-label" for="ignore-duplicates">
+                                            Ignore duplicates
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="stop-on-error">
+                                        <label class="form-check-label" for="stop-on-error">
+                                            Stop on first error
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success mt-3" id="manual-verify-btn" disabled>
+                                <i class="fas fa-check-double"></i> Verify All
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary mt-3" id="clear-input">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="divider my-4">
+                        <hr>
+                        <span class="divider-text">OR</span>
+                    </div>
+
+                    <!-- Predefined Lists -->
+                    <div class="verification-method">
+                        <h6><i class="fas fa-list"></i> Predefined Device Lists</h6>
+                        <p class="text-muted">Select from commonly used device groups</p>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="department-filter" class="form-label">By Department</label>
+                                <select class="form-select" id="department-filter">
+                                    <option value="">Select Department</option>
+                                    {% for dept in departments %}
+                                    <option value="{{ dept.id }}">{{ dept.name }} ({{ dept.device_count }} devices)</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="location-filter" class="form-label">By Location</label>
+                                <select class="form-select" id="location-filter">
+                                    <option value="">Select Location</option>
+                                    {% for location in locations %}
+                                    <option value="{{ location.id }}">{{ location.get_full_path }} ({{ location.device_count }} devices)</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="category-filter" class="form-label">By Category</label>
+                                <select class="form-select" id="category-filter">
+                                    <option value="">Select Category</option>
+                                    {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.name }} ({{ category.device_count }} devices)</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="status-filter" class="form-label">By Status</label>
+                                <select class="form-select" id="status-filter">
+                                    <option value="">Select Status</option>
+                                    <option value="Available">Available Devices</option>
+                                    <option value="Assigned">Assigned Devices</option>
+                                    <option value="Maintenance">Under Maintenance</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <button type="button" class="btn btn-info mt-3" id="load-predefined" disabled>
+                            <i class="fas fa-download"></i> Load Selected Devices
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Verification Progress -->
+            <div class="card mt-4" id="progress-card" style="display: none;">
+                <div class="card-header">
+                    <h6><i class="fas fa-tasks"></i> Verification Progress</h6>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             id="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="row text-center">
+                        <div class="col-3">
+                            <div class="progress-stat">
+                                <div class="stat-number" id="total-count">0</div>
+                                <div class="stat-label">Total</div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="progress-stat">
+                                <div class="stat-number text-success" id="success-count">0</div>
+                                <div class="stat-label">Verified</div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="progress-stat">
+                                <div class="stat-number text-danger" id="error-count">0</div>
+                                <div class="stat-label">Failed</div>
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="progress-stat">
+                                <div class="stat-number text-info" id="processed-count">0</div>
+                                <div class="stat-label">Processed</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div id="current-item" class="text-muted text-center">
+                            Ready to start...
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-warning" id="pause-btn" style="display: none;">
+                            <i class="fas fa-pause"></i> Pause
+                        </button>
+                        <button type="button" class="btn btn-danger" id="stop-btn" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Panel -->
+        <div class="col-md-4">
+            <!-- Quick Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-chart-pie"></i> Verification Summary</h6>
+                </div>
+                <div class="card-body">
+                    <div class="summary-stats" id="summary-stats">
+                        <div class="stat-row">
+                            <span class="stat-label">Items to Verify:</span>
+                            <span class="stat-value" id="items-to-verify">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Estimated Time:</span>
+                            <span class="stat-value" id="estimated-time">-</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Success Rate:</span>
+                            <span class="stat-value" id="success-rate">-%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Results -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-list-check"></i> Live Results</h6>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    <div id="live-results">
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-clipboard-list fa-2x mb-2"></i>
+                            <p>Results will appear here during verification</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Options -->
+            <div class="card mt-3" id="export-card" style="display: none;">
+                <div class="card-header">
+                    <h6><i class="fas fa-download"></i> Export Results</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-success btn-sm" id="export-csv">
+                            <i class="fas fa-file-csv"></i> Export as CSV
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" id="export-excel">
+                            <i class="fas fa-file-excel"></i> Export as Excel
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="export-json">
+                            <i class="fas fa-file-code"></i> Export as JSON
+                        </button>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="include-details" checked>
+                            <label class="form-check-label" for="include-details">
+                                Include detailed information
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="errors-only">
+                            <label class="form-check-label" for="errors-only">
+                                Export errors only
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Modal -->
+<div class="modal fade" id="results-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-chart-bar"></i> Batch Verification Results
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="results-content">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="modal-export-csv">
+                    <i class="fas fa-download"></i> Export CSV
+                </button>
+                <button type="button" class="btn btn-primary" id="verify-failed-only">
+                    <i class="fas fa-redo"></i> Retry Failed
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Elements
+    const fileUploadForm = document.getElementById('file-upload-form');
+    const manualBatchForm = document.getElementById('manual-batch-form');
+    const batchInput = document.getElementById('batch-input');
+    const lineCountSpan = document.getElementById('line-count');
+    const manualVerifyBtn = document.getElementById('manual-verify-btn');
+    const clearInputBtn = document.getElementById('clear-input');
+    const loadPredefinedBtn = document.getElementById('load-predefined');
+    const progressCard = document.getElementById('progress-card');
+    const exportCard = document.getElementById('export-card');
+    
+    // Filter elements
+    const departmentFilter = document.getElementById('department-filter');
+    const locationFilter = document.getElementById('location-filter');
+    const categoryFilter = document.getElementById('category-filter');
+    const statusFilter = document.getElementById('status-filter');
+    
+    // Progress elements
+    const progressBar = document.getElementById('progress-bar');
+    const totalCountSpan = document.getElementById('total-count');
+    const successCountSpan = document.getElementById('success-count');
+    const errorCountSpan = document.getElementById('error-count');
+    const processedCountSpan = document.getElementById('processed-count');
+    const currentItemSpan = document.getElementById('current-item');
+    
+    // Summary elements
+    const itemsToVerifySpan = document.getElementById('items-to-verify');
+    const estimatedTimeSpan = document.getElementById('estimated-time');
+    const successRateSpan = document.getElementById('success-rate');
+    const liveResults = document.getElementById('live-results');
+    
+    let verificationData = [];
+    let verificationResults = [];
+    let isVerifying = false;
+    let verificationPaused = false;
+    let currentIndex = 0;
+
+    // Event listeners
+    batchInput.addEventListener('input', updateLineCount);
+    clearInputBtn.addEventListener('click', clearInput);
+    manualBatchForm.addEventListener('submit', startManualVerification);
+    fileUploadForm.addEventListener('submit', handleFileUpload);
+    
+    // Filter change handlers
+    [departmentFilter, locationFilter, categoryFilter, statusFilter].forEach(filter => {
+        filter.addEventListener('change', updatePredefinedButton);
+    });
+    
+    loadPredefinedBtn.addEventListener('click', loadPredefinedDevices);
+
+    // Update line count
+    function updateLineCount() {
+        const lines = batchInput.value.trim().split('\n').filter(line => line.trim());
+        lineCountSpan.textContent = `${lines.length} lines`;
+        manualVerifyBtn.disabled = lines.length === 0;
+        
+        if (lines.length > 0) {
+            itemsToVerifySpan.textContent = lines.length;
+            estimatedTimeSpan.textContent = `~${Math.ceil(lines.length * 0.5)} seconds`;
+        } else {
+            itemsToVerifySpan.textContent = '0';
+            estimatedTimeSpan.textContent = '-';
+        }
+    }
+
+    // Clear input
+    function clearInput() {
+        batchInput.value = '';
+        updateLineCount();
+        verificationData = [];
+        verificationResults = [];
+        resetProgress();
+        liveResults.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-clipboard-list fa-2x mb-2"></i><p>Results will appear here during verification</p></div>';
+    }
+
+    // Update predefined button state
+    function updatePredefinedButton() {
+        const hasSelection = departmentFilter.value || locationFilter.value || 
+                           categoryFilter.value || statusFilter.value;
+        loadPredefinedBtn.disabled = !hasSelection;
+    }
+
+    // Load predefined devices
+    function loadPredefinedDevices() {
+        const filters = {
+            department: departmentFilter.value,
+            location: locationFilter.value,
+            category: categoryFilter.value,
+            status: statusFilter.value
+        };
+
+        fetch('{% url "qr_get_devices_by_filter" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(filters)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const deviceIds = data.devices.map(device => device.device_id);
+                batchInput.value = deviceIds.join('\n');
+                updateLineCount();
+                
+                showToast('Success', `Loaded ${deviceIds.length} devices`, 'success');
+            } else {
+                showToast('Error', data.error || 'Failed to load devices', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error', 'Failed to load devices', 'danger');
+        });
+    }
+
+    // Handle file upload
+    function handleFileUpload(e) {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('batch-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            showToast('Error', 'Please select a file', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+        fetch('{% url "qr_process_batch_file" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                batchInput.value = data.device_ids.join('\n');
+                updateLineCount();
+                showToast('Success', `Processed ${data.device_ids.length} items from file`, 'success');
+                
+                // Auto-start verification
+                setTimeout(() => {
+                    startManualVerification();
+                }, 1000);
+            } else {
+                showToast('Error', data.error || 'Failed to process file', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error', 'Failed to process file', 'danger');
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-upload"></i> Upload & Verify';
+        });
+    }
+
+    // Start manual verification
+    function startManualVerification(e) {
+        if (e) e.preventDefault();
+        
+        const lines = batchInput.value.trim().split('\n').filter(line => line.trim());
+        if (lines.length === 0) return;
+
+        const ignoreDuplicates = document.getElementById('ignore-duplicates').checked;
+        const stopOnError = document.getElementById('stop-on-error').checked;
+
+        // Process and deduplicate if needed
+        verificationData = ignoreDuplicates ? [...new Set(lines)] : lines;
+        verificationResults = [];
+        currentIndex = 0;
+        isVerifying = true;
+        verificationPaused = false;
+
+        // Setup progress
+        progressCard.style.display = 'block';
+        resetProgress();
+        totalCountSpan.textContent = verificationData.length;
+        
+        // Clear live results
+        liveResults.innerHTML = '';
+
+        // Start verification
+        verifyNextItem(stopOnError);
+    }
+
+    // Verify next item
+    function verifyNextItem(stopOnError = false) {
+        if (!isVerifying || verificationPaused || currentIndex >= verificationData.length) {
+            if (currentIndex >= verificationData.length) {
+                completeVerification();
+            }
+            return;
+        }
+
+        const item = verificationData[currentIndex];
+        currentItemSpan.textContent = `Verifying: ${item}`;
+
+        fetch('{% url "qr_verify_device" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                input: item,
+                method: 'batch'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const result = {
+                input: item,
+                success: data.success,
+                device: data.device || null,
+                error: data.error || null,
+                timestamp: new Date().toISOString()
+            };
+
+            verificationResults.push(result);
+            addLiveResult(result);
+            updateProgress();
+
+            if (!data.success && stopOnError) {
+                isVerifying = false;
+                showToast('Stopped', 'Verification stopped due to error', 'warning');
+                return;
+            }
+
+            currentIndex++;
+            
+            // Small delay to prevent overwhelming the server
+            setTimeout(() => verifyNextItem(stopOnError), 100);
+        })
+        .catch(error => {
+            console.error('Verification error:', error);
+            
+            const result = {
+                input: item,
+                success: false,
+                device: null,
+                error: 'Network error',
+                timestamp: new Date().toISOString()
+            };
+
+            verificationResults.push(result);
+            addLiveResult(result);
+            updateProgress();
+
+            if (stopOnError) {
+                isVerifying = false;
+                showToast('Stopped', 'Verification stopped due to error', 'warning');
+                return;
+            }
+
+            currentIndex++;
+            setTimeout(() => verifyNextItem(stopOnError), 100);
+        });
+    }
+
+    // Add live result
+    function addLiveResult(result) {
+        const resultDiv = document.createElement('div');
+        resultDiv.className = `result-item ${result.success ? 'success' : 'error'} mb-2`;
+        
+        resultDiv.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="result-icon">
+                        <i class="fas fa-${result.success ? 'check-circle text-success' : 'times-circle text-danger'}"></i>
+                    </span>
+                    <span class="result-text">${result.input}</span>
+                </div>
+                <small class="text-muted">${new Date(result.timestamp).toLocaleTimeString()}</small>
+            </div>
+            ${result.device ? `<small class="text-muted">${result.device.device_name}</small>` : ''}
+            ${result.error ? `<small class="text-danger">${result.error}</small>` : ''}
+        `;
+
+        liveResults.insertBefore(resultDiv, liveResults.firstChild);
+
+        // Keep only last 20 results visible
+        while (liveResults.children.length > 20) {
+            liveResults.removeChild(liveResults.lastChild);
+        }
+    }
+
+    // Update progress
+    function updateProgress() {
+        const total = verificationData.length;
+        const processed = verificationResults.length;
+        const successful = verificationResults.filter(r => r.success).length;
+        const failed = verificationResults.filter(r => !r.success).length;
+
+        const percentage = (processed / total) * 100;
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${Math.round(percentage)}%`;
+
+        processedCountSpan.textContent = processed;
+        successCountSpan.textContent = successful;
+        errorCountSpan.textContent = failed;
+
+        if (processed > 0) {
+            const rate = (successful / processed) * 100;
+            successRateSpan.textContent = `${Math.round(rate)}%`;
+        }
+    }
+
+    // Reset progress
+    function resetProgress() {
+        progressBar.style.width = '0%';
+        progressBar.textContent = '0%';
+        processedCountSpan.textContent = '0';
+        successCountSpan.textContent = '0';
+        errorCountSpan.textContent = '0';
+        totalCountSpan.textContent = '0';
+        successRateSpan.textContent = '-%';
+        currentItemSpan.textContent = 'Ready to start...';
+    }
+
+    // Complete verification
+    function completeVerification() {
+        isVerifying = false;
+        currentItemSpan.textContent = 'Verification completed!';
+        exportCard.style.display = 'block';
+        
+        const successful = verificationResults.filter(r => r.success).length;
+        const total = verificationResults.length;
+        
+        showToast('Completed', `Verification completed: ${successful}/${total} successful`, 'success');
+        
+        // Show detailed results modal
+        setTimeout(() => {
+            showResultsModal();
+        }, 1000);
+    }
+
+    // Show results modal
+    function showResultsModal() {
+        const modal = document.getElementById('results-modal');
+        const resultsContent = document.getElementById('results-content');
+        
+        const successful = verificationResults.filter(r => r.success).length;
+        const failed = verificationResults.filter(r => !r.success).length;
+        const total = verificationResults.length;
+        
+        resultsContent.innerHTML = `
+            <div class="row mb-4">
+                <div class="col-md-4 text-center">
+                    <div class="stat-card">
+                        <div class="stat-number text-primary">${total}</div>
+                        <div class="stat-label">Total Processed</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="stat-card">
+                        <div class="stat-number text-success">${successful}</div>
+                        <div class="stat-label">Successful</div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="stat-card">
+                        <div class="stat-number text-danger">${failed}</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Input</th>
+                            <th>Status</th>
+                            <th>Device</th>
+                            <th>Error</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${verificationResults.map(result => `
+                            <tr>
+                                <td><code>${result.input}</code></td>
+                                <td>
+                                    <span class="badge bg-${result.success ? 'success' : 'danger'}">
+                                        ${result.success ? 'Verified' : 'Failed'}
+                                    </span>
+                                </td>
+                                <td>
+                                    ${result.device ? result.device.device_name : '-'}
+                                </td>
+                                <td>
+                                    ${result.error ? `<small class="text-danger">${result.error}</small>` : '-'}
+                                </td>
+                                <td>
+                                    <small>${new Date(result.timestamp).toLocaleTimeString()}</small>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        const bootstrapModal = new bootstrap.Modal(modal);
+        bootstrapModal.show();
+    }
+
+    // Export functions
+    document.getElementById('export-csv').addEventListener('click', () => exportResults('csv'));
+    document.getElementById('export-excel').addEventListener('click', () => exportResults('excel'));
+    document.getElementById('export-json').addEventListener('click', () => exportResults('json'));
+    document.getElementById('modal-export-csv').addEventListener('click', () => exportResults('csv'));
+
+    function exportResults(format) {
+        const includeDetails = document.getElementById('include-details').checked;
+        const errorsOnly = document.getElementById('errors-only').checked;
+        
+        const dataToExport = errorsOnly ? 
+            verificationResults.filter(r => !r.success) : 
+            verificationResults;
+
+        const exportData = {
+            results: dataToExport,
+            include_details: includeDetails,
+            format: format
+        };
+
+        fetch('{% url "qr_export_batch_results" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(exportData)
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            }
+            throw new Error('Export failed');
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `batch_verification_results.${format === 'excel' ? 'xlsx' : format}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            showToast('Error', 'Failed to export results', 'danger');
+        });
+    }
+
+    // Download template
+    document.getElementById('download-template').addEventListener('click', function() {
+        const csvContent = "Device Identifier\nDEV-001\nLAPTOP-BPS-123\nTAB-456";
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'batch_verification_template.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    });
+
+    // Retry failed items
+    document.getElementById('verify-failed-only').addEventListener('click', function() {
+        const failedItems = verificationResults.filter(r => !r.success).map(r => r.input);
+        
+        if (failedItems.length === 0) {
+            showToast('Info', 'No failed items to retry', 'info');
+            return;
+        }
+
+        batchInput.value = failedItems.join('\n');
+        updateLineCount();
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('results-modal'));
+        modal.hide();
+        
+        showToast('Info', `Loaded ${failedItems.length} failed items for retry`, 'info');
+    });
+
+    // Utility functions
+    function getCsrfToken() {
+        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        return csrfInput ? csrfInput.value : '';
+    }
+
+    function showToast(title, message, type = 'info') {
+        // Create toast if bootstrap is available
+        if (typeof bootstrap !== 'undefined') {
+            const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+            
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong><br>${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toast = new bootstrap.Toast(toastContainer.lastElementChild);
+            toast.show();
+        } else {
+            alert(`${title}: ${message}`);
+        }
+    }
+
+    function createToastContainer() {
+        const container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.style.zIndex = '9999';
+        document.body.appendChild(container);
+        return container;
+    }
+
+    // Initialize
+    updateLineCount();
+    updatePredefinedButton();
+});
+</script>
+
+<style>
+.divider {
+    position: relative;
+    text-align: center;
+}
+
+.divider hr {
+    margin: 0;
+}
+
+.divider-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 0 1rem;
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.verification-method {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1.5rem;
+    background: #f8f9fa;
+}
+
+.verification-method h6 {
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.progress-stat {
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.summary-stats {
+    font-size: 0.9rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.stat-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+.stat-value {
+    font-weight: 600;
+    color: #667eea;
+}
+
+.result-item {
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+    background: white;
+}
+
+.result-item.success {
+    border-left: 4px solid #28a745;
+}
+
+.result-item.error {
+    border-left: 4px solid #dc3545;
+}
+
+.result-icon {
+    margin-right: 0.5rem;
+}
+
+.result-text {
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.stat-card {
+    padding: 1rem;
+    border-radius: 8px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+}
+
+.stat-card .stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card .stat-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .verification-method {
+        padding: 1rem;
+    }
+    
+    .stat-row {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .progress-stat {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+{% endblock %}

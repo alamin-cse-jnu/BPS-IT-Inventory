@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Report Generator | BPS IT Inventory</title>
+    <link rel="shortcut icon" href="{% static 'img/favicons/bps-favicon.ico' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicons/bps-favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicons/bps-favicon-16x16.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/favicons/apple-touch-icon.png' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bps-primary: #2c3e50;
+            --bps-secondary: #34495e;
+            --bps-accent: #3498db;
+            --bps-success: #27ae60;
+            --bps-warning: #f39c12;
+            --bps-danger: #e74c3c;
+            --bps-light: #ecf0f1;
+            --bps-dark: #2c3e50;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .report-header {
+            background: linear-gradient(135deg, var(--bps-primary), var(--bps-secondary));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .report-title {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-subtitle {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+
+        .wizard-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .wizard-header {
+            background: var(--bps-light);
+            padding: 1.5rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .wizard-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .wizard-step {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            position: relative;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e9ecef;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 1rem;
+            z-index: 2;
+        }
+
+        .step-number.active {
+            background: var(--bps-primary);
+            color: white;
+        }
+
+        .step-number.completed {
+            background: var(--bps-success);
+            color: white;
+        }
+
+        .step-label {
+            font-weight: 500;
+            color: var(--bps-primary);
+        }
+
+        .step-connector {
+            position: absolute;
+            top: 20px;
+            left: 60px;
+            right: -20px;
+            height: 2px;
+            background: #e9ecef;
+            z-index: 1;
+        }
+
+        .step-connector.active {
+            background: var(--bps-success);
+        }
+
+        .wizard-content {
+            padding: 2rem;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+        }
+
+        .section-title {
+            color: var(--bps-primary);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: var(--bps-dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control, .form-select {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 0.6rem 0.8rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--bps-accent);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.5rem;
+        }
+
+        .form-check {
+            padding: 0.5rem;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+        }
+
+        .form-check:hover {
+            background-color: #f8f9fa;
+        }
+
+        .form-check-input:checked ~ .form-check-label {
+            color: var(--bps-primary);
+            font-weight: 500;
+        }
+
+        .btn-bps {
+            background: var(--bps-primary);
+            border: none;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-bps:hover {
+            background: var(--bps-secondary);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-bps:disabled {
+            background: #6c757d;
+            transform: none;
+        }
+
+        .preset-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .preset-card {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .preset-card:hover {
+            border-color: var(--bps-accent);
+            transform: translateY(-2px);
+        }
+
+        .preset-card.selected {
+            border-color: var(--bps-primary);
+            background: rgba(44, 62, 80, 0.05);
+        }
+
+        .preset-icon {
+            font-size: 2rem;
+            color: var(--bps-accent);
+            margin-bottom: 1rem;
+        }
+
+        .preset-title {
+            font-weight: 600;
+            color: var(--bps-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .preset-description {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .preview-section {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .preview-title {
+            font-weight: 600;
+            color: var(--bps-primary);
+            margin-bottom: 1rem;
+        }
+
+        .preview-item {
+            display: flex;
+            justify-content: between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .preview-item:last-child {
+            border-bottom: none;
+        }
+
+        .progress-container {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            text-align: center;
+            display: none;
+        }
+
+        .progress-spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #e9ecef;
+            border-top: 6px solid var(--bps-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .advanced-options {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .collapsible-section {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .collapsible-header {
+            background: #f8f9fa;
+            padding: 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .collapsible-content {
+            padding: 1rem;
+            display: none;
+        }
+
+        .collapsible-content.active {
+            display: block;
+        }
+
+        @media print {
+            .wizard-container, .btn { display: none; }
+            .report-header { background: var(--bps-primary) !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="report-title">
+                        <i class="bi bi-gear me-3"></i>
+                        Custom Report Generator
+                    </h1>
+                    <p class="report-subtitle">Create tailored reports for your specific needs</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <img src="{% static 'img/logos/bps-logo.png' %}" alt="BPS Logo" style="height: 60px;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Wizard Container -->
+        <div class="wizard-container">
+            <!-- Wizard Header -->
+            <div class="wizard-header">
+                <div class="wizard-steps">
+                    <div class="wizard-step">
+                        <div class="step-number active" id="step-1">1</div>
+                        <div class="step-label">Report Type</div>
+                        <div class="step-connector"></div>
+                    </div>
+                    <div class="wizard-step">
+                        <div class="step-number" id="step-2">2</div>
+                        <div class="step-label">Configure</div>
+                        <div class="step-connector"></div>
+                    </div>
+                    <div class="wizard-step">
+                        <div class="step-number" id="step-3">3</div>
+                        <div class="step-label">Preview</div>
+                        <div class="step-connector"></div>
+                    </div>
+                    <div class="wizard-step">
+                        <div class="step-number" id="step-4">4</div>
+                        <div class="step-label">Generate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wizard Content -->
+            <div class="wizard-content">
+                <form method="post" id="customReportForm">
+                    {% csrf_token %}
+                    
+                    <!-- Step 1: Report Type Selection -->
+                    <div class="wizard-step-content active" id="step-content-1">
+                        <div class="form-section">
+                            <h5 class="section-title">
+                                <i class="bi bi-file-earmark-text"></i>
+                                Choose Report Type
+                            </h5>
+                            <div class="preset-cards">
+                                {% for type_id, type_name in report_types %}
+                                <div class="preset-card" data-report-type="{{ type_id }}">
+                                    <div class="preset-icon">
+                                        {% if type_id == 'inventory' %}
+                                            <i class="bi bi-boxes"></i>
+                                        {% elif type_id == 'assignments' %}
+                                            <i class="bi bi-person-check"></i>
+                                        {% elif type_id == 'maintenance' %}
+                                            <i class="bi bi-tools"></i>
+                                        {% elif type_id == 'audit' %}
+                                            <i class="bi bi-shield-check"></i>
+                                        {% elif type_id == 'warranty' %}
+                                            <i class="bi bi-shield"></i>
+                                        {% elif type_id == 'department' %}
+                                            <i class="bi bi-pie-chart"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="preset-title">{{ type_name }}</div>
+                                    <div class="preset-description">
+                                        {% if type_id == 'inventory' %}
+                                            Comprehensive device inventory analysis
+                                        {% elif type_id == 'assignments' %}
+                                            Staff assignments and device allocation
+                                        {% elif type_id == 'maintenance' %}
+                                            Maintenance schedules and history
+                                        {% elif type_id == 'audit' %}
+                                            System activity and compliance tracking
+                                        {% elif type_id == 'warranty' %}
+                                            Warranty status and expiration analysis
+                                        {% elif type_id == 'department' %}
+                                            Department utilization and efficiency
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="report_type" id="selected_report_type">
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Configuration -->
+                    <div class="wizard-step-content" id="step-content-2">
+                        <div class="form-section">
+                            <h5 class="section-title">
+                                <i class="bi bi-sliders"></i>
+                                Report Configuration
+                            </h5>
+                            
+                            <!-- Basic Configuration -->
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Report Name</label>
+                                    <input type="text" name="report_name" class="form-control" placeholder="Enter custom report name...">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Date Range</label>
+                                    <select name="date_range" class="form-select" id="date_range_select">
+                                        <option value="last_7_days">Last 7 Days</option>
+                                        <option value="last_30_days" selected>Last 30 Days</option>
+                                        <option value="last_3_months">Last 3 Months</option>
+                                        <option value="last_year">Last Year</option>
+                                        <option value="custom">Custom Range</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Custom Date Range -->
+                            <div class="form-grid" id="custom_date_range" style="display: none;">
+                                <div class="form-group">
+                                    <label class="form-label">From Date</label>
+                                    <input type="date" name="date_from" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">To Date</label>
+                                    <input type="date" name="date_to" class="form-control">
+                                </div>
+                            </div>
+
+                            <!-- Department Filter -->
+                            <div class="form-section">
+                                <h6 class="section-title">
+                                    <i class="bi bi-building"></i>
+                                    Department Filter
+                                </h6>
+                                <div class="checkbox-grid">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="all_departments" checked>
+                                        <label class="form-check-label" for="all_departments">
+                                            <strong>All Departments</strong>
+                                        </label>
+                                    </div>
+                                    {% for department in departments %}
+                                    <div class="form-check">
+                                        <input class="form-check-input department-checkbox" type="checkbox" name="departments" value="{{ department.id }}" id="dept_{{ department.id }}">
+                                        <label class="form-check-label" for="dept_{{ department.id }}">
+                                            {{ department.name }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Category Filter -->
+                            <div class="form-section">
+                                <h6 class="section-title">
+                                    <i class="bi bi-tags"></i>
+                                    Category Filter
+                                </h6>
+                                <div class="checkbox-grid">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="all_categories" checked>
+                                        <label class="form-check-label" for="all_categories">
+                                            <strong>All Categories</strong>
+                                        </label>
+                                    </div>
+                                    {% for category in categories %}
+                                    <div class="form-check">
+                                        <input class="form-check-input category-checkbox" type="checkbox" name="categories" value="{{ category.id }}" id="cat_{{ category.id }}">
+                                        <label class="form-check-label" for="cat_{{ category.id }}">
+                                            {{ category.name }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Advanced Options -->
+                            <div class="advanced-options">
+                                <div class="collapsible-section">
+                                    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                                        <span><i class="bi bi-gear me-2"></i>Advanced Options</span>
+                                        <i class="bi bi-chevron-down"></i>
+                                    </div>
+                                    <div class="collapsible-content">
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label class="form-label">Export Format</label>
+                                                <select name="format" class="form-select">
+                                                    <option value="html">HTML (Online View)</option>
+                                                    <option value="pdf">PDF Document</option>
+                                                    <option value="excel">Excel Spreadsheet</option>
+                                                    <option value="csv">CSV File</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">Include Charts</label>
+                                                <select name="include_charts" class="form-select">
+                                                    <option value="yes">Yes</option>
+                                                    <option value="no">No</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="include_inactive" id="include_inactive">
+                                            <label class="form-check-label" for="include_inactive">
+                                                Include inactive records
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="email_report" id="email_report">
+                                            <label class="form-check-label" for="email_report">
+                                                Email report when ready
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Preview -->
+                    <div class="wizard-step-content" id="step-content-3">
+                        <div class="form-section">
+                            <h5 class="section-title">
+                                <i class="bi bi-eye"></i>
+                                Report Preview
+                            </h5>
+                            <div class="preview-section">
+                                <div class="preview-title">Report Configuration Summary</div>
+                                <div id="preview-content">
+                                    <div class="preview-item">
+                                        <span>Report Type:</span>
+                                        <span id="preview-type">-</span>
+                                    </div>
+                                    <div class="preview-item">
+                                        <span>Report Name:</span>
+                                        <span id="preview-name">-</span>
+                                    </div>
+                                    <div class="preview-item">
+                                        <span>Date Range:</span>
+                                        <span id="preview-dates">-</span>
+                                    </div>
+                                    <div class="preview-item">
+                                        <span>Departments:</span>
+                                        <span id="preview-departments">-</span>
+                                    </div>
+                                    <div class="preview-item">
+                                        <span>Categories:</span>
+                                        <span id="preview-categories">-</span>
+                                    </div>
+                                    <div class="preview-item">
+                                        <span>Export Format:</span>
+                                        <span id="preview-format">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Generate -->
+                    <div class="wizard-step-content" id="step-content-4">
+                        <div class="form-section text-center">
+                            <h5 class="section-title justify-content-center">
+                                <i class="bi bi-rocket"></i>
+                                Generate Report
+                            </h5>
+                            <p class="text-muted mb-4">Review your configuration and generate the custom report.</p>
+                            
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                                <button type="submit" class="btn btn-bps btn-lg">
+                                    <i class="bi bi-play-circle me-2"></i>
+                                    Generate Report
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-lg" onclick="saveAsTemplate()">
+                                    <i class="bi bi-bookmark me-2"></i>
+                                    Save as Template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-secondary" id="prev-btn" onclick="previousStep()" disabled>
+                            <i class="bi bi-arrow-left me-2"></i>Previous
+                        </button>
+                        <button type="button" class="btn btn-bps" id="next-btn" onclick="nextStep()" disabled>
+                            Next<i class="bi bi-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Progress Container -->
+        <div class="progress-container" id="progress-container">
+            <div class="progress-spinner"></div>
+            <h5>Generating Report...</h5>
+            <p class="text-muted">Please wait while we generate your custom report.</p>
+            <div class="progress mt-3">
+                <div class="progress-bar" role="progressbar" style="width: 0%" id="progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentStep = 1;
+        const totalSteps = 4;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateNavigation();
+            updatePreview();
+        });
+
+        // Report type selection
+        document.querySelectorAll('.preset-card').forEach(card => {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+                document.getElementById('selected_report_type').value = this.dataset.reportType;
+                updateNavigation();
+            });
+        });
+
+        // Date range handling
+        document.getElementById('date_range_select').addEventListener('change', function() {
+            const customRange = document.getElementById('custom_date_range');
+            if (this.value === 'custom') {
+                customRange.style.display = 'grid';
+            } else {
+                customRange.style.display = 'none';
+            }
+            updatePreview();
+        });
+
+        // Department checkboxes
+        document.getElementById('all_departments').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.department-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                cb.disabled = this.checked;
+            });
+            updatePreview();
+        });
+
+        document.querySelectorAll('.department-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                if (this.checked) {
+                    document.getElementById('all_departments').checked = false;
+                }
+                updatePreview();
+            });
+        });
+
+        // Category checkboxes
+        document.getElementById('all_categories').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.category-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                cb.disabled = this.checked;
+            });
+            updatePreview();
+        });
+
+        document.querySelectorAll('.category-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                if (this.checked) {
+                    document.getElementById('all_categories').checked = false;
+                }
+                updatePreview();
+            });
+        });
+
+        // Form inputs
+        document.querySelectorAll('input[name="report_name"], select[name="format"]').forEach(input => {
+            input.addEventListener('change', updatePreview);
+        });
+
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                document.getElementById(`step-content-${currentStep}`).classList.remove('active');
+                document.getElementById(`step-${currentStep}`).classList.remove('active');
+                document.getElementById(`step-${currentStep}`).classList.add('completed');
+                
+                currentStep++;
+                
+                document.getElementById(`step-content-${currentStep}`).classList.add('active');
+                document.getElementById(`step-${currentStep}`).classList.add('active');
+                
+                updateNavigation();
+                updatePreview();
+            }
+        }
+
+        function previousStep() {
+            if (currentStep > 1) {
+                document.getElementById(`step-content-${currentStep}`).classList.remove('active');
+                document.getElementById(`step-${currentStep}`).classList.remove('active');
+                
+                currentStep--;
+                
+                document.getElementById(`step-content-${currentStep}`).classList.add('active');
+                document.getElementById(`step-${currentStep}`).classList.remove('completed');
+                document.getElementById(`step-${currentStep}`).classList.add('active');
+                
+                updateNavigation();
+            }
+        }
+
+        function updateNavigation() {
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            
+            prevBtn.disabled = currentStep === 1;
+            
+            if (currentStep === totalSteps) {
+                nextBtn.style.display = 'none';
+            } else {
+                nextBtn.style.display = 'inline-block';
+                
+                // Enable next button based on step requirements
+                if (currentStep === 1) {
+                    nextBtn.disabled = !document.getElementById('selected_report_type').value;
+                } else {
+                    nextBtn.disabled = false;
+                }
+            }
+        }
+
+        function updatePreview() {
+            if (currentStep < 3) return;
+            
+            const reportType = document.getElementById('selected_report_type').value;
+            const reportName = document.querySelector('input[name="report_name"]').value;
+            const dateRange = document.querySelector('select[name="date_range"]').value;
+            const format = document.querySelector('select[name="format"]').value;
+            
+            document.getElementById('preview-type').textContent = reportType || '-';
+            document.getElementById('preview-name').textContent = reportName || 'Untitled Report';
+            document.getElementById('preview-dates').textContent = dateRange.replace('_', ' ').toUpperCase();
+            document.getElementById('preview-format').textContent = format.toUpperCase();
+            
+            // Departments
+            const allDepts = document.getElementById('all_departments').checked;
+            const selectedDepts = document.querySelectorAll('.department-checkbox:checked');
+            if (allDepts) {
+                document.getElementById('preview-departments').textContent = 'All Departments';
+            } else if (selectedDepts.length > 0) {
+                document.getElementById('preview-departments').textContent = `${selectedDepts.length} Selected`;
+            } else {
+                document.getElementById('preview-departments').textContent = 'None Selected';
+            }
+            
+            // Categories
+            const allCats = document.getElementById('all_categories').checked;
+            const selectedCats = document.querySelectorAll('.category-checkbox:checked');
+            if (allCats) {
+                document.getElementById('preview-categories').textContent = 'All Categories';
+            } else if (selectedCats.length > 0) {
+                document.getElementById('preview-categories').textContent = `${selectedCats.length} Selected`;
+            } else {
+                document.getElementById('preview-categories').textContent = 'None Selected';
+            }
+        }
+
+        function toggleCollapsible(header) {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('i:last-child');
+            
+            if (content.classList.contains('active')) {
+                content.classList.remove('active');
+                icon.classList.remove('bi-chevron-up');
+                icon.classList.add('bi-chevron-down');
+            } else {
+                content.classList.add('active');
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-up');
+            }
+        }
+
+        function saveAsTemplate() {
+            // Implement save as template functionality
+            alert('Save as template feature coming soon!');
+        }
+
+        // Form submission
+        document.getElementById('customReportForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Show progress
+            document.querySelector('.wizard-container').style.display = 'none';
+            document.getElementById('progress-container').style.display = 'block';
+            
+            // Simulate progress
+            let progress = 0;
+            const progressBar = document.getElementById('progress-bar');
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 100) progress = 100;
+                
+                progressBar.style.width = progress + '%';
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        // Submit the actual form
+                        this.submit();
+                    }, 1000);
+                }
+            }, 500);
+        });
+
+        // Auto-save functionality
+        function autoSave() {
+            const formData = new FormData(document.getElementById('customReportForm'));
+            const data = Object.fromEntries(formData.entries());
+            
+            localStorage.setItem('customReportDraft', JSON.stringify(data));
+        }
+
+        function loadDraft() {
+            const draft = localStorage.getItem('customReportDraft');
+            if (draft) {
+                const data = JSON.parse(draft);
+                
+                // Restore form values
+                Object.keys(data).forEach(key => {
+                    const element = document.querySelector(`[name="${key}"]`);
+                    if (element) {
+                        if (element.type === 'checkbox') {
+                            element.checked = data[key] === 'on';
+                        } else {
+                            element.value = data[key];
+                        }
+                    }
+                });
+                
+                updatePreview();
+            }
+        }
+
+        // Auto-save every 30 seconds
+        setInterval(autoSave, 30000);
+
+        // Load draft on page load
+        window.addEventListener('load', loadDraft);
+
+        // Clear draft on successful submission
+        document.getElementById('customReportForm').addEventListener('submit', function() {
+            localStorage.removeItem('customReportDraft');
+        });
+    </script>
+</body>
+</html>

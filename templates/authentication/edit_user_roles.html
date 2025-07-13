@@ -1,0 +1,859 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit User Roles - {{ target_user.get_full_name|default:target_user.username }} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .roles-header {
+        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .user-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.75rem;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .user-info h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.75rem;
+        font-weight: 600;
+    }
+    
+    .user-meta {
+        display: flex;
+        gap: 2rem;
+        font-size: 0.95rem;
+        opacity: 0.9;
+    }
+    
+    .roles-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+        border: 1px solid #e9ecef;
+    }
+    
+    .roles-card-header {
+        background: #f8f9fa;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .roles-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: #495057;
+        display: flex;
+        align-items: center;
+    }
+    
+    .roles-card-header i {
+        margin-right: 0.75rem;
+        color: #6f42c1;
+    }
+    
+    .roles-card-body {
+        padding: 1.5rem;
+    }
+    
+    .current-roles {
+        margin-bottom: 2rem;
+    }
+    
+    .role-item {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.3s ease;
+    }
+    
+    .role-item:hover {
+        background: #e9ecef;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .role-info {
+        flex-grow: 1;
+    }
+    
+    .role-name {
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.25rem;
+    }
+    
+    .role-description {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+    
+    .role-department {
+        font-size: 0.75rem;
+        color: #6f42c1;
+        font-weight: 500;
+    }
+    
+    .role-permissions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    
+    .permission-badge {
+        background: #e8f4f8;
+        color: #0c5460;
+        padding: 0.125rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .role-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-remove {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-remove:hover {
+        background: #c82333;
+        transform: translateY(-1px);
+    }
+    
+    .btn-edit {
+        background: #17a2b8;
+        color: white;
+        border: none;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+    
+    .btn-edit:hover {
+        background: #138496;
+        color: white;
+        transform: translateY(-1px);
+    }
+    
+    .add-role-section {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        border: 2px dashed #dee2e6;
+    }
+    
+    .form-floating {
+        margin-bottom: 1rem;
+    }
+    
+    .form-floating > .form-control,
+    .form-floating > .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1rem 0.75rem;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+    
+    .form-floating > .form-control:focus,
+    .form-floating > .form-select:focus {
+        border-color: #6f42c1;
+        box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.25);
+        outline: none;
+    }
+    
+    .form-floating > label {
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .role-preview {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-top: 1rem;
+        display: none;
+    }
+    
+    .role-preview.show {
+        display: block;
+    }
+    
+    .role-preview h6 {
+        color: #495057;
+        margin-bottom: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .permission-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+    }
+    
+    .permission-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .permission-item i {
+        color: #28a745;
+        font-size: 0.75rem;
+    }
+    
+    .action-buttons {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #e9ecef;
+    }
+    
+    .btn-group {
+        display: flex;
+        gap: 1rem;
+    }
+    
+    .btn-action {
+        padding: 0.75rem 2rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 1rem;
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-color: #28a745;
+    }
+    
+    .btn-save:hover {
+        background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+    
+    .btn-cancel {
+        background: white;
+        color: #6c757d;
+        border-color: #dee2e6;
+    }
+    
+    .btn-cancel:hover {
+        background: #f8f9fa;
+        color: #495057;
+        border-color: #adb5bd;
+        text-decoration: none;
+    }
+    
+    .btn-add {
+        background: #6f42c1;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-add:hover {
+        background: #5a32a3;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(111, 66, 193, 0.3);
+    }
+    
+    .btn-add:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .form-help {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.5rem;
+    }
+    
+    .alert-info {
+        background: #e8f4f8;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .alert-warning {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .date-range {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    
+    .date-range .form-floating {
+        margin-bottom: 0;
+    }
+    
+    @media (max-width: 768px) {
+        .role-item {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .role-actions {
+            margin-top: 1rem;
+            width: 100%;
+            justify-content: flex-end;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .btn-group {
+            flex-direction: column;
+        }
+        
+        .btn-action {
+            justify-content: center;
+        }
+        
+        .date-range {
+            grid-template-columns: 1fr;
+        }
+        
+        .permission-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Roles Header -->
+<div class="roles-header">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center">
+            <div class="user-avatar">
+                {{ target_user.first_name|first|default:target_user.username|first|upper }}
+            </div>
+            <div class="user-info">
+                <h1>Edit User Roles</h1>
+                <div class="user-meta">
+                    <span><i class="fas fa-user me-1"></i>{{ target_user.get_full_name|default:target_user.username }}</span>
+                    <span><i class="fas fa-envelope me-1"></i>{{ target_user.email|default:"No email" }}</span>
+                    <span><i class="fas fa-shield-alt me-1"></i>{{ current_roles.count }} role(s)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <form method="post" id="rolesForm">
+        {% csrf_token %}
+        
+        <!-- Current Roles -->
+        <div class="roles-card">
+            <div class="roles-card-header">
+                <h5><i class="fas fa-shield-check"></i>Current Role Assignments</h5>
+            </div>
+            <div class="roles-card-body">
+                <div class="current-roles">
+                    {% if current_roles %}
+                    {% for assignment in current_roles %}
+                    <div class="role-item" data-assignment-id="{{ assignment.id }}">
+                        <div class="role-info">
+                            <div class="role-name">{{ assignment.role.display_name }}</div>
+                            <div class="role-description">{{ assignment.role.description|truncatechars:100 }}</div>
+                            {% if assignment.department %}
+                            <div class="role-department">
+                                <i class="fas fa-building me-1"></i>{{ assignment.department.name }}
+                            </div>
+                            {% else %}
+                            <div class="role-department">
+                                <i class="fas fa-globe me-1"></i>System-wide access
+                            </div>
+                            {% endif %}
+                            <div class="role-permissions">
+                                {% if assignment.role.can_view_all_devices %}
+                                <span class="permission-badge">All Devices</span>
+                                {% endif %}
+                                {% if assignment.role.can_manage_assignments %}
+                                <span class="permission-badge">Assignments</span>
+                                {% endif %}
+                                {% if assignment.role.can_approve_requests %}
+                                <span class="permission-badge">Approvals</span>
+                                {% endif %}
+                                {% if assignment.role.can_generate_reports %}
+                                <span class="permission-badge">Reports</span>
+                                {% endif %}
+                                {% if assignment.role.can_manage_users %}
+                                <span class="permission-badge">User Management</span>
+                                {% endif %}
+                                {% if assignment.role.can_system_admin %}
+                                <span class="permission-badge">System Admin</span>
+                                {% endif %}
+                                {% if assignment.role.can_manage_maintenance %}
+                                <span class="permission-badge">Maintenance</span>
+                                {% endif %}
+                                {% if assignment.role.can_manage_vendors %}
+                                <span class="permission-badge">Vendors</span>
+                                {% endif %}
+                            </div>
+                            {% if assignment.valid_from or assignment.valid_until %}
+                            <div class="role-department mt-1">
+                                <i class="fas fa-clock me-1"></i>
+                                {% if assignment.valid_from %}From: {{ assignment.valid_from|date:"M d, Y" }}{% endif %}
+                                {% if assignment.valid_until %} Until: {{ assignment.valid_until|date:"M d, Y" }}{% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="role-actions">
+                            <button type="button" class="btn-edit" onclick="editAssignment({{ assignment.id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn-remove" onclick="removeAssignment({{ assignment.id }})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-shield-alt"></i>
+                        <h5>No Roles Assigned</h5>
+                        <p>This user currently has no role assignments. Add a role below to grant permissions.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Add New Role -->
+        <div class="roles-card">
+            <div class="roles-card-header">
+                <h5><i class="fas fa-plus-circle"></i>Add New Role Assignment</h5>
+            </div>
+            <div class="roles-card-body">
+                <div class="add-role-section">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="newRole" name="role" required>
+                                    <option value="">Select a role...</option>
+                                    {% for role in available_roles %}
+                                    <option value="{{ role.id }}" 
+                                            data-description="{{ role.description }}"
+                                            data-permissions='{{ role.permissions|default:"{}" }}'
+                                            data-view-all="{{ role.can_view_all_devices|yesno:"yes,no" }}"
+                                            data-manage-assignments="{{ role.can_manage_assignments|yesno:"yes,no" }}"
+                                            data-approve-requests="{{ role.can_approve_requests|yesno:"yes,no" }}"
+                                            data-generate-reports="{{ role.can_generate_reports|yesno:"yes,no" }}"
+                                            data-manage-users="{{ role.can_manage_users|yesno:"yes,no" }}"
+                                            data-system-admin="{{ role.can_system_admin|yesno:"yes,no" }}"
+                                            data-manage-maintenance="{{ role.can_manage_maintenance|yesno:"yes,no" }}"
+                                            data-manage-vendors="{{ role.can_manage_vendors|yesno:"yes,no" }}"
+                                            data-scan-qr="{{ role.can_scan_qr_codes|yesno:"yes,no" }}"
+                                            data-generate-qr="{{ role.can_generate_qr_codes|yesno:"yes,no" }}">
+                                        {{ role.display_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <label for="newRole">Role</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="department" name="department">
+                                    <option value="">System-wide (All Departments)</option>
+                                    {% for dept in departments %}
+                                    <option value="{{ dept.id }}">{{ dept.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <label for="department">Department Scope</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="date" class="form-control" id="validFrom" name="valid_from">
+                                <label for="validFrom">Valid From (Optional)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="date" class="form-control" id="validUntil" name="valid_until">
+                                <label for="validUntil">Valid Until (Optional)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-floating">
+                        <textarea class="form-control" id="assignmentNotes" name="notes" style="height: 80px"></textarea>
+                        <label for="assignmentNotes">Assignment Notes (Optional)</label>
+                    </div>
+
+                    <div class="role-preview" id="rolePreview">
+                        <h6>Role Permissions Preview:</h6>
+                        <div id="roleDescription"></div>
+                        <div class="permission-grid" id="permissionGrid"></div>
+                    </div>
+
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="button" class="btn-add" id="addRoleBtn" disabled onclick="addRoleAssignment()">
+                            <i class="fas fa-plus"></i>Add Role Assignment
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Information -->
+        <div class="alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Role Assignment Guidelines:</strong>
+            <ul class="mb-0 mt-2">
+                <li>Users can have multiple roles with different department scopes</li>
+                <li>System-wide roles apply to all departments</li>
+                <li>Departmental roles only apply to the specified department</li>
+                <li>Effective permissions are the union of all assigned roles</li>
+                <li>Time-limited assignments will automatically expire</li>
+            </ul>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <div class="btn-group">
+                <a href="{% url 'authentication:user_detail' target_user.id %}" class="btn-action btn-cancel">
+                    <i class="fas fa-arrow-left"></i>Back to User
+                </a>
+                <a href="{% url 'authentication:user_list' %}" class="btn-action btn-cancel">
+                    <i class="fas fa-list"></i>User List
+                </a>
+            </div>
+            <button type="submit" class="btn-action btn-save">
+                <i class="fas fa-save"></i>Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Hidden input for tracking assignments to remove -->
+<input type="hidden" id="assignmentsToRemove" name="assignments_to_remove" value="">
+<input type="hidden" id="newAssignments" name="new_assignments" value="">
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const newRoleSelect = document.getElementById('newRole');
+    const addRoleBtn = document.getElementById('addRoleBtn');
+    const rolePreview = document.getElementById('rolePreview');
+    const roleDescription = document.getElementById('roleDescription');
+    const permissionGrid = document.getElementById('permissionGrid');
+    const validFromInput = document.getElementById('validFrom');
+    const validUntilInput = document.getElementById('validUntil');
+    const assignmentsToRemove = [];
+    const newAssignments = [];
+
+    // Role selection change handler
+    newRoleSelect.addEventListener('change', function() {
+        const selectedOption = this.selectedOptions[0];
+        
+        if (this.value) {
+            addRoleBtn.disabled = false;
+            showRolePreview(selectedOption);
+        } else {
+            addRoleBtn.disabled = true;
+            rolePreview.classList.remove('show');
+        }
+    });
+
+    function showRolePreview(option) {
+        const description = option.dataset.description;
+        const permissions = [
+            { key: 'view-all', label: 'View All Devices', value: option.dataset.viewAll },
+            { key: 'manage-assignments', label: 'Manage Assignments', value: option.dataset.manageAssignments },
+            { key: 'approve-requests', label: 'Approve Requests', value: option.dataset.approveRequests },
+            { key: 'generate-reports', label: 'Generate Reports', value: option.dataset.generateReports },
+            { key: 'manage-users', label: 'Manage Users', value: option.dataset.manageUsers },
+            { key: 'system-admin', label: 'System Administration', value: option.dataset.systemAdmin },
+            { key: 'manage-maintenance', label: 'Manage Maintenance', value: option.dataset.manageMaintenance },
+            { key: 'manage-vendors', label: 'Manage Vendors', value: option.dataset.manageVendors },
+            { key: 'scan-qr', label: 'Scan QR Codes', value: option.dataset.scanQr },
+            { key: 'generate-qr', label: 'Generate QR Codes', value: option.dataset.generateQr }
+        ];
+
+        roleDescription.textContent = description;
+        
+        permissionGrid.innerHTML = '';
+        permissions.forEach(perm => {
+            if (perm.value === 'yes') {
+                const permDiv = document.createElement('div');
+                permDiv.className = 'permission-item';
+                permDiv.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <span>${perm.label}</span>
+                `;
+                permissionGrid.appendChild(permDiv);
+            }
+        });
+
+        rolePreview.classList.add('show');
+    }
+
+    // Date validation
+    validFromInput.addEventListener('change', function() {
+        if (validUntilInput.value && this.value > validUntilInput.value) {
+            alert('Valid From date cannot be after Valid Until date');
+            this.value = '';
+        }
+    });
+
+    validUntilInput.addEventListener('change', function() {
+        if (validFromInput.value && this.value < validFromInput.value) {
+            alert('Valid Until date cannot be before Valid From date');
+            this.value = '';
+        }
+    });
+
+    // Global functions for button actions
+    window.removeAssignment = function(assignmentId) {
+        if (confirm('Are you sure you want to remove this role assignment?')) {
+            assignmentsToRemove.push(assignmentId);
+            document.getElementById('assignmentsToRemove').value = JSON.stringify(assignmentsToRemove);
+            
+            const roleItem = document.querySelector(`[data-assignment-id="${assignmentId}"]`);
+            roleItem.style.transition = 'all 0.3s ease';
+            roleItem.style.opacity = '0.5';
+            roleItem.style.transform = 'scale(0.95)';
+            
+            // Add removed indicator
+            const removedIndicator = document.createElement('div');
+            removedIndicator.className = 'alert alert-warning mt-2 mb-0';
+            removedIndicator.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>This role will be removed when you save changes.';
+            roleItem.appendChild(removedIndicator);
+        }
+    };
+
+    window.editAssignment = function(assignmentId) {
+        // For now, just scroll to add new role section
+        // In a full implementation, you'd populate the form with current values
+        document.getElementById('newRole').focus();
+        alert('To modify this assignment, please remove it and add a new one with the desired settings.');
+    };
+
+    window.addRoleAssignment = function() {
+        const roleId = newRoleSelect.value;
+        const departmentId = document.getElementById('department').value;
+        const validFrom = validFromInput.value;
+        const validUntil = validUntilInput.value;
+        const notes = document.getElementById('assignmentNotes').value;
+
+        if (!roleId) {
+            alert('Please select a role');
+            return;
+        }
+
+        const assignment = {
+            role_id: roleId,
+            department_id: departmentId || null,
+            valid_from: validFrom || null,
+            valid_until: validUntil || null,
+            notes: notes || null
+        };
+
+        newAssignments.push(assignment);
+        document.getElementById('newAssignments').value = JSON.stringify(newAssignments);
+
+        // Create preview of new assignment
+        const selectedOption = newRoleSelect.selectedOptions[0];
+        const departmentName = departmentId ? 
+            document.querySelector(`#department option[value="${departmentId}"]`).textContent : 
+            'System-wide';
+
+        const newRoleItem = document.createElement('div');
+        newRoleItem.className = 'role-item';
+        newRoleItem.style.background = '#e8f5e8';
+        newRoleItem.style.border = '1px solid #28a745';
+        newRoleItem.innerHTML = `
+            <div class="role-info">
+                <div class="role-name">${selectedOption.textContent}</div>
+                <div class="role-description">${selectedOption.dataset.description}</div>
+                <div class="role-department">
+                    <i class="fas fa-${departmentId ? 'building' : 'globe'} me-1"></i>${departmentName}
+                </div>
+                ${validFrom || validUntil ? `
+                <div class="role-department mt-1">
+                    <i class="fas fa-clock me-1"></i>
+                    ${validFrom ? `From: ${new Date(validFrom).toLocaleDateString()}` : ''}
+                    ${validUntil ? ` Until: ${new Date(validUntil).toLocaleDateString()}` : ''}
+                </div>
+                ` : ''}
+                <div class="alert alert-success mt-2 mb-0">
+                    <i class="fas fa-plus-circle me-2"></i>This role will be added when you save changes.
+                </div>
+            </div>
+            <div class="role-actions">
+                <button type="button" class="btn-remove" onclick="removeNewAssignment(${newAssignments.length - 1})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        document.querySelector('.current-roles').appendChild(newRoleItem);
+
+        // Clear form
+        newRoleSelect.value = '';
+        document.getElementById('department').value = '';
+        validFromInput.value = '';
+        validUntilInput.value = '';
+        document.getElementById('assignmentNotes').value = '';
+        addRoleBtn.disabled = true;
+        rolePreview.classList.remove('show');
+    };
+
+    window.removeNewAssignment = function(index) {
+        newAssignments.splice(index, 1);
+        document.getElementById('newAssignments').value = JSON.stringify(newAssignments);
+        
+        // Re-render new assignments
+        const newRoleItems = document.querySelectorAll('.role-item[style*="background: rgb(232, 245, 232)"]');
+        newRoleItems.forEach(item => item.remove());
+        
+        // Re-add remaining new assignments
+        newAssignments.forEach((assignment, idx) => {
+            // Re-create the assignment preview (simplified version)
+            const roleOption = document.querySelector(`#newRole option[value="${assignment.role_id}"]`);
+            const departmentName = assignment.department_id ? 
+                document.querySelector(`#department option[value="${assignment.department_id}"]`).textContent : 
+                'System-wide';
+
+            const newRoleItem = document.createElement('div');
+            newRoleItem.className = 'role-item';
+            newRoleItem.style.background = '#e8f5e8';
+            newRoleItem.style.border = '1px solid #28a745';
+            newRoleItem.innerHTML = `
+                <div class="role-info">
+                    <div class="role-name">${roleOption.textContent}</div>
+                    <div class="role-description">${roleOption.dataset.description}</div>
+                    <div class="role-department">
+                        <i class="fas fa-${assignment.department_id ? 'building' : 'globe'} me-1"></i>${departmentName}
+                    </div>
+                    <div class="alert alert-success mt-2 mb-0">
+                        <i class="fas fa-plus-circle me-2"></i>This role will be added when you save changes.
+                    </div>
+                </div>
+                <div class="role-actions">
+                    <button type="button" class="btn-remove" onclick="removeNewAssignment(${idx})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            document.querySelector('.current-roles').appendChild(newRoleItem);
+        });
+    };
+
+    // Form submission handler
+    document.getElementById('rolesForm').addEventListener('submit', function(e) {
+        // Update hidden inputs before submission
+        document.getElementById('assignmentsToRemove').value = JSON.stringify(assignmentsToRemove);
+        document.getElementById('newAssignments').value = JSON.stringify(newAssignments);
+        
+        // Show confirmation if there are changes
+        if (assignmentsToRemove.length > 0 || newAssignments.length > 0) {
+            const changes = [];
+            if (assignmentsToRemove.length > 0) {
+                changes.push(`${assignmentsToRemove.length} role(s) will be removed`);
+            }
+            if (newAssignments.length > 0) {
+                changes.push(`${newAssignments.length} role(s) will be added`);
+            }
+            
+            if (!confirm(`Confirm changes: ${changes.join(', ')}. Continue?`)) {
+                e.preventDefault();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -207,7 +207,7 @@ def assignment_report(request):
             }
         }
         
-        return render(request, 'reports/assignment_report.html', context)
+        return render(request, 'reports/standard/assignment_report.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating assignment report: {str(e)}")
@@ -292,7 +292,7 @@ def maintenance_report(request):
             }
         }
         
-        return render(request, 'reports/maintenance_report.html', context)
+        return render(request, 'reports/standard/maintenance_report.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating maintenance report: {str(e)}")
@@ -378,7 +378,7 @@ def audit_report(request):
             }
         }
         
-        return render(request, 'reports/audit_report.html', context)
+        return render(request, 'reports/standard/audit_report.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating audit report: {str(e)}")
@@ -465,7 +465,7 @@ def warranty_report(request):
             }
         }
         
-        return render(request, 'reports/warranty_report.html', context)
+        return render(request, 'reports/standard/warranty_report.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating warranty report: {str(e)}")
@@ -551,7 +551,7 @@ def department_utilization_report(request):
             }
         }
         
-        return render(request, 'reports/department_utilization_report.html', context)
+        return render(request, 'reports/standard/department_utilization_report.html', context)
         
     except Exception as e:
         messages.error(request, f"Error generating department utilization report: {str(e)}")
@@ -599,7 +599,7 @@ def generate_custom_report(request):
         ]
     }
     
-    return render(request, 'reports/custom_report.html', context)
+    return render(request, 'reports/standard/custom_report.html', context)
 
 @login_required
 @require_http_methods(["GET"])

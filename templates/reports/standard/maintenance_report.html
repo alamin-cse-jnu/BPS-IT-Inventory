@@ -1,0 +1,924 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Maintenance Report - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        transition: all 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stats-card.success {
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    }
+    
+    .stats-card.warning {
+        background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    }
+    
+    .stats-card.danger {
+        background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+    }
+    
+    .stats-card.info {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    }
+    
+    .stats-card.purple {
+        background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%);
+    }
+    
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+    }
+    
+    .stats-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stats-icon {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        font-size: 2rem;
+        opacity: 0.3;
+    }
+    
+    .report-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+    
+    .filter-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .table-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        overflow: hidden;
+    }
+    
+    .table-responsive {
+        border-radius: 12px;
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: none;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+    }
+    
+    .table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid #f1f3f4;
+        vertical-align: middle;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .status-badge {
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-scheduled {
+        background-color: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .status-in_progress {
+        background-color: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .status-completed {
+        background-color: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .status-cancelled {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-postponed {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .maintenance-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .maintenance-avatar {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E8E 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .maintenance-details h6 {
+        margin: 0;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    
+    .maintenance-details small {
+        color: #6c757d;
+    }
+    
+    .device-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .device-avatar {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .device-details h6 {
+        margin: 0;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    
+    .device-details small {
+        color: #6c757d;
+    }
+    
+    .priority-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .priority-low {
+        background-color: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .priority-medium {
+        background-color: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .priority-high {
+        background-color: #ffebee;
+        color: #d32f2f;
+    }
+    
+    .priority-critical {
+        background-color: #f3e5f5;
+        color: #7b1fa2;
+    }
+    
+    .maintenance-type-icon {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.8rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-action {
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-view {
+        background-color: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .btn-view:hover {
+        background-color: #1976d2;
+        color: white;
+    }
+    
+    .btn-edit {
+        background-color: #fff3e0;
+        color: #f57c00;
+    }
+    
+    .btn-edit:hover {
+        background-color: #f57c00;
+        color: white;
+    }
+    
+    .btn-complete {
+        background-color: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .btn-complete:hover {
+        background-color: #2e7d32;
+        color: white;
+    }
+    
+    .export-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+    }
+    
+    .chart-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+    }
+    
+    .cost-display {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2e7d32;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .stats-card {
+            background: #f8f9fa !important;
+            color: #333 !important;
+            -webkit-print-color-adjust: exact;
+        }
+        
+        .report-header {
+            background: #f8f9fa !important;
+            color: #333 !important;
+            -webkit-print-color-adjust: exact;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="mb-2">
+                    <i class="fas fa-tools me-3"></i>
+                    Maintenance Report
+                </h1>
+                <p class="mb-0 opacity-75">
+                    Comprehensive overview of all maintenance activities and schedules in the BPS IT inventory system
+                </p>
+            </div>
+            <div class="col-md-4 text-end">
+                <div class="report-meta">
+                    <div class="mb-1">
+                        <small class="opacity-75">Generated on:</small>
+                        <strong>{{ report_date|date:"F d, Y" }}</strong>
+                    </div>
+                    <div>
+                        <small class="opacity-75">Report ID:</small>
+                        <strong>MNT-{{ report_date|date:"Ymd" }}-001</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-2 col-md-4 mb-4">
+            <div class="stats-card">
+                <div class="position-relative p-4">
+                    <i class="fas fa-tools stats-icon"></i>
+                    <div class="stats-number">{{ total_maintenance|default:0 }}</div>
+                    <div class="stats-label">Total Tasks</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 mb-4">
+            <div class="stats-card info">
+                <div class="position-relative p-4">
+                    <i class="fas fa-calendar-alt stats-icon"></i>
+                    <div class="stats-number">{{ scheduled_count|default:0 }}</div>
+                    <div class="stats-label">Scheduled</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 mb-4">
+            <div class="stats-card warning">
+                <div class="position-relative p-4">
+                    <i class="fas fa-clock stats-icon"></i>
+                    <div class="stats-number">{{ in_progress_count|default:0 }}</div>
+                    <div class="stats-label">In Progress</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 mb-4">
+            <div class="stats-card success">
+                <div class="position-relative p-4">
+                    <i class="fas fa-check-circle stats-icon"></i>
+                    <div class="stats-number">{{ completed_count|default:0 }}</div>
+                    <div class="stats-label">Completed</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 mb-4">
+            <div class="stats-card danger">
+                <div class="position-relative p-4">
+                    <i class="fas fa-exclamation-triangle stats-icon"></i>
+                    <div class="stats-number">{{ overdue_count|default:0 }}</div>
+                    <div class="stats-label">Overdue</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-4 mb-4">
+            <div class="stats-card purple">
+                <div class="position-relative p-4">
+                    <i class="fas fa-dollar-sign stats-icon"></i>
+                    <div class="stats-number">${{ total_cost|floatformat:0|default:0 }}</div>
+                    <div class="stats-label">Total Cost</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters & Export -->
+    <div class="row">
+        <!-- Filters -->
+        <div class="col-lg-8">
+            <div class="filter-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-filter me-2"></i>
+                    Filters
+                </h5>
+                <form method="get" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">All Status</option>
+                            <option value="SCHEDULED" {% if request.GET.status == "SCHEDULED" %}selected{% endif %}>Scheduled</option>
+                            <option value="IN_PROGRESS" {% if request.GET.status == "IN_PROGRESS" %}selected{% endif %}>In Progress</option>
+                            <option value="COMPLETED" {% if request.GET.status == "COMPLETED" %}selected{% endif %}>Completed</option>
+                            <option value="CANCELLED" {% if request.GET.status == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+                            <option value="POSTPONED" {% if request.GET.status == "POSTPONED" %}selected{% endif %}>Postponed</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="maintenance_type" class="form-label">Maintenance Type</label>
+                        <select class="form-select" id="maintenance_type" name="maintenance_type">
+                            <option value="">All Types</option>
+                            <option value="PREVENTIVE" {% if request.GET.maintenance_type == "PREVENTIVE" %}selected{% endif %}>Preventive</option>
+                            <option value="CORRECTIVE" {% if request.GET.maintenance_type == "CORRECTIVE" %}selected{% endif %}>Corrective</option>
+                            <option value="EMERGENCY" {% if request.GET.maintenance_type == "EMERGENCY" %}selected{% endif %}>Emergency</option>
+                            <option value="UPGRADE" {% if request.GET.maintenance_type == "UPGRADE" %}selected{% endif %}>Upgrade</option>
+                            <option value="INSPECTION" {% if request.GET.maintenance_type == "INSPECTION" %}selected{% endif %}>Inspection</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">Date From</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">Date To</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label for="device_category" class="form-label">Device Category</label>
+                        <select class="form-select" id="device_category" name="device_category">
+                            <option value="">All Categories</option>
+                            {% for category in device_categories %}
+                            <option value="{{ category.id }}" {% if category.id|stringformat:"s" == request.GET.device_category %}selected{% endif %}>
+                                {{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label for="technician" class="form-label">Technician</label>
+                        <select class="form-select" id="technician" name="technician">
+                            <option value="">All Technicians</option>
+                            {% for tech in technicians %}
+                            <option value="{{ tech.id }}" {% if tech.id|stringformat:"s" == request.GET.technician %}selected{% endif %}>
+                                {{ tech.user.get_full_name|default:tech.user.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               placeholder="Search by device name or ID..." 
+                               value="{{ request.GET.search }}">
+                    </div>
+                    
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search me-2"></i>
+                            Apply Filters
+                        </button>
+                        <a href="{% url 'reports:maintenance_report' %}" class="btn btn-outline-secondary ms-2">
+                            <i class="fas fa-times me-2"></i>
+                            Clear Filters
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Export Options -->
+        <div class="col-lg-4">
+            <div class="export-section">
+                <h5 class="mb-3">
+                    <i class="fas fa-download me-2"></i>
+                    Export Options
+                </h5>
+                <div class="d-grid gap-2">
+                    <a href="?format=pdf{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="btn btn-outline-danger">
+                        <i class="fas fa-file-pdf me-2"></i>
+                        Export as PDF
+                    </a>
+                    <a href="?format=excel{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="btn btn-outline-success">
+                        <i class="fas fa-file-excel me-2"></i>
+                        Export as Excel
+                    </a>
+                    <button onclick="window.print()" class="btn btn-outline-primary">
+                        <i class="fas fa-print me-2"></i>
+                        Print Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maintenance Table -->
+    <div class="table-card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Maintenance Info</th>
+                        <th>Device Details</th>
+                        <th>Type & Priority</th>
+                        <th>Schedule</th>
+                        <th>Technician</th>
+                        <th>Cost</th>
+                        <th>Status</th>
+                        <th class="no-print">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for maintenance in maintenance_records %}
+                    <tr>
+                        <td>
+                            <div class="maintenance-info">
+                                <div class="maintenance-avatar">
+                                    {% if maintenance.maintenance_type == 'PREVENTIVE' %}
+                                    <i class="fas fa-shield-alt"></i>
+                                    {% elif maintenance.maintenance_type == 'CORRECTIVE' %}
+                                    <i class="fas fa-wrench"></i>
+                                    {% elif maintenance.maintenance_type == 'EMERGENCY' %}
+                                    <i class="fas fa-exclamation"></i>
+                                    {% elif maintenance.maintenance_type == 'UPGRADE' %}
+                                    <i class="fas fa-arrow-up"></i>
+                                    {% else %}
+                                    <i class="fas fa-search"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="maintenance-details">
+                                    <h6>MNT-{{ maintenance.id|stringformat:"05d" }}</h6>
+                                    <small>{{ maintenance.description|truncatechars:50 }}</small>
+                                    {% if maintenance.created_at %}
+                                    <br><small class="text-muted">Created: {{ maintenance.created_at|date:"M d, Y" }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="device-info">
+                                <div class="device-avatar">
+                                    {{ maintenance.device.device_name|first|upper }}
+                                </div>
+                                <div class="device-details">
+                                    <h6>{{ maintenance.device.device_name }}</h6>
+                                    <small>{{ maintenance.device.device_id }}</small>
+                                    {% if maintenance.device.device_type %}
+                                    <br><small class="text-muted">{{ maintenance.device.device_type.name }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="maintenance-type-icon mb-2">
+                                {% if maintenance.maintenance_type == 'PREVENTIVE' %}
+                                <i class="fas fa-shield-alt text-success"></i>
+                                {% elif maintenance.maintenance_type == 'CORRECTIVE' %}
+                                <i class="fas fa-wrench text-warning"></i>
+                                {% elif maintenance.maintenance_type == 'EMERGENCY' %}
+                                <i class="fas fa-exclamation text-danger"></i>
+                                {% elif maintenance.maintenance_type == 'UPGRADE' %}
+                                <i class="fas fa-arrow-up text-info"></i>
+                                {% else %}
+                                <i class="fas fa-search text-secondary"></i>
+                                {% endif %}
+                                <span>{{ maintenance.get_maintenance_type_display }}</span>
+                            </div>
+                            {% if maintenance.maintenance_type == 'EMERGENCY' %}
+                            <span class="priority-badge priority-critical">Critical</span>
+                            {% elif maintenance.maintenance_type == 'CORRECTIVE' %}
+                            <span class="priority-badge priority-high">High</span>
+                            {% elif maintenance.maintenance_type == 'UPGRADE' %}
+                            <span class="priority-badge priority-medium">Medium</span>
+                            {% else %}
+                            <span class="priority-badge priority-low">Low</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>
+                                {% if maintenance.next_due_date %}
+                                <strong>Due: {{ maintenance.next_due_date|date:"M d, Y" }}</strong>
+                                {% endif %}
+                                {% if maintenance.last_completed_date %}
+                                <br><small class="text-muted">Last: {{ maintenance.last_completed_date|date:"M d, Y" }}</small>
+                                {% endif %}
+                                {% if maintenance.frequency %}
+                                <br><small class="text-muted">{{ maintenance.get_frequency_display }}</small>
+                                {% endif %}
+                                {% if maintenance.is_overdue %}
+                                <br><small class="text-danger">Overdue by {{ maintenance.days_until_due|default:0 }} days</small>
+                                {% elif maintenance.days_until_due and maintenance.days_until_due <= 7 and maintenance.days_until_due > 0 %}
+                                <br><small class="text-warning">Due in {{ maintenance.days_until_due }} days</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if maintenance.assigned_technician %}
+                            <div>
+                                <strong>{{ maintenance.assigned_technician.user.get_full_name|default:maintenance.assigned_technician.user.username }}</strong>
+                                {% if maintenance.assigned_technician.designation %}
+                                <br><small class="text-muted">{{ maintenance.assigned_technician.designation }}</small>
+                                {% endif %}
+                                {% if maintenance.assigned_technician.employee_id %}
+                                <br><small class="text-muted">ID: {{ maintenance.assigned_technician.employee_id }}</small>
+                                {% endif %}
+                            </div>
+                            {% elif maintenance.vendor %}
+                            <div>
+                                <strong>{{ maintenance.vendor.name }}</strong>
+                                <br><small class="text-muted">External Vendor</small>
+                                {% if maintenance.vendor.contact_email %}
+                                <br><small class="text-muted">{{ maintenance.vendor.contact_email }}</small>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if maintenance.cost_estimate %}
+                            <div class="cost-display">
+                                ${{ maintenance.cost_estimate|floatformat:2 }}
+                            </div>
+                            <small class="text-muted">Estimated</small>
+                            {% elif maintenance.cost %}
+                            <div class="cost-display text-success">
+                                ${{ maintenance.cost|floatformat:2 }}
+                            </div>
+                            <small class="text-muted">Actual</small>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ maintenance.status|lower }}">
+                                {{ maintenance.get_status_display }}
+                            </span>
+                            {% if maintenance.estimated_duration %}
+                            <br><small class="text-muted">Est: {{ maintenance.estimated_duration }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="no-print">
+                            <div class="action-buttons">
+                                <a href="{% url 'inventory:maintenance_detail' maintenance.id %}" 
+                                   class="btn btn-action btn-view" 
+                                   title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if maintenance.status == 'SCHEDULED' %}
+                                <a href="{% url 'inventory:maintenance_edit' maintenance.id %}" 
+                                   class="btn btn-action btn-edit" 
+                                   title="Edit Maintenance">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'inventory:maintenance_complete' maintenance.id %}" 
+                                   class="btn btn-action btn-complete" 
+                                   title="Mark Complete">
+                                    <i class="fas fa-check"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="fas fa-inbox fa-2x mb-3"></i>
+                                <h5>No maintenance records found</h5>
+                                <p>Try adjusting your filters or schedule new maintenance.</p>
+                                <a href="{% url 'inventory:maintenance_add' %}" class="btn btn-primary">
+                                    <i class="fas fa-plus me-2"></i>
+                                    Schedule Maintenance
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="p-3 border-top">
+            <nav aria-label="Maintenance pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">First</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    
+                    <li class="page-item active">
+                        <span class="page-link">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                        </span>
+                    </li>
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Next</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">Last</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Summary Section -->
+    <div class="row mt-4">
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Status Distribution
+                </h5>
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <div class="h4 text-primary">{{ scheduled_count|default:0 }}</div>
+                            <small class="text-muted">Scheduled</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <div class="h4 text-warning">{{ in_progress_count|default:0 }}</div>
+                            <small class="text-muted">In Progress</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <div class="h4 text-success">{{ completed_count|default:0 }}</div>
+                            <small class="text-muted">Completed</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="text-center">
+                            <div class="h4 text-danger">{{ overdue_count|default:0 }}</div>
+                            <small class="text-muted">Overdue</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Maintenance Types
+                </h5>
+                {% for type_stat in maintenance_type_stats %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>{{ type_stat.maintenance_type|default:"Unknown" }}</span>
+                    <span class="badge bg-primary">{{ type_stat.count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-dollar-sign me-2"></i>
+                    Cost Analysis
+                </h5>
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Total Cost:</span>
+                            <strong class="cost-display">${{ total_cost|floatformat:2|default:"0.00" }}</strong>
+                        </div>
+                    </div>
+                    <div class="col-12 mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Average Cost:</span>
+                            <strong class="text-info">${{ avg_cost|floatformat:2|default:"0.00" }}</strong>
+                        </div>
+                    </div>
+                    <div class="col-12 mb-3">
+                        <div class="d-flex justify-content-between">
+                            <span>Pending Estimates:</span>
+                            <strong class="text-warning">${{ pending_cost|floatformat:2|default:"0.00" }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Upcoming Maintenance -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="chart-card">
+                <h5 class="mb-3">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Upcoming Maintenance (Next 30 Days)
+                </h5>
+                {% if upcoming_maintenance %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Due Date</th>
+                                <th>Device</th>
+                                <th>Type</th>
+                                <th>Technician</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for maintenance in upcoming_maintenance|slice:":10" %}
+                            <tr>
+                                <td>
+                                    {{ maintenance.next_due_date|date:"M d, Y" }}
+                                    {% if maintenance.is_overdue %}
+                                    <span class="badge bg-danger ms-1">Overdue</span>
+                                    {% elif maintenance.days_until_due <= 3 %}
+                                    <span class="badge bg-warning ms-1">Urgent</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ maintenance.device.device_name }}</td>
+                                <td>{{ maintenance.get_maintenance_type_display }}</td>
+                                <td>{{ maintenance.assigned_technician.user.get_full_name|default:"Unassigned" }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ maintenance.status|lower }}">
+                                        {{ maintenance.get_status_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-check-circle fa-2x mb-2"></i>
+                    <p>No upcoming maintenance scheduled for the next 30 days.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Report Footer -->
+    <div class="text-center mt-4 no-print">
+        <hr>
+        <small class="text-muted">
+            Report generated on {{ report_date|date:"F d, Y \a\t g:i A" }} by {{ user.get_full_name|default:user.username }}
+            <br>
+            BPS IT Inventory Management System
+        </small>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh statistics every 5 minutes
+    setTimeout(function() {
+        location.reload();
+    }, 300000);
+    
+    // Enhanced print functionality
+    window.addEventListener('beforeprint', function() {
+        document.title = 'BPS IT Maintenance Report - ' + new Date().toLocaleDateString();
+    });
+    
+    // Filter form enhancements
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-submit form when filters change (optional)
+        const filterForm = document.querySelector('form');
+        const selectElements = filterForm.querySelectorAll('select');
+        
+        selectElements.forEach(select => {
+            select.addEventListener('change', function() {
+                // Optional: Auto-submit on filter change
+                // filterForm.submit();
+            });
+        });
+    });
+</script>
+{% endblock %}

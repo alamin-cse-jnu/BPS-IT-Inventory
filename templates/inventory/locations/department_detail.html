@@ -1,0 +1,629 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ department.name }} - Department Detail - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .department-header {
+        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .department-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+    
+    .department-meta {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+        opacity: 0.9;
+    }
+    
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .info-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e9ecef;
+    }
+    
+    .info-card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #f8f9fa;
+    }
+    
+    .info-card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 0.5rem;
+        background: linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+    }
+    
+    .info-card-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #212529;
+        margin: 0;
+    }
+    
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .info-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .info-item-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0.75rem;
+        color: #6c757d;
+        font-size: 0.75rem;
+    }
+    
+    .info-item-label {
+        font-weight: 500;
+        color: #495057;
+        margin-right: 0.5rem;
+        min-width: 120px;
+    }
+    
+    .info-item-value {
+        color: #212529;
+        flex: 1;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        text-align: center;
+        border: 1px solid #e9ecef;
+        transition: transform 0.2s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #6f42c1;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-change {
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .stat-change.positive {
+        color: #28a745;
+    }
+    
+    .stat-change.negative {
+        color: #dc3545;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .section-divider {
+        height: 2px;
+        background: linear-gradient(90deg, #6f42c1, #5a32a3);
+        margin: 2rem 0;
+        border-radius: 1px;
+    }
+    
+    .table-responsive {
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        border: none;
+        padding: 1rem;
+    }
+    
+    .table td {
+        padding: 1rem;
+        border: none;
+        border-bottom: 1px solid #f8f9fa;
+    }
+    
+    .badge {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border-radius: 0.375rem;
+    }
+    
+    .location-hierarchy {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .hierarchy-separator {
+        color: #dee2e6;
+        margin: 0 0.25rem;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+    }
+    
+    .contact-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .contact-item a {
+        color: #6f42c1;
+        text-decoration: none;
+    }
+    
+    .contact-item a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:location_list' %}">Locations</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:department_list' %}">Departments</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ department.name }}</li>
+        </ol>
+    </nav>
+
+    <!-- Department Header -->
+    <div class="department-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="department-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h1 class="mb-0">{{ department.name }}</h1>
+                    <div class="department-meta">
+                        <div class="meta-item">
+                            <i class="fas fa-code"></i>
+                            <span>{{ department.code }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>{{ department.floor.building.name }} - {{ department.floor.name }}</span>
+                        </div>
+                        {% if department.created_at %}
+                        <div class="meta-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>Created {{ department.created_at|date:"M d, Y" }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="action-buttons">
+                        <a href="{% url 'inventory:department_edit' department.id %}" class="btn btn-light">
+                            <i class="fas fa-edit me-2"></i>Edit
+                        </a>
+                        <a href="{% url 'inventory:department_staff' department.id %}" class="btn btn-light">
+                            <i class="fas fa-users me-2"></i>Staff
+                        </a>
+                        <a href="{% url 'inventory:department_assignments' department.id %}" class="btn btn-light">
+                            <i class="fas fa-laptop me-2"></i>Assignments
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-number">{{ department.staff_count|default:0 }}</span>
+            <div class="stat-label">Staff Members</div>
+            {% if department.staff_change %}
+            <div class="stat-change {{ department.staff_change|yesno:'positive,negative' }}">
+                <i class="fas fa-arrow-{{ department.staff_change|yesno:'up,down' }}"></i>
+                {{ department.staff_change|abs }} this month
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="stat-card">
+            <span class="stat-number">{{ department.rooms.count }}</span>
+            <div class="stat-label">Rooms</div>
+            <div class="stat-change">
+                <i class="fas fa-info-circle"></i>
+                Physical locations
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <span class="stat-number">{{ department.active_assignments|default:0 }}</span>
+            <div class="stat-label">Active Assignments</div>
+            {% if department.assignment_change %}
+            <div class="stat-change {{ department.assignment_change|yesno:'positive,negative' }}">
+                <i class="fas fa-arrow-{{ department.assignment_change|yesno:'up,down' }}"></i>
+                {{ department.assignment_change|abs }} this week
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="stat-card">
+            <span class="stat-number">{{ department.maintenance_requests|default:0 }}</span>
+            <div class="stat-label">Maintenance Requests</div>
+            <div class="stat-change">
+                <i class="fas fa-clock"></i>
+                Pending resolution
+            </div>
+        </div>
+    </div>
+
+    <!-- Information Grid -->
+    <div class="info-grid">
+        <!-- Basic Information -->
+        <div class="info-card">
+            <div class="info-card-header">
+                <div class="info-card-icon">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <h5 class="info-card-title">Department Information</h5>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-tag"></i>
+                </div>
+                <div class="info-item-label">Department Code:</div>
+                <div class="info-item-value">
+                    <code>{{ department.code }}</code>
+                </div>
+            </div>
+            
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-sitemap"></i>
+                </div>
+                <div class="info-item-label">Location:</div>
+                <div class="info-item-value">
+                    <div class="location-hierarchy">
+                        <span>{{ department.floor.building.name }}</span>
+                        <span class="hierarchy-separator">→</span>
+                        <span>{{ department.floor.name }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            {% if department.description %}
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-align-left"></i>
+                </div>
+                <div class="info-item-label">Description:</div>
+                <div class="info-item-value">{{ department.description }}</div>
+            </div>
+            {% endif %}
+            
+            {% if department.budget_code %}
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div class="info-item-label">Budget Code:</div>
+                <div class="info-item-value">
+                    <code>{{ department.budget_code }}</code>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Contact Information -->
+        <div class="info-card">
+            <div class="info-card-header">
+                <div class="info-card-icon">
+                    <i class="fas fa-address-card"></i>
+                </div>
+                <h5 class="info-card-title">Contact Information</h5>
+            </div>
+            
+            {% if department.head_of_department %}
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-user-tie"></i>
+                </div>
+                <div class="info-item-label">Department Head:</div>
+                <div class="info-item-value">{{ department.head_of_department }}</div>
+            </div>
+            {% endif %}
+            
+            {% if department.contact_email or department.contact_phone %}
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-envelope"></i>
+                </div>
+                <div class="info-item-label">Contact:</div>
+                <div class="info-item-value">
+                    <div class="contact-info">
+                        {% if department.contact_email %}
+                        <div class="contact-item">
+                            <i class="fas fa-envelope"></i>
+                            <a href="mailto:{{ department.contact_email }}">{{ department.contact_email }}</a>
+                        </div>
+                        {% endif %}
+                        {% if department.contact_phone %}
+                        <div class="contact-item">
+                            <i class="fas fa-phone"></i>
+                            <a href="tel:{{ department.contact_phone }}">{{ department.contact_phone }}</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if department.office_hours %}
+            <div class="info-item">
+                <div class="info-item-icon">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="info-item-label">Office Hours:</div>
+                <div class="info-item-value">{{ department.office_hours }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Department Rooms -->
+    <div class="info-card">
+        <div class="info-card-header">
+            <div class="info-card-icon">
+                <i class="fas fa-door-open"></i>
+            </div>
+            <h5 class="info-card-title">Department Rooms</h5>
+        </div>
+        
+        {% if department.rooms.all %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Room Number</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Capacity</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for room in department.rooms.all %}
+                    <tr>
+                        <td>
+                            <code>{{ room.room_number }}</code>
+                        </td>
+                        <td>{{ room.name }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ room.room_type|default:"General" }}</span>
+                        </td>
+                        <td>{{ room.capacity|default:"N/A" }}</td>
+                        <td>
+                            <span class="badge {% if room.is_active %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ room.is_active|yesno:"Active,Inactive" }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'inventory:room_detail' room.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-door-open"></i>
+            </div>
+            <h6>No Rooms Found</h6>
+            <p>This department doesn't have any rooms assigned yet.</p>
+            <a href="{% url 'inventory:room_create' %}?department={{ department.id }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Room
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Assignments -->
+    <div class="info-card">
+        <div class="info-card-header">
+            <div class="info-card-icon">
+                <i class="fas fa-laptop"></i>
+            </div>
+            <h5 class="info-card-title">Recent Assignments</h5>
+        </div>
+        
+        {% if recent_assignments %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>Assigned To</th>
+                        <th>Assignment Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in recent_assignments %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-{{ assignment.device.device_type.icon|default:'laptop' }} me-2"></i>
+                                <div>
+                                    <div class="fw-bold">{{ assignment.device.name }}</div>
+                                    <small class="text-muted">{{ assignment.device.serial_number }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if assignment.staff %}
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user me-2"></i>
+                                    {{ assignment.staff.full_name }}
+                                </div>
+                            {% else %}
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-users me-2"></i>
+                                    Department Pool
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td>{{ assignment.assigned_date|date:"M d, Y" }}</td>
+                        <td>
+                            <span class="badge {% if assignment.status == 'active' %}bg-success{% elif assignment.status == 'returned' %}bg-secondary{% else %}bg-warning{% endif %}">
+                                {{ assignment.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'inventory:assignment_detail' assignment.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="text-center mt-3">
+            <a href="{% url 'inventory:department_assignments' department.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-list me-2"></i>View All Assignments
+            </a>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-laptop"></i>
+            </div>
+            <h6>No Assignments Found</h6>
+            <p>This department doesn't have any device assignments yet.</p>
+            <a href="{% url 'inventory:assignment_create' %}?department={{ department.id }}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Create Assignment
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize tooltips
+    $('[data-bs-toggle="tooltip"]').tooltip();
+    
+    // Handle action button clicks
+    $('.action-buttons .btn').on('click', function(e) {
+        if ($(this).hasClass('disabled')) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

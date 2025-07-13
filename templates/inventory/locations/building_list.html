@@ -1,0 +1,546 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Buildings - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .buildings-header {
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .buildings-stats {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        display: block;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+    
+    .building-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+    }
+    
+    .building-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    
+    .building-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .building-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.75rem;
+        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+    
+    .building-info h5 {
+        margin: 0 0 0.25rem 0;
+        font-weight: 600;
+        color: #212529;
+    }
+    
+    .building-code {
+        color: #6c757d;
+        font-size: 0.875rem;
+        font-family: 'Courier New', monospace;
+        margin: 0;
+    }
+    
+    .building-content {
+        margin-bottom: 1rem;
+    }
+    
+    .building-address {
+        color: #495057;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .building-address i {
+        margin-right: 0.5rem;
+        color: #6c757d;
+        width: 16px;
+    }
+    
+    .building-description {
+        color: #6c757d;
+        font-size: 0.875rem;
+        line-height: 1.4;
+    }
+    
+    .building-metrics {
+        display: flex;
+        gap: 1.5rem;
+        padding: 1rem 0;
+        border-top: 1px solid #e9ecef;
+        border-bottom: 1px solid #e9ecef;
+        margin: 1rem 0;
+    }
+    
+    .metric-item {
+        text-align: center;
+        flex: 1;
+    }
+    
+    .metric-number {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #0066cc;
+        display: block;
+    }
+    
+    .metric-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 0.25rem;
+    }
+    
+    .building-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+    
+    .btn-outline-primary {
+        border-color: #0066cc;
+        color: #0066cc;
+    }
+    
+    .btn-outline-primary:hover {
+        background-color: #0066cc;
+        border-color: #0066cc;
+    }
+    
+    .building-status {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-active {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .search-filters {
+        background: white;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .filter-row {
+        display: flex;
+        gap: 1rem;
+        align-items: end;
+    }
+    
+    .filter-group {
+        flex: 1;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+    
+    .empty-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+    
+    .btn-add-building {
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-add-building:hover {
+        background: linear-gradient(135deg, #20a23a 0%, #1e7e34 100%);
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    @media (max-width: 768px) {
+        .buildings-stats {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .building-metrics {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .filter-row {
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .building-actions {
+            flex-direction: column;
+        }
+        
+        .buildings-header {
+            padding: 1.5rem 0;
+            margin-bottom: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Buildings</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="buildings-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-0">
+                        <i class="fas fa-building me-3"></i>Buildings Management
+                    </h1>
+                    <p class="mb-0 mt-2 opacity-75">Manage organizational buildings and infrastructure</p>
+                    
+                    <div class="buildings-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_buildings }}</span>
+                            <span class="stat-label">Total Buildings</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ active_buildings }}</span>
+                            <span class="stat-label">Active</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_blocks }}</span>
+                            <span class="stat-label">Total Blocks</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">{{ total_floors }}</span>
+                            <span class="stat-label">Total Floors</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'inventory:building_add' %}" class="btn btn-add-building">
+                        <i class="fas fa-plus me-2"></i>Add Building
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="search-filters">
+        <form method="GET" class="filter-form">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="search" class="form-label">Search Buildings</label>
+                    <input type="text" 
+                           id="search" 
+                           name="search" 
+                           class="form-control" 
+                           placeholder="Search by name, code, or address..."
+                           value="{{ request.GET.search }}">
+                </div>
+                <div class="filter-group">
+                    <label for="status" class="form-label">Status</label>
+                    <select id="status" name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="sort" class="form-label">Sort By</label>
+                    <select id="sort" name="sort" class="form-select">
+                        <option value="name" {% if request.GET.sort == 'name' %}selected{% endif %}>Name A-Z</option>
+                        <option value="-name" {% if request.GET.sort == '-name' %}selected{% endif %}>Name Z-A</option>
+                        <option value="code" {% if request.GET.sort == 'code' %}selected{% endif %}>Code A-Z</option>
+                        <option value="-created_at" {% if request.GET.sort == '-created_at' %}selected{% endif %}>Newest First</option>
+                        <option value="created_at" {% if request.GET.sort == 'created_at' %}selected{% endif %}>Oldest First</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Buildings List -->
+    {% if buildings %}
+        <div class="row">
+            {% for building in buildings %}
+                <div class="col-lg-6 col-xl-4">
+                    <div class="building-card position-relative">
+                        <!-- Status Badge -->
+                        <div class="building-status">
+                            <span class="status-badge {% if building.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                {% if building.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                        </div>
+
+                        <!-- Building Header -->
+                        <div class="building-header">
+                            <div class="building-icon">
+                                <i class="fas fa-building"></i>
+                            </div>
+                            <div class="building-info">
+                                <h5>{{ building.name }}</h5>
+                                <p class="building-code">{{ building.code }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Building Content -->
+                        <div class="building-content">
+                            <div class="building-address">
+                                <i class="fas fa-map-marker-alt"></i>
+                                {{ building.address|truncatechars:80 }}
+                            </div>
+                            {% if building.description %}
+                                <div class="building-description">
+                                    {{ building.description|truncatechars:120 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Building Metrics -->
+                        <div class="building-metrics">
+                            <div class="metric-item">
+                                <span class="metric-number">{{ building.blocks.count }}</span>
+                                <span class="metric-label">Blocks</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-number">{{ building.floors.count }}</span>
+                                <span class="metric-label">Floors</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-number">{{ building.locations.count }}</span>
+                                <span class="metric-label">Locations</span>
+                            </div>
+                        </div>
+
+                        <!-- Building Actions -->
+                        <div class="building-actions">
+                            <a href="{% url 'inventory:building_detail' building.id %}" 
+                               class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-eye me-1"></i>View
+                            </a>
+                            <a href="{% url 'inventory:building_edit' building.id %}" 
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-edit me-1"></i>Edit
+                            </a>
+                            <a href="{% url 'inventory:building_delete' building.id %}" 
+                               class="btn btn-outline-danger btn-sm"
+                               onclick="return confirm('Are you sure you want to delete this building?')">
+                                <i class="fas fa-trash me-1"></i>Delete
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if buildings.has_other_pages %}
+            <div class="d-flex justify-content-center mt-4">
+                <nav aria-label="Buildings pagination">
+                    <ul class="pagination">
+                        {% if buildings.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort }}&{% endif %}page={{ buildings.previous_page_number }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in buildings.paginator.page_range %}
+                            {% if buildings.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > buildings.number|add:'-3' and num < buildings.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if buildings.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.sort %}sort={{ request.GET.sort }}&{% endif %}page={{ buildings.next_page_number }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        {% endif %}
+    {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-building"></i>
+            </div>
+            <h3>No Buildings Found</h3>
+            <p>There are no buildings matching your search criteria.</p>
+            <a href="{% url 'inventory:building_add' %}" class="btn btn-add-building">
+                <i class="fas fa-plus me-2"></i>Add First Building
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-submit filter form on select change
+    $('.filter-form select').on('change', function() {
+        $(this).closest('form').submit();
+    });
+    
+    // Search input with debounce
+    let searchTimeout;
+    $('#search').on('input', function() {
+        clearTimeout(searchTimeout);
+        const form = $(this).closest('form');
+        searchTimeout = setTimeout(function() {
+            form.submit();
+        }, 500);
+    });
+    
+    // Building card hover effects
+    $('.building-card').hover(
+        function() {
+            $(this).find('.building-actions').addClass('show');
+        },
+        function() {
+            $(this).find('.building-actions').removeClass('show');
+        }
+    );
+    
+    // Confirmation for delete actions
+    $('a[href*="delete"]').on('click', function(e) {
+        const buildingName = $(this).closest('.building-card').find('h5').text();
+        if (!confirm(`Are you sure you want to delete "${buildingName}"? This action cannot be undone.`)) {
+            e.preventDefault();
+        }
+    });
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        // Ctrl+N or Cmd+N to add new building
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            window.location.href = "{% url 'inventory:building_add' %}";
+        }
+        
+        // ESC to clear search
+        if (e.key === 'Escape') {
+            $('#search').val('').focus();
+        }
+    });
+    
+    // Focus on search input on load
+    $('#search').focus();
+});
+</script>
+{% endblock %}

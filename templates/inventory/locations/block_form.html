@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{% if form.instance.pk %}Edit Building{% else %}Add Building{% endif %} - {{ block.super }}{% endblock %}
+{% block title %}{% if form.instance.pk %}Edit Block{% else %}Add Block{% endif %} - {{ block.super }}{% endblock %}
 
 {% block extra_css %}
 <style>
     .form-header {
-        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
         color: white;
         padding: 2rem 0;
         margin-bottom: 2rem;
@@ -59,7 +59,7 @@
     
     .section-title i {
         margin-right: 0.75rem;
-        color: #0066cc;
+        color: #28a745;
         width: 20px;
     }
     
@@ -89,8 +89,8 @@
     }
     
     .form-control:focus {
-        border-color: #0066cc;
-        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
     }
     
     .form-control:invalid {
@@ -100,6 +100,19 @@
     .form-control:invalid:focus {
         border-color: #dc3545;
         box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+    
+    .form-select {
+        border-radius: 0.375rem;
+        border: 1px solid #ced4da;
+        padding: 0.75rem 1rem;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+    }
+    
+    .form-select:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
     }
     
     .form-text {
@@ -148,6 +161,78 @@
         color: #dc3545;
     }
     
+    .building-selector {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .building-title {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .building-title i {
+        margin-right: 0.5rem;
+        color: #28a745;
+    }
+    
+    .building-info {
+        background: #e7f3ff;
+        border: 1px solid #b3d7ff;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        color: #0056b3;
+    }
+    
+    .block-preview {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .block-preview-header {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .block-preview-header i {
+        margin-right: 0.5rem;
+        color: #28a745;
+    }
+    
+    .block-preview-content {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .block-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.5rem;
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-right: 1rem;
+        float: left;
+    }
+    
     .form-actions {
         background: #f8f9fa;
         padding: 1.5rem 2rem;
@@ -159,21 +244,6 @@
     }
     
     .btn-primary {
-        background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
-        border: none;
-        padding: 0.75rem 2rem;
-        border-radius: 0.375rem;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-    
-    .btn-primary:hover {
-        background: linear-gradient(135deg, #004499 0%, #003366 100%);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
-    }
-    
-    .btn-success {
         background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
         border: none;
         padding: 0.75rem 2rem;
@@ -182,10 +252,25 @@
         transition: all 0.2s ease;
     }
     
-    .btn-success:hover {
+    .btn-primary:hover {
         background: linear-gradient(135deg, #20a23a 0%, #1e7e34 100%);
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    
+    .btn-success {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-success:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
     }
     
     .btn-secondary {
@@ -215,7 +300,7 @@
     }
     
     .breadcrumb-item a {
-        color: #0066cc;
+        color: #28a745;
         text-decoration: none;
     }
     
@@ -225,25 +310,6 @@
     
     .breadcrumb-item.active {
         color: #6c757d;
-    }
-    
-    .preview-card {
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 0.375rem;
-        padding: 1rem;
-        margin-top: 1rem;
-    }
-    
-    .preview-title {
-        font-weight: 600;
-        color: #495057;
-        margin-bottom: 0.5rem;
-    }
-    
-    .preview-content {
-        color: #6c757d;
-        font-size: 0.9rem;
     }
     
     @media (max-width: 768px) {
@@ -269,6 +335,11 @@
         .section-title {
             font-size: 1rem;
         }
+        
+        .block-icon {
+            float: none;
+            margin: 0 0 1rem 0;
+        }
     }
 </style>
 {% endblock %}
@@ -279,12 +350,12 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'inventory:building_list' %}">Buildings</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:block_list' %}">Blocks</a></li>
             {% if form.instance.pk %}
-                <li class="breadcrumb-item"><a href="{% url 'inventory:building_detail' form.instance.pk %}">{{ form.instance.name }}</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'inventory:block_detail' form.instance.pk %}">{{ form.instance.name }}</a></li>
                 <li class="breadcrumb-item active" aria-current="page">Edit</li>
             {% else %}
-                <li class="breadcrumb-item active" aria-current="page">Add Building</li>
+                <li class="breadcrumb-item active" aria-current="page">Add Block</li>
             {% endif %}
         </ol>
     </nav>
@@ -295,21 +366,21 @@
             <div class="row align-items-center">
                 <div class="col-md-8">
                     <h1 class="mb-0">
-                        <i class="fas fa-building me-3"></i>
-                        {% if form.instance.pk %}Edit Building{% else %}Add New Building{% endif %}
+                        <i class="fas fa-th-large me-3"></i>
+                        {% if form.instance.pk %}Edit Block{% else %}Add New Block{% endif %}
                     </h1>
                     <p class="mb-0 mt-2 opacity-75">
                         {% if form.instance.pk %}
-                            Update building information and settings
+                            Update block information and settings
                         {% else %}
-                            Create a new building in the organizational structure
+                            Create a new block within a building
                         {% endif %}
                     </p>
                 </div>
                 <div class="col-md-4 text-end">
                     {% if form.instance.pk %}
-                        <a href="{% url 'inventory:building_detail' form.instance.pk %}" class="btn btn-light">
-                            <i class="fas fa-eye me-2"></i>View Building
+                        <a href="{% url 'inventory:block_detail' form.instance.pk %}" class="btn btn-light">
+                            <i class="fas fa-eye me-2"></i>View Block
                         </a>
                     {% endif %}
                 </div>
@@ -322,31 +393,60 @@
         <div class="form-card">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-edit me-2"></i>Building Information
+                    <i class="fas fa-edit me-2"></i>Block Information
                 </h5>
             </div>
             <div class="card-body">
-                <form method="post" id="buildingForm" novalidate>
+                <form method="post" id="blockForm" novalidate>
                     {% csrf_token %}
                     
-                    <!-- Basic Information Section -->
+                    <!-- Building Selection Section -->
                     <div class="form-section">
                         <h6 class="section-title">
-                            <i class="fas fa-info-circle"></i>Basic Information
+                            <i class="fas fa-building"></i>Building Assignment
+                        </h6>
+                        
+                        <div class="building-selector">
+                            <div class="building-title">
+                                <i class="fas fa-sitemap"></i>Select Building
+                            </div>
+                            <div class="building-info">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Choose the building where this block will be located
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="{{ form.building.id_for_label }}" class="form-label">
+                                    Building
+                                    <span class="required">*</span>
+                                </label>
+                                {{ form.building }}
+                                {% if form.building.errors %}
+                                    <div class="invalid-feedback">{{ form.building.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">Select the building that will contain this block</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Block Details Section -->
+                    <div class="form-section">
+                        <h6 class="section-title">
+                            <i class="fas fa-info-circle"></i>Block Details
                         </h6>
                         
                         <div class="row">
                             <div class="col-md-8">
                                 <div class="form-group">
                                     <label for="{{ form.name.id_for_label }}" class="form-label">
-                                        Building Name
+                                        Block Name
                                         <span class="required">*</span>
                                     </label>
                                     {{ form.name }}
                                     {% if form.name.errors %}
                                         <div class="invalid-feedback">{{ form.name.errors.0 }}</div>
                                     {% endif %}
-                                    <div class="form-text">Full name of the building (e.g., Bangladesh Parliament Secretariat - Main Building)</div>
+                                    <div class="form-text">Full name of the block (e.g., East Block, West Block, North Block)</div>
                                     <div class="character-count" data-target="{{ form.name.id_for_label }}" data-max="100">
                                         <span class="current">0</span> / 100 characters
                                     </div>
@@ -355,49 +455,20 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label for="{{ form.code.id_for_label }}" class="form-label">
-                                        Building Code
+                                        Block Code
                                         <span class="required">*</span>
                                     </label>
                                     {{ form.code }}
                                     {% if form.code.errors %}
                                         <div class="invalid-feedback">{{ form.code.errors.0 }}</div>
                                     {% endif %}
-                                    <div class="form-text">Unique identifier (e.g., BPS-MAIN-BLDG)</div>
-                                    <div class="character-count" data-target="{{ form.code.id_for_label }}" data-max="50">
-                                        <span class="current">0</span> / 50 characters
+                                    <div class="form-text">Short code (e.g., EB, WB, NB, SB)</div>
+                                    <div class="character-count" data-target="{{ form.code.id_for_label }}" data-max="20">
+                                        <span class="current">0</span> / 20 characters
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Address Information Section -->
-                    <div class="form-section">
-                        <h6 class="section-title">
-                            <i class="fas fa-map-marker-alt"></i>Location Details
-                        </h6>
-                        
-                        <div class="form-group">
-                            <label for="{{ form.address.id_for_label }}" class="form-label">
-                                Address
-                                <span class="required">*</span>
-                            </label>
-                            {{ form.address }}
-                            {% if form.address.errors %}
-                                <div class="invalid-feedback">{{ form.address.errors.0 }}</div>
-                            {% endif %}
-                            <div class="form-text">Complete address including street, area, city, and postal code</div>
-                            <div class="character-count" data-target="{{ form.address.id_for_label }}" data-max="500">
-                                <span class="current">0</span> / 500 characters
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Description Section -->
-                    <div class="form-section">
-                        <h6 class="section-title">
-                            <i class="fas fa-align-left"></i>Additional Information
-                        </h6>
                         
                         <div class="form-group">
                             <label for="{{ form.description.id_for_label }}" class="form-label">
@@ -407,9 +478,9 @@
                             {% if form.description.errors %}
                                 <div class="invalid-feedback">{{ form.description.errors.0 }}</div>
                             {% endif %}
-                            <div class="form-text">Optional description about the building's purpose, features, or other relevant information</div>
-                            <div class="character-count" data-target="{{ form.description.id_for_label }}" data-max="1000">
-                                <span class="current">0</span> / 1000 characters
+                            <div class="form-text">Optional description of the block's purpose or features</div>
+                            <div class="character-count" data-target="{{ form.description.id_for_label }}" data-max="500">
+                                <span class="current">0</span> / 500 characters
                             </div>
                         </div>
                     </div>
@@ -423,31 +494,47 @@
                         <div class="form-check">
                             {{ form.is_active }}
                             <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
-                                Active Building
+                                Active Block
                             </label>
                             {% if form.is_active.errors %}
                                 <div class="invalid-feedback">{{ form.is_active.errors.0 }}</div>
                             {% endif %}
-                            <div class="form-text mt-2">Inactive buildings will be hidden from most system operations</div>
+                            <div class="form-text mt-2">Inactive blocks will be hidden from most system operations</div>
+                        </div>
+                    </div>
+
+                    <!-- Block Preview -->
+                    <div class="block-preview" id="blockPreview" style="display: none;">
+                        <div class="block-preview-header">
+                            <i class="fas fa-eye"></i>Block Preview
+                        </div>
+                        <div class="block-preview-content">
+                            <div class="block-icon" id="previewIcon">EB</div>
+                            <div id="previewContent">
+                                <strong id="previewName">Block Name</strong><br>
+                                <span id="previewBuilding">Building</span><br>
+                                <small id="previewDescription" class="text-muted"></small>
+                            </div>
+                            <div class="clearfix"></div>
                         </div>
                     </div>
 
                     <!-- Form Actions -->
                     <div class="form-actions">
-                        <a href="{% url 'inventory:building_list' %}" class="btn btn-secondary">
+                        <a href="{% url 'inventory:block_list' %}" class="btn btn-secondary">
                             <i class="fas fa-times me-1"></i>Cancel
                         </a>
                         
                         {% if form.instance.pk %}
                             <button type="submit" name="action" value="save" class="btn btn-primary">
-                                <i class="fas fa-save me-1"></i>Update Building
+                                <i class="fas fa-save me-1"></i>Update Block
                             </button>
                             <button type="submit" name="action" value="save_continue" class="btn btn-success">
                                 <i class="fas fa-save me-1"></i>Save & Continue Editing
                             </button>
                         {% else %}
                             <button type="submit" name="action" value="save" class="btn btn-primary">
-                                <i class="fas fa-plus me-1"></i>Create Building
+                                <i class="fas fa-plus me-1"></i>Create Block
                             </button>
                             <button type="submit" name="action" value="save_add" class="btn btn-success">
                                 <i class="fas fa-plus me-1"></i>Save & Add Another
@@ -458,18 +545,24 @@
             </div>
         </div>
 
-        <!-- Preview Card (for editing) -->
+        <!-- Current Block Information (for editing) -->
         {% if form.instance.pk %}
-            <div class="preview-card mt-3">
-                <div class="preview-title">Current Building Information</div>
-                <div class="preview-content">
-                    <strong>Name:</strong> {{ form.instance.name }}<br>
-                    <strong>Code:</strong> {{ form.instance.code }}<br>
-                    <strong>Status:</strong> {% if form.instance.is_active %}Active{% else %}Inactive{% endif %}<br>
-                    <strong>Created:</strong> {{ form.instance.created_at|date:"M d, Y H:i" }}<br>
-                    {% if form.instance.updated_at != form.instance.created_at %}
-                        <strong>Last Updated:</strong> {{ form.instance.updated_at|date:"M d, Y H:i" }}
-                    {% endif %}
+            <div class="block-preview mt-3">
+                <div class="block-preview-header">Current Block Information</div>
+                <div class="block-preview-content">
+                    <div class="block-icon">{{ form.instance.code }}</div>
+                    <div>
+                        <strong>{{ form.instance.name }}</strong><br>
+                        {{ form.instance.building.name }}<br>
+                        <small class="text-muted">
+                            Status: {% if form.instance.is_active %}Active{% else %}Inactive{% endif %} | 
+                            Created: {{ form.instance.created_at|date:"M d, Y H:i" }}
+                            {% if form.instance.updated_at != form.instance.created_at %}
+                                | Updated: {{ form.instance.updated_at|date:"M d, Y H:i" }}
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div class="clearfix"></div>
                 </div>
             </div>
         {% endif %}
@@ -508,19 +601,21 @@ $(document).ready(function() {
     // Update character counts on input
     $('input[type="text"], textarea').on('input', updateCharacterCount);
     
-    // Auto-generate building code from name
+    // Auto-generate block code from name
     $('#{{ form.name.id_for_label }}').on('input', function() {
         const name = $(this).val();
         const codeField = $('#{{ form.code.id_for_label }}');
         
-        // Only auto-generate if code field is empty or this is a new building
+        // Only auto-generate if code field is empty or this is a new block
         {% if not form.instance.pk %}
             if (!codeField.val() || codeField.data('auto-generated')) {
                 let code = name
                     .toUpperCase()
                     .replace(/[^A-Z0-9\s]/g, '')
-                    .replace(/\s+/g, '-')
-                    .substring(0, 20);
+                    .split(' ')
+                    .map(word => word.substring(0, 2))
+                    .join('')
+                    .substring(0, 6);
                 
                 if (code) {
                     codeField.val(code).data('auto-generated', true);
@@ -528,15 +623,51 @@ $(document).ready(function() {
                 }
             }
         {% endif %}
+        
+        updatePreview();
     });
     
     // Remove auto-generated flag when user manually edits code
     $('#{{ form.code.id_for_label }}').on('input', function() {
         $(this).removeData('auto-generated');
+        // Convert to uppercase
+        const value = $(this).val().toUpperCase();
+        $(this).val(value);
+        updatePreview();
     });
     
+    // Building change handler
+    $('#{{ form.building.id_for_label }}').on('change', function() {
+        updatePreview();
+    });
+    
+    // Description change handler
+    $('#{{ form.description.id_for_label }}').on('input', function() {
+        updatePreview();
+    });
+    
+    // Update block preview
+    function updatePreview() {
+        const blockName = $('#{{ form.name.id_for_label }}').val();
+        const blockCode = $('#{{ form.code.id_for_label }}').val();
+        const buildingText = $('#{{ form.building.id_for_label }} option:selected').text();
+        const description = $('#{{ form.description.id_for_label }}').val();
+        
+        if (blockName && blockCode && buildingText !== 'Select Building...') {
+            $('#blockPreview').show();
+            
+            // Update preview content
+            $('#previewIcon').text(blockCode || 'BL');
+            $('#previewName').text(blockName);
+            $('#previewBuilding').text(buildingText);
+            $('#previewDescription').text(description || 'No description provided');
+        } else {
+            $('#blockPreview').hide();
+        }
+    }
+    
     // Form validation
-    $('#buildingForm').on('submit', function(e) {
+    $('#blockForm').on('submit', function(e) {
         let isValid = true;
         
         // Clear previous errors
@@ -544,19 +675,19 @@ $(document).ready(function() {
         $('.invalid-feedback').hide();
         
         // Validate required fields
-        $('input[required], textarea[required]').each(function() {
-            if (!$(this).val().trim()) {
+        $('input[required], select[required]').each(function() {
+            if (!$(this).val()) {
                 $(this).addClass('is-invalid');
                 $(this).siblings('.invalid-feedback').show();
                 isValid = false;
             }
         });
         
-        // Validate code uniqueness (frontend check)
-        const code = $('#{{ form.code.id_for_label }}').val();
-        if (code && code.length < 3) {
+        // Validate code format
+        const blockCode = $('#{{ form.code.id_for_label }}').val();
+        if (blockCode && !/^[A-Z0-9]+$/i.test(blockCode)) {
             $('#{{ form.code.id_for_label }}').addClass('is-invalid');
-            $('#{{ form.code.id_for_label }}').siblings('.invalid-feedback').text('Building code must be at least 3 characters long.').show();
+            $('#{{ form.code.id_for_label }}').siblings('.invalid-feedback').text('Block code can only contain letters and numbers.').show();
             isValid = false;
         }
         
@@ -575,31 +706,38 @@ $(document).ready(function() {
     });
     
     // Auto-focus on first field
-    $('#{{ form.name.id_for_label }}').focus();
+    $('#{{ form.building.id_for_label }}').focus();
+    
+    // Code formatting
+    $('#{{ form.code.id_for_label }}').on('input', function() {
+        // Convert to uppercase and remove invalid characters
+        let value = $(this).val().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        $(this).val(value);
+    });
     
     // Keyboard shortcuts
     $(document).on('keydown', function(e) {
         // Ctrl+S or Cmd+S to save
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
-            $('#buildingForm').submit();
+            $('#blockForm').submit();
         }
         
         // ESC to cancel
         if (e.key === 'Escape') {
             if (confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
-                window.location.href = "{% url 'inventory:building_list' %}";
+                window.location.href = "{% url 'inventory:block_list' %}";
             }
         }
     });
     
     // Warn about unsaved changes
     let formChanged = false;
-    $('#buildingForm input, #buildingForm textarea, #buildingForm select').on('change input', function() {
+    $('#blockForm input, #blockForm select, #blockForm textarea').on('change input', function() {
         formChanged = true;
     });
     
-    $('#buildingForm').on('submit', function() {
+    $('#blockForm').on('submit', function() {
         formChanged = false;
     });
     
@@ -609,14 +747,8 @@ $(document).ready(function() {
         }
     });
     
-    // Auto-resize textareas
-    $('textarea').each(function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-    }).on('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-    });
+    // Initialize preview
+    updatePreview();
 });
 </script>
 {% endblock %}

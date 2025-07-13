@@ -1,0 +1,1045 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Assignment Search - BPS IT Inventory{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    
+    .search-form {
+        background: #ffffff;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+    }
+    
+    .filter-section {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .search-stats {
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 8px;
+        background: #f8f9fa;
+        border-left: 4px solid #007bff;
+    }
+    
+    .stat-card.warning {
+        border-left-color: #ffc107;
+        background: #fff8e1;
+    }
+    
+    .stat-card.danger {
+        border-left-color: #dc3545;
+        background: #ffeaea;
+    }
+    
+    .stat-card.success {
+        border-left-color: #28a745;
+        background: #e8f5e8;
+    }
+    
+    .results-table {
+        background: #ffffff;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        border-top: none;
+        font-weight: 600;
+        color: #495057;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .assignment-status {
+        padding: 0.375rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-overdue {
+        background: #fff3cd;
+        color: #856404;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+    
+    .assignment-type {
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    
+    .type-permanent {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+    
+    .type-temporary {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+    
+    .type-loan {
+        background: #e8f5e8;
+        color: #2e7d32;
+    }
+    
+    .search-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .btn-search {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        border: none;
+        color: white;
+        padding: 0.5rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-search:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+    }
+    
+    .btn-clear {
+        background: #6c757d;
+        border: none;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-clear:hover {
+        background: #545b62;
+        transform: translateY(-1px);
+    }
+    
+    .btn-export {
+        background: #28a745;
+        border: none;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-export:hover {
+        background: #1e7e34;
+        transform: translateY(-1px);
+    }
+    
+    .assignment-card {
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        background: #ffffff;
+    }
+    
+    .assignment-card:hover {
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        border-color: #007bff;
+    }
+    
+    .device-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .device-icon {
+        width: 40px;
+        height: 40px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+    }
+    
+    .staff-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .staff-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #007bff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .pagination {
+        justify-content: center;
+        margin-top: 2rem;
+    }
+    
+    .pagination .page-link {
+        border: 1px solid #dee2e6;
+        color: #495057;
+        padding: 0.5rem 0.75rem;
+        margin: 0 0.125rem;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+    
+    .pagination .page-link:hover {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: #007bff;
+        border-color: #007bff;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .filter-badge {
+        background: #e9ecef;
+        color: #495057;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+        display: inline-block;
+    }
+    
+    .clear-filter {
+        color: #dc3545;
+        cursor: pointer;
+        margin-left: 0.25rem;
+    }
+    
+    .search-loading {
+        display: none;
+        text-align: center;
+        padding: 2rem;
+    }
+    
+    .loading-spinner {
+        border: 3px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 3px solid #007bff;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .quick-filters {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    
+    .quick-filter {
+        padding: 0.375rem 0.75rem;
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        color: #495057;
+    }
+    
+    .quick-filter:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+        color: #495057;
+        text-decoration: none;
+    }
+    
+    .quick-filter.active {
+        background: #007bff;
+        border-color: #007bff;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Search Header -->
+    <div class="search-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="mb-2">
+                    <i class="fas fa-search me-2"></i>Assignment Search
+                </h1>
+                <p class="mb-0 opacity-75">
+                    Find and filter device assignments with advanced search options
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <a href="{% url 'inventory:assignment_create' %}" class="btn btn-light btn-lg">
+                    <i class="fas fa-plus me-2"></i>New Assignment
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Search Statistics -->
+    {% if search_performed %}
+    <div class="search-stats">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="h4 mb-1 text-primary">{{ total_results }}</div>
+                    <div class="small text-muted">Total Results</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card success">
+                    <div class="h4 mb-1 text-success">{{ page_obj|length }}</div>
+                    <div class="small text-muted">This Page</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card warning">
+                    <div class="h4 mb-1 text-warning">
+                        {{ page_obj.object_list|length }}
+                    </div>
+                    <div class="small text-muted">Showing</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <div class="h4 mb-1 text-info">{{ page_obj.paginator.num_pages }}</div>
+                    <div class="small text-muted">Total Pages</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Search Form -->
+    <div class="search-form">
+        <form method="get" id="searchForm">
+            <!-- Quick Filters -->
+            <div class="quick-filters">
+                <a href="?status=active" class="quick-filter {% if filters.status == 'active' %}active{% endif %}">
+                    <i class="fas fa-check-circle me-1"></i>Active Assignments
+                </a>
+                <a href="?status=overdue" class="quick-filter {% if filters.status == 'overdue' %}active{% endif %}">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Overdue Returns
+                </a>
+                <a href="?assignment_type=TEMPORARY" class="quick-filter {% if filters.assignment_type == 'TEMPORARY' %}active{% endif %}">
+                    <i class="fas fa-clock me-1"></i>Temporary
+                </a>
+                <a href="?assignment_type=PERMANENT" class="quick-filter {% if filters.assignment_type == 'PERMANENT' %}active{% endif %}">
+                    <i class="fas fa-infinity me-1"></i>Permanent
+                </a>
+            </div>
+            
+            <div class="row g-3">
+                <!-- Search Query -->
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Search Query</label>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" 
+                               class="form-control" 
+                               name="search" 
+                               value="{{ query|default:'' }}" 
+                               placeholder="Device ID, Staff name, Department...">
+                    </div>
+                </div>
+                
+                <!-- Status Filter -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        <option value="overdue" {% if filters.status == 'overdue' %}selected{% endif %}>Overdue</option>
+                    </select>
+                </div>
+                
+                <!-- Assignment Type -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Type</label>
+                    <select name="assignment_type" class="form-select">
+                        <option value="">All Types</option>
+                        {% for choice in assignment_type_choices %}
+                        <option value="{{ choice.0 }}" {% if choice.0 == filters.assignment_type %}selected{% endif %}>
+                            {{ choice.1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Department -->
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Department</label>
+                    <select name="department" class="form-select">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.id }}" {% if dept.id|stringformat:"s" == filters.department %}selected{% endif %}>
+                            {{ dept.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Search Actions -->
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="search-actions d-grid">
+                        <button type="submit" class="btn btn-search">
+                            <i class="fas fa-search me-1"></i>Search
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Date Range Filters -->
+            <div class="row g-3 mt-2">
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Assignment Date From</label>
+                    <input type="date" 
+                           class="form-control" 
+                           name="date_from" 
+                           value="{{ filters.date_from|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">Assignment Date To</label>
+                    <input type="date" 
+                           class="form-control" 
+                           name="date_to" 
+                           value="{{ filters.date_to|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-grid">
+                        <a href="{% url 'inventory:assignment_search' %}" class="btn btn-clear">
+                            <i class="fas fa-times me-1"></i>Clear Filters
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-grid">
+                        <button type="button" class="btn btn-export" onclick="exportResults()">
+                            <i class="fas fa-download me-1"></i>Export Results
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Active Filters Display -->
+    {% if search_performed %}
+    <div class="mb-3">
+        <small class="text-muted">Active filters:</small>
+        {% if query %}
+            <span class="filter-badge">
+                Search: "{{ query }}"
+                <span class="clear-filter" onclick="clearFilter('search')">&times;</span>
+            </span>
+        {% endif %}
+        {% if filters.status %}
+            <span class="filter-badge">
+                Status: {{ filters.status|title }}
+                <span class="clear-filter" onclick="clearFilter('status')">&times;</span>
+            </span>
+        {% endif %}
+        {% if filters.assignment_type %}
+            <span class="filter-badge">
+                Type: {{ filters.assignment_type }}
+                <span class="clear-filter" onclick="clearFilter('assignment_type')">&times;</span>
+            </span>
+        {% endif %}
+        {% if filters.department %}
+            <span class="filter-badge">
+                Department: {{ filters.department }}
+                <span class="clear-filter" onclick="clearFilter('department')">&times;</span>
+            </span>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Loading State -->
+    <div class="search-loading" id="searchLoading">
+        <div class="loading-spinner"></div>
+        <p>Searching assignments...</p>
+    </div>
+    
+    <!-- Search Results -->
+    {% if search_performed %}
+        {% if page_obj %}
+            <div class="results-table">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Assignment ID</th>
+                                <th>Device</th>
+                                <th>Assigned To</th>
+                                <th>Department</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Assignment Date</th>
+                                <th>Return Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in page_obj %}
+                            <tr>
+                                <td>
+                                    <strong>{{ assignment.assignment_id }}</strong>
+                                </td>
+                                <td>
+                                    <div class="device-info">
+                                        <div class="device-icon">
+                                            <i class="fas fa-laptop"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-semibold">{{ assignment.device.device_name|truncatechars:30 }}</div>
+                                            <small class="text-muted">{{ assignment.device.device_id }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if assignment.assigned_to_staff %}
+                                        <div class="staff-info">
+                                            <div class="staff-avatar">
+                                                {{ assignment.assigned_to_staff.user.first_name.0 }}{{ assignment.assigned_to_staff.user.last_name.0 }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-semibold">
+                                                    {{ assignment.assigned_to_staff.user.get_full_name|default:assignment.assigned_to_staff.user.username }}
+                                                </div>
+                                                <small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ assignment.assigned_to_department.name|default:"-" }}
+                                </td>
+                                <td>
+                                    <span class="assignment-type type-{{ assignment.assignment_type|lower }}">
+                                        {{ assignment.get_assignment_type_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if assignment.is_active %}
+                                        {% if assignment.is_overdue %}
+                                            <span class="assignment-status status-overdue">Overdue</span>
+                                        {% else %}
+                                            <span class="assignment-status status-active">Active</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="assignment-status status-inactive">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ assignment.assignment_date|date:"M d, Y" }}
+                                </td>
+                                <td>
+                                    {% if assignment.expected_return_date %}
+                                        {{ assignment.expected_return_date|date:"M d, Y" }}
+                                        {% if assignment.is_overdue %}
+                                            <small class="text-danger d-block">
+                                                <i class="fas fa-exclamation-triangle"></i> Overdue
+                                            </small>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">No return date</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'inventory:assignment_detail' assignment.id %}" 
+                                           class="btn btn-outline-primary" 
+                                           title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% if assignment.is_active %}
+                                            <a href="{% url 'inventory:assignment_return' assignment.id %}" 
+                                               class="btn btn-outline-success" 
+                                               title="Return Device">
+                                                <i class="fas fa-undo"></i>
+                                            </a>
+                                        {% endif %}
+                                        <a href="{% url 'inventory:assignment_edit' assignment.id %}" 
+                                           class="btn btn-outline-secondary" 
+                                           title="Edit Assignment">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+                <nav aria-label="Search results pagination" class="mt-4">
+                    <ul class="pagination">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ request.GET.urlencode }}&page=1">
+                                    <i class="fas fa-angle-double-left"></i> First
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">
+                                    <i class="fas fa-angle-left"></i> Previous
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">
+                                    Next <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.paginator.num_pages }}">
+                                    Last <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <!-- Empty Results -->
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <h3>No assignments found</h3>
+                <p class="text-muted mb-4">
+                    No assignments match your search criteria. Try adjusting your filters or search terms.
+                </p>
+                <div>
+                    <a href="{% url 'inventory:assignment_search' %}" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-times me-1"></i>Clear All Filters
+                    </a>
+                    <a href="{% url 'inventory:assignment_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Create New Assignment
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <!-- Initial State -->
+        <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h3>Search Assignments</h3>
+            <p class="text-muted">
+                Use the search form above to find specific assignments using various filters.
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('searchForm');
+    const searchLoading = document.getElementById('searchLoading');
+    
+    // Show loading state on form submit
+    searchForm.addEventListener('submit', function() {
+        searchLoading.style.display = 'block';
+    });
+    
+    // Auto-submit form on filter change
+    const filterSelects = document.querySelectorAll('select[name="status"], select[name="assignment_type"], select[name="department"]');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            searchForm.submit();
+        });
+    });
+    
+    // Clear individual filters
+    window.clearFilter = function(filterName) {
+        const input = document.querySelector(`[name="${filterName}"]`);
+        if (input) {
+            input.value = '';
+            searchForm.submit();
+        }
+    };
+    
+    // Export functionality
+    window.exportResults = function() {
+        const params = new URLSearchParams(window.location.search);
+        params.set('export', 'csv');
+        window.location.href = '?' + params.toString();
+    };
+    
+    // Quick filter handling
+    document.querySelectorAll('.quick-filter').forEach(filter => {
+        filter.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = new URL(this.href);
+            const params = new URLSearchParams(url.search);
+            
+            // Clear current form
+            searchForm.reset();
+            
+            // Apply quick filter params
+            params.forEach((value, key) => {
+                const input = searchForm.querySelector(`[name="${key}"]`);
+                if (input) {
+                    input.value = value;
+                }
+            });
+            
+            searchForm.submit();
+        });
+    });
+    
+    // Real-time search (debounced)
+    let searchTimeout;
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (this.value.length >= 3 || this.value.length === 0) {
+                    searchForm.submit();
+                }
+            }, 500);
+        });
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + F to focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !e.shiftKey) {
+            e.preventDefault();
+            searchInput.focus();
+        }
+        
+        // Escape to clear search
+        if (e.key === 'Escape' && document.activeElement === searchInput) {
+            searchInput.value = '';
+            searchForm.submit();
+        }
+    });
+    
+    // Table row click to view details
+    document.querySelectorAll('tbody tr').forEach(row => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(e) {
+            // Don't trigger if clicking on buttons
+            if (e.target.closest('.btn-group')) return;
+            
+            const detailLink = this.querySelector('a[title="View Details"]');
+            if (detailLink) {
+                window.location.href = detailLink.href;
+            }
+        });
+    });
+    
+    // Highlight overdue assignments
+    document.querySelectorAll('.status-overdue').forEach(element => {
+        element.closest('tr').classList.add('table-warning');
+    });
+    
+    // Add tooltips to action buttons
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Animate statistics cards
+    const statCards = document.querySelectorAll('.stat-card');
+    statCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.style.animation = 'fadeInUp 0.5s ease forwards';
+    });
+    
+    // Search form validation
+    searchForm.addEventListener('submit', function(e) {
+        const dateFrom = document.querySelector('input[name="date_from"]').value;
+        const dateTo = document.querySelector('input[name="date_to"]').value;
+        
+        if (dateFrom && dateTo && new Date(dateFrom) > new Date(dateTo)) {
+            e.preventDefault();
+            alert('Start date cannot be later than end date.');
+            return false;
+        }
+    });
+    
+    // Save search preferences
+    const saveSearchBtn = document.getElementById('saveSearch');
+    if (saveSearchBtn) {
+        saveSearchBtn.addEventListener('click', function() {
+            const formData = new FormData(searchForm);
+            const searchData = {};
+            
+            formData.forEach((value, key) => {
+                if (value) searchData[key] = value;
+            });
+            
+            localStorage.setItem('assignmentSearchPrefs', JSON.stringify(searchData));
+            
+            // Show success message
+            const toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-white bg-success border-0';
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        Search preferences saved successfully!
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto"></button>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            toast.addEventListener('hidden.bs.toast', () => {
+                document.body.removeChild(toast);
+            });
+        });
+    }
+    
+    // Load saved search preferences
+    const savedPrefs = localStorage.getItem('assignmentSearchPrefs');
+    if (savedPrefs && !window.location.search) {
+        const prefs = JSON.parse(savedPrefs);
+        Object.keys(prefs).forEach(key => {
+            const input = searchForm.querySelector(`[name="${key}"]`);
+            if (input) {
+                input.value = prefs[key];
+            }
+        });
+    }
+    
+    // Bulk actions
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const rowCheckboxes = document.querySelectorAll('input[name="selected_assignments"]');
+    const bulkActionsDiv = document.getElementById('bulkActions');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            rowCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBulkActions();
+        });
+    }
+    
+    rowCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkActions);
+    });
+    
+    function updateBulkActions() {
+        const selectedCount = document.querySelectorAll('input[name="selected_assignments"]:checked').length;
+        if (bulkActionsDiv) {
+            bulkActionsDiv.style.display = selectedCount > 0 ? 'block' : 'none';
+            const countSpan = bulkActionsDiv.querySelector('.selected-count');
+            if (countSpan) {
+                countSpan.textContent = selectedCount;
+            }
+        }
+    }
+    
+    // Advanced search toggle
+    const advancedToggle = document.getElementById('advancedToggle');
+    const advancedSection = document.getElementById('advancedSection');
+    
+    if (advancedToggle && advancedSection) {
+        advancedToggle.addEventListener('click', function() {
+            const isExpanded = advancedSection.style.display !== 'none';
+            advancedSection.style.display = isExpanded ? 'none' : 'block';
+            this.innerHTML = isExpanded ? 
+                '<i class="fas fa-chevron-down me-1"></i>Show Advanced Filters' :
+                '<i class="fas fa-chevron-up me-1"></i>Hide Advanced Filters';
+        });
+    }
+    
+    // Print functionality
+    const printBtn = document.getElementById('printResults');
+    if (printBtn) {
+        printBtn.addEventListener('click', function() {
+            const printContent = document.querySelector('.results-table').cloneNode(true);
+            const printWindow = window.open('', '_blank');
+            
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Assignment Search Results</title>
+                    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                    <style>
+                        body { font-size: 12px; }
+                        .btn-group { display: none; }
+                        @media print {
+                            .no-print { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="container-fluid">
+                        <h2 class="mb-4">Assignment Search Results</h2>
+                        <p class="text-muted">Generated on ${new Date().toLocaleString()}</p>
+                        ${printContent.outerHTML}
+                    </div>
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            printWindow.print();
+        });
+    }
+});
+
+// CSS animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-fade-in {
+        animation: fadeInUp 0.5s ease forwards;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+        transform: translateY(-1px);
+        transition: all 0.2s ease;
+    }
+    
+    .search-form {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .search-form::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+        transition: left 0.5s;
+    }
+    
+    .search-form:hover::before {
+        left: 100%;
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

@@ -1,0 +1,559 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block page_title %}Mobile QR Scanner{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/qr_management.css' %}">
+<style>
+#camera-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+#camera-feed {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 2px solid #ddd;
+}
+
+#scan-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border: 3px solid #007bff;
+    border-radius: 12px;
+    background: rgba(0, 123, 255, 0.1);
+    pointer-events: none;
+}
+
+.scan-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #007bff, transparent);
+    animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+}
+
+.camera-controls {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.scan-result {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.device-info-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-top: 15px;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-available { background-color: #28a745; }
+.status-assigned { background-color: #ffc107; }
+.status-maintenance { background-color: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="page-title">Mobile QR Scanner</h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'qr_management_index' %}">QR Management</a></li>
+                    <li class="breadcrumb-item active">Mobile Scanner</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="action-buttons">
+            <a href="{% url 'qr_scan_history' %}" class="btn btn-outline-primary">
+                <i class="fas fa-history"></i> Scan History
+            </a>
+            <a href="{% url 'qr_management_index' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Camera Section -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-camera"></i> Camera Scanner</h5>
+                </div>
+                <div class="card-body">
+                    <div id="camera-container">
+                        <video id="camera-feed" autoplay muted playsinline></video>
+                        <div id="scan-overlay">
+                            <div class="scan-line"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="camera-controls">
+                        <button id="start-camera" class="btn btn-success">
+                            <i class="fas fa-play"></i> Start Camera
+                        </button>
+                        <button id="stop-camera" class="btn btn-danger" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Camera
+                        </button>
+                        <button id="switch-camera" class="btn btn-info" style="display: none;">
+                            <i class="fas fa-sync-alt"></i> Switch Camera
+                        </button>
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="auto-scan" checked>
+                            <label class="form-check-label" for="auto-scan">
+                                Continuous scanning
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="scan-sound">
+                            <label class="form-check-label" for="scan-sound">
+                                Enable scan sound
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="camera-status" class="mt-3">
+                        <small class="text-muted">Click "Start Camera" to begin scanning</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Input -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-keyboard"></i> Manual Input</h6>
+                </div>
+                <div class="card-body">
+                    <form id="manual-scan-form">
+                        <div class="input-group">
+                            <input type="text" id="manual-code" class="form-control" placeholder="Enter device ID or scan code">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Verify
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-clipboard-list"></i> Scan Results</h5>
+                </div>
+                <div class="card-body">
+                    <div id="scan-results-container">
+                        <div class="text-center py-4">
+                            <i class="fas fa-qrcode fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Scan a QR code to view device information</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scan History -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6><i class="fas fa-clock"></i> Recent Scans</h6>
+                </div>
+                <div class="card-body">
+                    <div id="recent-scans">
+                        {% if recent_scans %}
+                        <div class="list-group list-group-flush">
+                            {% for scan in recent_scans %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">{{ scan.device.device_name }}</h6>
+                                        <p class="mb-1 text-muted">{{ scan.device.asset_tag }}</p>
+                                        <small>{{ scan.scanned_at|timesince }} ago</small>
+                                    </div>
+                                    <span class="badge bg-{% if scan.is_verified %}success{% else %}warning{% endif %}">
+                                        {% if scan.is_verified %}Verified{% else %}Pending{% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-center py-3">No recent scans</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Success Modal -->
+<div class="modal fade" id="scan-success-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle"></i> Scan Successful
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scan-success-content">
+                    <!-- Success content will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="view-device-details">
+                    View Details
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Continue Scanning
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan Error Modal -->
+<div class="modal fade" id="scan-error-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Scan Error
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="scan-error-content">
+                    <!-- Error content will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let video = document.getElementById('camera-feed');
+    let canvas = document.createElement('canvas');
+    let context = canvas.getContext('2d');
+    let scanning = false;
+    let currentStream = null;
+    let facingMode = 'environment'; // 'user' for front camera, 'environment' for back camera
+
+    const startButton = document.getElementById('start-camera');
+    const stopButton = document.getElementById('stop-camera');
+    const switchButton = document.getElementById('switch-camera');
+    const statusDiv = document.getElementById('camera-status');
+    const resultsContainer = document.getElementById('scan-results-container');
+    const autoScanCheck = document.getElementById('auto-scan');
+    const scanSoundCheck = document.getElementById('scan-sound');
+    const manualForm = document.getElementById('manual-scan-form');
+    const manualInput = document.getElementById('manual-code');
+
+    // Check if camera is supported
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        statusDiv.innerHTML = '<div class="alert alert-warning">Camera not supported in this browser</div>';
+        startButton.disabled = true;
+        return;
+    }
+
+    startButton.addEventListener('click', startCamera);
+    stopButton.addEventListener('click', stopCamera);
+    switchButton.addEventListener('click', switchCamera);
+    manualForm.addEventListener('submit', handleManualScan);
+
+    async function startCamera() {
+        try {
+            statusDiv.innerHTML = '<small class="text-info">Starting camera...</small>';
+            
+            const constraints = {
+                video: {
+                    facingMode: facingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = currentStream;
+            
+            video.addEventListener('loadedmetadata', () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                scanning = true;
+                startButton.style.display = 'none';
+                stopButton.style.display = 'inline-block';
+                switchButton.style.display = 'inline-block';
+                statusDiv.innerHTML = '<small class="text-success">Camera active - Point at QR code</small>';
+                
+                if (autoScanCheck.checked) {
+                    requestAnimationFrame(scanFrame);
+                }
+            });
+        } catch (error) {
+            console.error('Camera error:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger">Camera access denied or not available</div>';
+        }
+    }
+
+    function stopCamera() {
+        scanning = false;
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+            currentStream = null;
+        }
+        video.srcObject = null;
+        startButton.style.display = 'inline-block';
+        stopButton.style.display = 'none';
+        switchButton.style.display = 'none';
+        statusDiv.innerHTML = '<small class="text-muted">Camera stopped</small>';
+    }
+
+    function switchCamera() {
+        facingMode = facingMode === 'environment' ? 'user' : 'environment';
+        stopCamera();
+        setTimeout(startCamera, 100);
+    }
+
+    function scanFrame() {
+        if (!scanning) return;
+
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (code) {
+                handleScanResult(code.data);
+                if (scanSoundCheck.checked) {
+                    playBeep();
+                }
+                return; // Stop scanning after successful scan
+            }
+        }
+
+        if (autoScanCheck.checked) {
+            requestAnimationFrame(scanFrame);
+        }
+    }
+
+    function handleScanResult(scannedData) {
+        console.log('Scanned:', scannedData);
+        
+        // Parse QR code data
+        let deviceData;
+        try {
+            deviceData = JSON.parse(scannedData);
+        } catch (e) {
+            // If not JSON, treat as device ID
+            deviceData = { deviceId: scannedData };
+        }
+
+        // Send to backend for verification
+        fetch('{% url "qr_verify_scan" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                scan_data: scannedData,
+                device_id: deviceData.deviceId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayScanResult(data);
+                showSuccessModal(data);
+                updateRecentScans(data);
+            } else {
+                showErrorModal(data.error || 'Device not found');
+            }
+        })
+        .catch(error => {
+            console.error('Verification error:', error);
+            showErrorModal('Error verifying device');
+        });
+    }
+
+    function handleManualScan(e) {
+        e.preventDefault();
+        const code = manualInput.value.trim();
+        if (code) {
+            handleScanResult(code);
+            manualInput.value = '';
+        }
+    }
+
+    function displayScanResult(data) {
+        const device = data.device;
+        const assignment = data.current_assignment;
+        
+        resultsContainer.innerHTML = `
+            <div class="device-info-card">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <h5>${device.device_name}</h5>
+                    <span class="badge bg-success">Verified</span>
+                </div>
+                
+                <div class="row">
+                    <div class="col-6">
+                        <p class="mb-2"><strong>Asset Tag:</strong><br>${device.asset_tag}</p>
+                        <p class="mb-2"><strong>Category:</strong><br>${device.category}</p>
+                        <p class="mb-2"><strong>Status:</strong><br>
+                            <span class="status-indicator status-${device.status.toLowerCase()}"></span>
+                            ${device.status}
+                        </p>
+                    </div>
+                    <div class="col-6">
+                        ${assignment ? `
+                            <p class="mb-2"><strong>Assigned To:</strong><br>
+                                ${assignment.assigned_to_staff || assignment.assigned_to_department || 'Unassigned'}
+                            </p>
+                            <p class="mb-2"><strong>Location:</strong><br>${assignment.location || 'Unknown'}</p>
+                            <p class="mb-2"><strong>Since:</strong><br>${new Date(assignment.assigned_date).toLocaleDateString()}</p>
+                        ` : `
+                            <p class="text-muted">No current assignment</p>
+                        `}
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <button class="btn btn-primary btn-sm" onclick="viewDeviceDetails('${device.id}')">
+                        <i class="fas fa-eye"></i> View Details
+                    </button>
+                    <button class="btn btn-info btn-sm" onclick="viewScanHistory('${device.id}')">
+                        <i class="fas fa-history"></i> Scan History
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function showSuccessModal(data) {
+        const modal = new bootstrap.Modal(document.getElementById('scan-success-modal'));
+        document.getElementById('scan-success-content').innerHTML = `
+            <div class="text-center">
+                <h4>${data.device.device_name}</h4>
+                <p class="text-muted">${data.device.asset_tag}</p>
+                <p>Device verified successfully!</p>
+            </div>
+        `;
+        modal.show();
+    }
+
+    function showErrorModal(message) {
+        const modal = new bootstrap.Modal(document.getElementById('scan-error-modal'));
+        document.getElementById('scan-error-content').innerHTML = `
+            <div class="text-center">
+                <p>${message}</p>
+            </div>
+        `;
+        modal.show();
+    }
+
+    function updateRecentScans(data) {
+        // Add to recent scans list
+        const recentScansContainer = document.getElementById('recent-scans');
+        const newScanItem = document.createElement('div');
+        newScanItem.className = 'list-group-item';
+        newScanItem.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1">${data.device.device_name}</h6>
+                    <p class="mb-1 text-muted">${data.device.asset_tag}</p>
+                    <small>Just now</small>
+                </div>
+                <span class="badge bg-success">Verified</span>
+            </div>
+        `;
+        
+        const listGroup = recentScansContainer.querySelector('.list-group');
+        if (listGroup) {
+            listGroup.insertBefore(newScanItem, listGroup.firstChild);
+        } else {
+            recentScansContainer.innerHTML = `<div class="list-group list-group-flush">${newScanItem.outerHTML}</div>`;
+        }
+    }
+
+    function playBeep() {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 800;
+        oscillator.type = 'square';
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+    }
+
+    // Global functions for buttons
+    window.viewDeviceDetails = function(deviceId) {
+        window.location.href = `/inventory/devices/${deviceId}/`;
+    };
+
+    window.viewScanHistory = function(deviceId) {
+        window.location.href = `/qr/scan-history/?device=${deviceId}`;
+    };
+
+    // Auto-scan toggle
+    autoScanCheck.addEventListener('change', function() {
+        if (this.checked && scanning) {
+            requestAnimationFrame(scanFrame);
+        }
+    });
+});
+</script>
+{% endblock %}

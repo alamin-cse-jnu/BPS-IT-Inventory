@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warranty Report | BPS IT Inventory</title>
+    <link rel="shortcut icon" href="{% static 'img/favicons/bps-favicon.ico' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicons/bps-favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicons/bps-favicon-16x16.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/favicons/apple-touch-icon.png' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bps-primary: #2c3e50;
+            --bps-secondary: #34495e;
+            --bps-accent: #3498db;
+            --bps-success: #27ae60;
+            --bps-warning: #f39c12;
+            --bps-danger: #e74c3c;
+            --bps-light: #ecf0f1;
+            --bps-dark: #2c3e50;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .report-header {
+            background: linear-gradient(135deg, var(--bps-primary), var(--bps-secondary));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .report-title {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-subtitle {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .filter-title {
+            color: var(--bps-primary);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border-left: 4px solid var(--bps-success);
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-card.warning {
+            border-left-color: var(--bps-warning);
+        }
+
+        .stat-card.danger {
+            border-left-color: var(--bps-danger);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bps-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+
+        .chart-title {
+            color: var(--bps-primary);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .warranty-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .table-header {
+            background: var(--bps-primary);
+            color: white;
+            padding: 1rem;
+            font-weight: 600;
+        }
+
+        .table thead th {
+            background: var(--bps-light);
+            color: var(--bps-primary);
+            border: none;
+            font-weight: 600;
+            padding: 1rem;
+        }
+
+        .table tbody td {
+            padding: 1rem;
+            border: none;
+            border-bottom: 1px solid #eee;
+        }
+
+        .warranty-status {
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .warranty-active { background: #d4edda; color: #155724; }
+        .warranty-expiring { background: #fff3cd; color: #856404; }
+        .warranty-expired { background: #f8d7da; color: #721c24; }
+        .warranty-none { background: #e2e3e5; color: #383d41; }
+
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: -1.5rem;
+            top: 0.5rem;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--bps-accent);
+        }
+
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+
+        .timeline-date {
+            font-weight: 600;
+            color: var(--bps-primary);
+        }
+
+        .timeline-content {
+            margin-top: 0.5rem;
+            color: #6c757d;
+        }
+
+        .export-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-top: 2rem;
+        }
+
+        .btn-bps {
+            background: var(--bps-primary);
+            border: none;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-bps:hover {
+            background: var(--bps-secondary);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .vendor-chart {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .vendor-item {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .vendor-name {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .vendor-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .progress-thin {
+            height: 6px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 3rem;
+            color: #6c757d;
+        }
+
+        @media print {
+            .filter-section, .export-section, .btn { display: none; }
+            .report-header { background: var(--bps-primary) !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="report-title">
+                        <i class="bi bi-shield-check me-3"></i>
+                        Warranty Report
+                    </h1>
+                    <p class="report-subtitle">Device Warranty Status & Management</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <img src="{% static 'img/logos/bps-logo.png' %}" alt="BPS Logo" style="height: 60px;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <h5 class="filter-title">
+                <i class="bi bi-funnel"></i>
+                Report Filters
+            </h5>
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Warranty Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="expiring" {% if filters.status == 'expiring' %}selected{% endif %}>Expiring Soon</option>
+                        <option value="expired" {% if filters.status == 'expired' %}selected{% endif %}>Expired</option>
+                        <option value="none" {% if filters.status == 'none' %}selected{% endif %}>No Warranty</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Vendor</label>
+                    <select name="vendor" class="form-select">
+                        <option value="">All Vendors</option>
+                        {% for vendor in vendors %}
+                            <option value="{{ vendor.id }}" {% if filters.vendor == vendor.id|stringformat:"s" %}selected{% endif %}>
+                                {{ vendor.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for category in categories %}
+                            <option value="{{ category.id }}" {% if filters.category == category.id|stringformat:"s" %}selected{% endif %}>
+                                {{ category.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-bps w-100">
+                        <i class="bi bi-search me-2"></i>Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Statistics Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_devices|default:0 }}</div>
+                <div class="stat-label">Total Devices</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ active_warranties|default:0 }}</div>
+                <div class="stat-label">Active Warranties</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value">{{ expiring_soon|default:0 }}</div>
+                <div class="stat-label">Expiring Soon</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value">{{ expired_warranties|default:0 }}</div>
+                <div class="stat-label">Expired Warranties</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Warranty Timeline -->
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5 class="chart-title">
+                        <i class="bi bi-clock-history"></i>
+                        Warranty Expiration Timeline
+                    </h5>
+                    {% if expiration_timeline %}
+                    <div class="timeline">
+                        {% for item in expiration_timeline %}
+                        <div class="timeline-item">
+                            <div class="timeline-date">
+                                {{ item.month|date:"M Y" }}
+                            </div>
+                            <div class="timeline-content">
+                                <strong>{{ item.count }}</strong> devices expiring
+                                {% if item.total_value %}
+                                <br><small class="text-muted">Est. value: ${{ item.total_value|floatformat:0 }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="no-data">
+                        <i class="bi bi-calendar-x display-4 text-muted"></i>
+                        <p class="mt-2">No warranty timeline data available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Vendor Warranty Breakdown -->
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5 class="chart-title">
+                        <i class="bi bi-building"></i>
+                        Vendor Warranty Status
+                    </h5>
+                    {% if vendor_stats %}
+                    <div class="vendor-chart">
+                        {% for vendor in vendor_stats %}
+                        <div class="vendor-item">
+                            <div class="vendor-name">{{ vendor.name }}</div>
+                            <div class="vendor-stats">
+                                <span class="text-success">{{ vendor.active_count }}</span>
+                                <span class="text-warning">{{ vendor.expiring_count }}</span>
+                                <span class="text-danger">{{ vendor.expired_count }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="no-data">
+                        <i class="bi bi-building-x display-4 text-muted"></i>
+                        <p class="mt-2">No vendor data available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Devices Expiring Soon -->
+        <div class="warranty-table">
+            <div class="table-header">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Devices with Expiring Warranties (Next 90 Days)
+            </div>
+            {% if expiring_soon_devices %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Serial Number</th>
+                            <th>Vendor</th>
+                            <th>Warranty End</th>
+                            <th>Days Remaining</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in expiring_soon_devices %}
+                        <tr>
+                            <td>
+                                <strong>{{ device.name }}</strong><br>
+                                <small class="text-muted">{{ device.device_type }}</small>
+                            </td>
+                            <td>
+                                <code>{{ device.serial_number|default:"-" }}</code>
+                            </td>
+                            <td>{{ device.vendor.name|default:"-" }}</td>
+                            <td>
+                                <strong>{{ device.warranty_end_date|date:"M d, Y" }}</strong>
+                            </td>
+                            <td>
+                                {% with days_remaining=device.warranty_end_date|timeuntil %}
+                                    {% if days_remaining %}
+                                        <span class="badge bg-warning">{{ days_remaining }}</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Expired</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                            <td>
+                                {% if device.warranty_end_date >= today %}
+                                    {% with days_left=device.warranty_end_date|timeuntil %}
+                                        {% if "day" in days_left and "30" in days_left %}
+                                            <span class="warranty-status warranty-expiring">Expiring Soon</span>
+                                        {% else %}
+                                            <span class="warranty-status warranty-active">Active</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                    <span class="warranty-status warranty-expired">Expired</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'inventory:device_detail' device.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{% url 'inventory:device_edit' device.id %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="no-data">
+                <i class="bi bi-check-circle display-1 text-success"></i>
+                <h5 class="mt-3 text-success">Great!</h5>
+                <p class="text-muted">No devices have warranties expiring in the next 90 days.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Recently Expired Warranties -->
+        <div class="warranty-table mt-4">
+            <div class="table-header">
+                <i class="bi bi-x-circle me-2"></i>
+                Recently Expired Warranties (Last 30 Days)
+            </div>
+            {% if recently_expired_devices %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Serial Number</th>
+                            <th>Vendor</th>
+                            <th>Expired Date</th>
+                            <th>Days Overdue</th>
+                            <th>Priority</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for device in recently_expired_devices %}
+                        <tr>
+                            <td>
+                                <strong>{{ device.name }}</strong><br>
+                                <small class="text-muted">{{ device.device_type }}</small>
+                            </td>
+                            <td>
+                                <code>{{ device.serial_number|default:"-" }}</code>
+                            </td>
+                            <td>{{ device.vendor.name|default:"-" }}</td>
+                            <td>
+                                <strong class="text-danger">{{ device.warranty_end_date|date:"M d, Y" }}</strong>
+                            </td>
+                            <td>
+                                {% with days_overdue=device.warranty_end_date|timesince %}
+                                    <span class="badge bg-danger">{{ days_overdue }} ago</span>
+                                {% endwith %}
+                            </td>
+                            <td>
+                                {% if device.is_critical %}
+                                    <span class="badge bg-danger">Critical</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Standard</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'inventory:device_detail' device.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-warning" onclick="renewWarranty('{{ device.id }}')">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="no-data">
+                <i class="bi bi-shield-check display-1 text-success"></i>
+                <h5 class="mt-3 text-success">All Good!</h5>
+                <p class="text-muted">No warranties have expired in the last 30 days.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Export Section -->
+        <div class="export-section">
+            <h5 class="mb-3">
+                <i class="bi bi-download me-2"></i>
+                Export Options
+            </h5>
+            <div class="row g-2">
+                <div class="col-auto">
+                    <button class="btn btn-bps" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print Report
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'reports:warranty_report' %}?format=pdf{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>PDF
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'reports:warranty_report' %}?format=excel{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Excel
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'reports:warranty_report' %}?format=csv{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-text me-2"></i>CSV
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-info" onclick="scheduleReport()">
+                        <i class="bi bi-calendar-plus me-2"></i>Schedule
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Renewal Modal -->
+    <div class="modal fade" id="renewalModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Renew Warranty</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="renewalForm">
+                        <div class="mb-3">
+                            <label class="form-label">New Warranty End Date</label>
+                            <input type="date" class="form-control" name="warranty_end_date" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Warranty Provider</label>
+                            <input type="text" class="form-control" name="warranty_provider">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" name="notes" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-bps" onclick="submitRenewal()">Renew Warranty</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function renewWarranty(deviceId) {
+            document.getElementById('renewalForm').setAttribute('data-device-id', deviceId);
+            new bootstrap.Modal(document.getElementById('renewalModal')).show();
+        }
+
+        function submitRenewal() {
+            const form = document.getElementById('renewalForm');
+            const deviceId = form.getAttribute('data-device-id');
+            const formData = new FormData(form);
+            
+            fetch(`/api/devices/${deviceId}/renew-warranty/`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error renewing warranty: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error renewing warranty: ' + error);
+            });
+        }
+
+        function scheduleReport() {
+            // Implement report scheduling functionality
+            alert('Report scheduling feature coming soon!');
+        }
+
+        // Auto-refresh functionality
+        const refreshInterval = 300000; // 5 minutes
+        let refreshTimer;
+
+        function startAutoRefresh() {
+            refreshTimer = setInterval(() => {
+                if (!document.hidden) {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    urlParams.set('auto_refresh', '1');
+                    window.location.search = urlParams.toString();
+                }
+            }, refreshInterval);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+        }
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                startAutoRefresh();
+            }
+        });
+
+        // Start auto-refresh when page loads
+        document.addEventListener('DOMContentLoaded', startAutoRefresh);
+    </script>
+</body>
+</html>

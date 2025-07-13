@@ -1,0 +1,787 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if form.instance.pk %}Edit Room{% else %}Add Room{% endif %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-header {
+        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+        border-radius: 0.5rem;
+    }
+    
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .form-card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        border: none;
+        overflow: hidden;
+    }
+    
+    .form-card .card-header {
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        padding: 1.5rem;
+    }
+    
+    .form-card .card-body {
+        padding: 2rem;
+    }
+    
+    .form-section {
+        margin-bottom: 2rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .form-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .section-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .section-title i {
+        margin-right: 0.75rem;
+        color: #fd7e14;
+        width: 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .form-label .required {
+        color: #dc3545;
+        margin-left: 0.25rem;
+    }
+    
+    .form-control {
+        border-radius: 0.375rem;
+        border: 1px solid #ced4da;
+        padding: 0.75rem 1rem;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+    }
+    
+    .form-control:focus {
+        border-color: #fd7e14;
+        box-shadow: 0 0 0 0.2rem rgba(253, 126, 20, 0.25);
+    }
+    
+    .form-control:invalid {
+        border-color: #dc3545;
+    }
+    
+    .form-control:invalid:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+    
+    .form-select {
+        border-radius: 0.375rem;
+        border: 1px solid #ced4da;
+        padding: 0.75rem 1rem;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+    }
+    
+    .form-select:focus {
+        border-color: #fd7e14;
+        box-shadow: 0 0 0 0.2rem rgba(253, 126, 20, 0.25);
+    }
+    
+    .form-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    .invalid-feedback {
+        display: block;
+        font-size: 0.875rem;
+        color: #dc3545;
+        margin-top: 0.25rem;
+    }
+    
+    .form-check {
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+        border: 1px solid #e9ecef;
+        margin-top: 0.5rem;
+    }
+    
+    .form-check-input {
+        margin-top: 0.125rem;
+    }
+    
+    .form-check-label {
+        font-weight: 500;
+        color: #495057;
+        margin-left: 0.5rem;
+    }
+    
+    .character-count {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-align: right;
+        margin-top: 0.25rem;
+    }
+    
+    .character-count.warning {
+        color: #fd7e14;
+    }
+    
+    .character-count.danger {
+        color: #dc3545;
+    }
+    
+    .hierarchy-selector {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .hierarchy-title {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .hierarchy-title i {
+        margin-right: 0.5rem;
+        color: #fd7e14;
+    }
+    
+    .cascade-info {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        color: #856404;
+    }
+    
+    .room-preview {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .room-preview-header {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .room-preview-header i {
+        margin-right: 0.5rem;
+        color: #fd7e14;
+    }
+    
+    .room-preview-content {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .room-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 0.5rem;
+        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        float: left;
+    }
+    
+    .capacity-display {
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 600;
+        display: inline-block;
+        margin-top: 0.5rem;
+    }
+    
+    .form-actions {
+        background: #f8f9fa;
+        padding: 1.5rem 2rem;
+        margin: 0 -2rem -2rem -2rem;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #fd7e14 0%, #e35e03 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #e35e03 0%, #ca5102 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(253, 126, 20, 0.3);
+    }
+    
+    .btn-success {
+        background: linear-gradient(135deg, #28a745 0%, #20a23a 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-success:hover {
+        background: linear-gradient(135deg, #20a23a 0%, #1e7e34 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        border: 1px solid #6c757d;
+        padding: 0.75rem 2rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
+        border-color: #5a6268;
+        transform: translateY(-1px);
+    }
+    
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item a {
+        color: #fd7e14;
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+    
+    .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    @media (max-width: 768px) {
+        .form-container {
+            margin: 0;
+        }
+        
+        .form-header {
+            padding: 1.5rem 0;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-card .card-body {
+            padding: 1.5rem;
+        }
+        
+        .form-actions {
+            flex-direction: column;
+            margin: 0 -1.5rem -1.5rem -1.5rem;
+            padding: 1.5rem;
+        }
+        
+        .section-title {
+            font-size: 1rem;
+        }
+        
+        .room-icon {
+            float: none;
+            margin: 0 0 1rem 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:room_list' %}">Rooms</a></li>
+            {% if form.instance.pk %}
+                <li class="breadcrumb-item"><a href="{% url 'inventory:room_detail' form.instance.pk %}">{{ form.instance.room_number }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Edit</li>
+            {% else %}
+                <li class="breadcrumb-item active" aria-current="page">Add Room</li>
+            {% endif %}
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="form-header">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="mb-0">
+                        <i class="fas fa-door-open me-3"></i>
+                        {% if form.instance.pk %}Edit Room{% else %}Add New Room{% endif %}
+                    </h1>
+                    <p class="mb-0 mt-2 opacity-75">
+                        {% if form.instance.pk %}
+                            Update room information and settings
+                        {% else %}
+                            Create a new room within a department
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    {% if form.instance.pk %}
+                        <a href="{% url 'inventory:room_detail' form.instance.pk %}" class="btn btn-light">
+                            <i class="fas fa-eye me-2"></i>View Room
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Container -->
+    <div class="form-container">
+        <div class="form-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-edit me-2"></i>Room Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="roomForm" novalidate>
+                    {% csrf_token %}
+                    
+                    <!-- Department Selection Section -->
+                    <div class="form-section">
+                        <h6 class="section-title">
+                            <i class="fas fa-sitemap"></i>Department Assignment
+                        </h6>
+                        
+                        <div class="hierarchy-selector">
+                            <div class="hierarchy-title">
+                                <i class="fas fa-users"></i>Select Department
+                            </div>
+                            <div class="cascade-info">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Choose the department where this room will be located
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="{{ form.department.id_for_label }}" class="form-label">
+                                    Department
+                                    <span class="required">*</span>
+                                </label>
+                                {{ form.department }}
+                                {% if form.department.errors %}
+                                    <div class="invalid-feedback">{{ form.department.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">Select the department that will manage this room</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Room Details Section -->
+                    <div class="form-section">
+                        <h6 class="section-title">
+                            <i class="fas fa-info-circle"></i>Room Details
+                        </h6>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ form.room_number.id_for_label }}" class="form-label">
+                                        Room Number
+                                        <span class="required">*</span>
+                                    </label>
+                                    {{ form.room_number }}
+                                    {% if form.room_number.errors %}
+                                        <div class="invalid-feedback">{{ form.room_number.errors.0 }}</div>
+                                    {% endif %}
+                                    <div class="form-text">Unique room identifier (e.g., 101, A-201, IT-301)</div>
+                                    <div class="character-count" data-target="{{ form.room_number.id_for_label }}" data-max="30">
+                                        <span class="current">0</span> / 30 characters
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="{{ form.capacity.id_for_label }}" class="form-label">
+                                        Capacity
+                                        <span class="required">*</span>
+                                    </label>
+                                    {{ form.capacity }}
+                                    {% if form.capacity.errors %}
+                                        <div class="invalid-feedback">{{ form.capacity.errors.0 }}</div>
+                                    {% endif %}
+                                    <div class="form-text">Maximum number of people the room can accommodate</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="{{ form.room_name.id_for_label }}" class="form-label">
+                                Room Name
+                            </label>
+                            {{ form.room_name }}
+                            {% if form.room_name.errors %}
+                                <div class="invalid-feedback">{{ form.room_name.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text">Descriptive name for the room (e.g., Conference Room, Director's Office)</div>
+                            <div class="character-count" data-target="{{ form.room_name.id_for_label }}" data-max="200">
+                                <span class="current">0</span> / 200 characters
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status Section -->
+                    <div class="form-section">
+                        <h6 class="section-title">
+                            <i class="fas fa-toggle-on"></i>Status
+                        </h6>
+                        
+                        <div class="form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                Active Room
+                            </label>
+                            {% if form.is_active.errors %}
+                                <div class="invalid-feedback">{{ form.is_active.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text mt-2">Inactive rooms will be hidden from most system operations</div>
+                        </div>
+                    </div>
+
+                    <!-- Room Preview -->
+                    <div class="room-preview" id="roomPreview" style="display: none;">
+                        <div class="room-preview-header">
+                            <i class="fas fa-eye"></i>Room Preview
+                        </div>
+                        <div class="room-preview-content">
+                            <div class="room-icon">
+                                <i class="fas fa-door-open"></i>
+                            </div>
+                            <div id="previewContent">
+                                <strong id="previewRoomNumber">Room Number</strong>
+                                <span id="previewRoomName"></span><br>
+                                <span id="previewDepartment">Department</span><br>
+                                <div class="capacity-display" id="previewCapacity">
+                                    <i class="fas fa-users me-1"></i>Capacity: 0
+                                </div>
+                            </div>
+                            <div class="clearfix"></div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <a href="{% url 'inventory:room_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                        
+                        {% if form.instance.pk %}
+                            <button type="submit" name="action" value="save" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Update Room
+                            </button>
+                            <button type="submit" name="action" value="save_continue" class="btn btn-success">
+                                <i class="fas fa-save me-1"></i>Save & Continue Editing
+                            </button>
+                        {% else %}
+                            <button type="submit" name="action" value="save" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>Create Room
+                            </button>
+                            <button type="submit" name="action" value="save_add" class="btn btn-success">
+                                <i class="fas fa-plus me-1"></i>Save & Add Another
+                            </button>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Current Room Information (for editing) -->
+        {% if form.instance.pk %}
+            <div class="room-preview mt-3">
+                <div class="room-preview-header">Current Room Information</div>
+                <div class="room-preview-content">
+                    <div class="room-icon">
+                        <i class="fas fa-door-open"></i>
+                    </div>
+                    <div>
+                        <strong>{{ form.instance.room_number }}</strong>
+                        {% if form.instance.room_name %} - {{ form.instance.room_name }}{% endif %}<br>
+                        {{ form.instance.department.name }}<br>
+                        <div class="capacity-display">
+                            <i class="fas fa-users me-1"></i>Capacity: {{ form.instance.capacity }}
+                        </div>
+                        <br>
+                        <small class="text-muted">
+                            Status: {% if form.instance.is_active %}Active{% else %}Inactive{% endif %} | 
+                            Created: {{ form.instance.created_at|date:"M d, Y H:i" }}
+                            {% if form.instance.updated_at != form.instance.created_at %}
+                                | Updated: {{ form.instance.updated_at|date:"M d, Y H:i" }}
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div class="clearfix"></div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Character count functionality
+    function updateCharacterCount() {
+        $('.character-count').each(function() {
+            const targetId = $(this).data('target');
+            const maxLength = $(this).data('max');
+            const target = $('#' + targetId);
+            const currentLength = target.val().length;
+            const currentSpan = $(this).find('.current');
+            
+            currentSpan.text(currentLength);
+            
+            // Update styling based on length
+            $(this).removeClass('warning danger');
+            if (currentLength > maxLength * 0.9) {
+                $(this).addClass('warning');
+            }
+            if (currentLength > maxLength) {
+                $(this).addClass('danger');
+            }
+        });
+    }
+    
+    // Initialize character counts
+    updateCharacterCount();
+    
+    // Update character counts on input
+    $('input[type="text"], textarea').on('input', updateCharacterCount);
+    
+    // Auto-generate room name from number and department
+    $('#{{ form.room_number.id_for_label }}').on('input', function() {
+        const roomNumber = $(this).val();
+        const nameField = $('#{{ form.room_name.id_for_label }}');
+        const department = $('#{{ form.department.id_for_label }} option:selected').text();
+        
+        // Only auto-generate if name field is empty or this is a new room
+        {% if not form.instance.pk %}
+            if (!nameField.val() || nameField.data('auto-generated')) {
+                if (roomNumber && department !== 'Select Department...') {
+                    const deptShort = department.split(' ')[0]; // Get first word
+                    const roomName = `${deptShort} Room ${roomNumber}`;
+                    nameField.val(roomName).data('auto-generated', true);
+                    updateCharacterCount();
+                }
+            }
+        {% endif %}
+        
+        updatePreview();
+    });
+    
+    // Remove auto-generated flag when user manually edits name
+    $('#{{ form.room_name.id_for_label }}').on('input', function() {
+        $(this).removeData('auto-generated');
+        updatePreview();
+    });
+    
+    // Department change handler
+    $('#{{ form.department.id_for_label }}').on('change', function() {
+        updatePreview();
+    });
+    
+    // Capacity change handler
+    $('#{{ form.capacity.id_for_label }}').on('input', function() {
+        updatePreview();
+    });
+    
+    // Update room preview
+    function updatePreview() {
+        const roomNumber = $('#{{ form.room_number.id_for_label }}').val();
+        const roomName = $('#{{ form.room_name.id_for_label }}').val();
+        const department = $('#{{ form.department.id_for_label }} option:selected').text();
+        const capacity = $('#{{ form.capacity.id_for_label }}').val();
+        
+        if (roomNumber && department !== 'Select Department...') {
+            $('#roomPreview').show();
+            
+            // Update preview content
+            $('#previewRoomNumber').text(roomNumber);
+            $('#previewRoomName').text(roomName ? ` - ${roomName}` : '');
+            $('#previewDepartment').text(department);
+            $('#previewCapacity').html(`<i class="fas fa-users me-1"></i>Capacity: ${capacity || 0}`);
+        } else {
+            $('#roomPreview').hide();
+        }
+    }
+    
+    // Form validation
+    $('#roomForm').on('submit', function(e) {
+        let isValid = true;
+        
+        // Clear previous errors
+        $('.is-invalid').removeClass('is-invalid');
+        $('.invalid-feedback').hide();
+        
+        // Validate required fields
+        $('input[required], select[required]').each(function() {
+            if (!$(this).val()) {
+                $(this).addClass('is-invalid');
+                $(this).siblings('.invalid-feedback').show();
+                isValid = false;
+            }
+        });
+        
+        // Validate capacity range
+        const capacity = parseInt($('#{{ form.capacity.id_for_label }}').val());
+        if (isNaN(capacity) || capacity < 1 || capacity > 1000) {
+            $('#{{ form.capacity.id_for_label }}').addClass('is-invalid');
+            $('#{{ form.capacity.id_for_label }}').siblings('.invalid-feedback').text('Capacity must be between 1 and 1000.').show();
+            isValid = false;
+        }
+        
+        // Validate room number format
+        const roomNumber = $('#{{ form.room_number.id_for_label }}').val();
+        if (roomNumber && !/^[A-Z0-9\-]+$/i.test(roomNumber)) {
+            $('#{{ form.room_number.id_for_label }}').addClass('is-invalid');
+            $('#{{ form.room_number.id_for_label }}').siblings('.invalid-feedback').text('Room number can only contain letters, numbers, and hyphens.').show();
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+            
+            // Scroll to first error
+            const firstError = $('.is-invalid').first();
+            if (firstError.length) {
+                $('html, body').animate({
+                    scrollTop: firstError.offset().top - 100
+                }, 300);
+                firstError.focus();
+            }
+        }
+    });
+    
+    // Auto-focus on first field
+    $('#{{ form.department.id_for_label }}').focus();
+    
+    // Room number formatting
+    $('#{{ form.room_number.id_for_label }}').on('input', function() {
+        // Convert to uppercase
+        const value = $(this).val().toUpperCase();
+        $(this).val(value);
+    });
+    
+    // Keyboard shortcuts
+    $(document).on('keydown', function(e) {
+        // Ctrl+S or Cmd+S to save
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            $('#roomForm').submit();
+        }
+        
+        // ESC to cancel
+        if (e.key === 'Escape') {
+            if (confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
+                window.location.href = "{% url 'inventory:room_list' %}";
+            }
+        }
+    });
+    
+    // Warn about unsaved changes
+    let formChanged = false;
+    $('#roomForm input, #roomForm select').on('change input', function() {
+        formChanged = true;
+    });
+    
+    $('#roomForm').on('submit', function() {
+        formChanged = false;
+    });
+    
+    $(window).on('beforeunload', function() {
+        if (formChanged) {
+            return 'You have unsaved changes. Are you sure you want to leave?';
+        }
+    });
+    
+    // Initialize preview
+    updatePreview();
+    
+    // Capacity input spinner
+    $('#{{ form.capacity.id_for_label }}').on('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.originalEvent.deltaY;
+        const currentValue = parseInt($(this).val()) || 1;
+        
+        if (delta < 0 && currentValue < 1000) {
+            $(this).val(currentValue + 1);
+        } else if (delta > 0 && currentValue > 1) {
+            $(this).val(currentValue - 1);
+        }
+        
+        updatePreview();
+    });
+});
+</script>
+{% endblock %}

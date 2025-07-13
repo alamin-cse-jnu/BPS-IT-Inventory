@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Report | BPS IT Inventory</title>
+    <link rel="shortcut icon" href="{% static 'img/favicons/bps-favicon.ico' %}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicons/bps-favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'img/favicons/bps-favicon-16x16.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/favicons/apple-touch-icon.png' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --bps-primary: #2c3e50;
+            --bps-secondary: #34495e;
+            --bps-accent: #3498db;
+            --bps-success: #27ae60;
+            --bps-warning: #f39c12;
+            --bps-danger: #e74c3c;
+            --bps-light: #ecf0f1;
+            --bps-dark: #2c3e50;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .report-header {
+            background: linear-gradient(135deg, var(--bps-primary), var(--bps-secondary));
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .report-title {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-subtitle {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .filter-title {
+            color: var(--bps-primary);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            border-left: 4px solid var(--bps-accent);
+            transition: transform 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bps-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-bottom: 2rem;
+        }
+
+        .chart-title {
+            color: var(--bps-primary);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .audit-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .table-header {
+            background: var(--bps-primary);
+            color: white;
+            padding: 1rem;
+            font-weight: 600;
+        }
+
+        .table thead th {
+            background: var(--bps-light);
+            color: var(--bps-primary);
+            border: none;
+            font-weight: 600;
+            padding: 1rem;
+        }
+
+        .table tbody td {
+            padding: 1rem;
+            border: none;
+            border-bottom: 1px solid #eee;
+        }
+
+        .action-badge {
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .action-CREATE { background: #d4edda; color: #155724; }
+        .action-UPDATE { background: #d1ecf1; color: #0c5460; }
+        .action-DELETE { background: #f8d7da; color: #721c24; }
+        .action-VIEW { background: #e2e3e5; color: #383d41; }
+
+        .export-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            margin-top: 2rem;
+        }
+
+        .btn-bps {
+            background: var(--bps-primary);
+            border: none;
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .btn-bps:hover {
+            background: var(--bps-secondary);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .pagination {
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .page-link {
+            color: var(--bps-primary);
+            border: 1px solid #dee2e6;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .page-item.active .page-link {
+            background: var(--bps-primary);
+            border-color: var(--bps-primary);
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 3rem;
+            color: #6c757d;
+        }
+
+        @media print {
+            .filter-section, .export-section, .btn, .pagination { display: none; }
+            .report-header { background: var(--bps-primary) !important; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="report-title">
+                        <i class="bi bi-shield-check me-3"></i>
+                        Audit Report
+                    </h1>
+                    <p class="report-subtitle">System Activity & Compliance Tracking</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <img src="{% static 'img/logos/bps-logo.png' %}" alt="BPS Logo" style="height: 60px;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <h5 class="filter-title">
+                <i class="bi bi-funnel"></i>
+                Report Filters
+            </h5>
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Action Type</label>
+                    <select name="action" class="form-select">
+                        <option value="">All Actions</option>
+                        {% for action in available_actions %}
+                            <option value="{{ action }}" {% if filters.action == action %}selected{% endif %}>
+                                {{ action|title }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">User</label>
+                    <select name="user" class="form-select">
+                        <option value="">All Users</option>
+                        {% for user in users %}
+                            <option value="{{ user.id }}" {% if filters.user == user.id|stringformat:"s" %}selected{% endif %}>
+                                {{ user.get_full_name|default:user.username }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-bps w-100">
+                        <i class="bi bi-search me-2"></i>Apply
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Statistics Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_logs|default:0 }}</div>
+                <div class="stat-label">Total Audit Logs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ action_stats.0.count|default:0 }}</div>
+                <div class="stat-label">Most Common Action</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ user_stats.0.count|default:0 }}</div>
+                <div class="stat-label">Most Active User</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ daily_stats|length|default:0 }}</div>
+                <div class="stat-label">Active Days</div>
+            </div>
+        </div>
+
+        <!-- Action Distribution Chart -->
+        <div class="chart-container">
+            <h5 class="chart-title">
+                <i class="bi bi-pie-chart"></i>
+                Action Distribution
+            </h5>
+            <div class="row">
+                {% for stat in action_stats %}
+                <div class="col-md-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="action-badge action-{{ stat.action }}">{{ stat.action }}</span>
+                        <strong>{{ stat.count }}</strong>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- User Activity Chart -->
+        <div class="chart-container">
+            <h5 class="chart-title">
+                <i class="bi bi-people"></i>
+                Top User Activity
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Actions</th>
+                            <th>Activity Level</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user_stat in user_stats %}
+                        <tr>
+                            <td>{{ user_stat.user__first_name }} {{ user_stat.user__last_name|default:user_stat.user__username }}</td>
+                            <td>{{ user_stat.count }}</td>
+                            <td>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-primary" style="width: {% widthratio user_stat.count user_stats.0.count 100 %}%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Audit Logs Table -->
+        <div class="audit-table">
+            <div class="table-header">
+                <i class="bi bi-list-ul me-2"></i>
+                Recent Audit Logs
+            </div>
+            {% if page_obj %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Model</th>
+                            <th>Object ID</th>
+                            <th>Changes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in page_obj %}
+                        <tr>
+                            <td>
+                                <small class="text-muted">{{ log.timestamp|date:"M d, Y" }}</small><br>
+                                <small>{{ log.timestamp|time:"H:i:s" }}</small>
+                            </td>
+                            <td>
+                                <strong>{{ log.user.get_full_name|default:log.user.username }}</strong><br>
+                                <small class="text-muted">{{ log.user.username }}</small>
+                            </td>
+                            <td>
+                                <span class="action-badge action-{{ log.action }}">{{ log.action }}</span>
+                            </td>
+                            <td>{{ log.model_name|default:"-" }}</td>
+                            <td>
+                                <code>{{ log.object_id|truncatechars:10 }}</code>
+                            </td>
+                            <td>
+                                {% if log.changes %}
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#changesModal{{ log.id }}">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="p-3">
+                <nav>
+                    <ul class="pagination mb-0">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% else %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div class="no-data">
+                <i class="bi bi-inbox display-1 text-muted"></i>
+                <h5 class="mt-3">No audit logs found</h5>
+                <p class="text-muted">Try adjusting your filter criteria.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Export Section -->
+        <div class="export-section">
+            <h5 class="mb-3">
+                <i class="bi bi-download me-2"></i>
+                Export Options
+            </h5>
+            <div class="row g-2">
+                <div class="col-auto">
+                    <button class="btn btn-bps" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print Report
+                    </button>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'reports:audit_report' %}?format=pdf{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-danger">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>PDF
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'reports:audit_report' %}?format=excel{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-success">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Excel
+                    </a>
+                </div>
+                <div class="col-auto">
+                    <a href="{% url 'reports:audit_report' %}?format=csv{% for key, value in request.GET.items %}{% if key != 'format' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-text me-2"></i>CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Details Modals -->
+    {% for log in page_obj %}
+    {% if log.changes %}
+    <div class="modal fade" id="changesModal{{ log.id }}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Change Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Action:</strong> {{ log.action }}<br>
+                        <strong>User:</strong> {{ log.user.get_full_name|default:log.user.username }}<br>
+                        <strong>Timestamp:</strong> {{ log.timestamp }}<br>
+                        <strong>Model:</strong> {{ log.model_name }}
+                    </div>
+                    <h6>Changes:</h6>
+                    <pre class="bg-light p-3 rounded">{{ log.changes|pprint }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-refresh functionality
+        const refreshInterval = 30000; // 30 seconds
+        let refreshTimer;
+
+        function startAutoRefresh() {
+            refreshTimer = setInterval(() => {
+                if (!document.hidden) {
+                    location.reload();
+                }
+            }, refreshInterval);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+        }
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                startAutoRefresh();
+            }
+        });
+
+        // Start auto-refresh when page loads
+        document.addEventListener('DOMContentLoaded', startAutoRefresh);
+    </script>
+</body>
+</html>

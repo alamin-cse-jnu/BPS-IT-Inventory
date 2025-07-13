@@ -1,230 +1,467 @@
-{% extends 'base.html' %}
+{% extends 'qr_management/base/qr_base.html' %}
 {% load static %}
 
-{% block title %}Bulk Generate QR Codes - BPS IT Inventory{% endblock %}
+{% block title %}Bulk Generate QR Codes - {{ block.super }}{% endblock %}
 
-{% block page_title %}Bulk Generate QR Codes{% endblock %}
+{% block qr_title %}Bulk Generate QR Codes{% endblock %}
+{% block qr_description %}Generate QR codes for multiple devices at once{% endblock %}
 
-{% block page_subtitle %}
-<p class="content-subtitle">Generate QR codes for multiple devices at once</p>
+{% block qr_breadcrumb %}
+<li class="breadcrumb-item active">Bulk Generate</li>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .device-selection-card {
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
+.device-selection-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
 
-    .filter-section {
-        background: #f8fafc;
-        border-radius: 8px;
-        padding: 1.25rem;
-        margin-bottom: 1.5rem;
-        border: 1px solid #e2e8f0;
-    }
+.filter-section {
+    background: #f8f9fc;
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #e3e6f0;
+}
 
-    .device-table {
-        background: white;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
+.device-table {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
 
-    .device-row {
-        transition: background-color 0.2s ease;
-    }
+.device-row {
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
 
-    .device-row:hover {
-        background-color: #f8fafc;
-    }
+.device-row:hover {
+    background-color: #f8f9fc;
+}
 
-    .device-checkbox {
-        width: 18px;
-        height: 18px;
-    }
+.device-row.selected {
+    background-color: #e3f2fd;
+    border-left: 4px solid #4e73df;
+}
 
-    .qr-status-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-    }
+.device-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
 
-    .qr-status-has {
-        background-color: #dcfce7;
-        color: #166534;
-    }
+.qr-status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 500;
+}
 
-    .qr-status-none {
-        background-color: #fef3c7;
-        color: #92400e;
-    }
+.qr-status-has {
+    background-color: #d1fae5;
+    color: #065f46;
+}
 
+.qr-status-none {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.bulk-actions-card {
+    background: linear-gradient(135deg, #f8f9fc 0%, #e3f2fd 100%);
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+    position: sticky;
+    top: 20px;
+    z-index: 100;
+}
+
+.bulk-actions-card.has-selection {
+    border-color: #4e73df;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(78, 115, 223, 0.15);
+}
+
+.selection-counter {
+    font-weight: 700;
+    color: #4e73df;
+    font-size: 1.2rem;
+}
+
+.device-info {
+    min-width: 0;
+}
+
+.device-name {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 0.25rem;
+}
+
+.device-details {
+    font-size: 0.875rem;
+    color: #718096;
+}
+
+.category-badge {
+    background-color: #e0e7ff;
+    color: #3730a3;
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-available {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.status-assigned {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.status-maintenance {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.status-retired {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.btn-generate {
+    background: linear-gradient(135deg, #4e73df, #224abe);
+    border: none;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(78, 115, 223, 0.25);
+}
+
+.btn-generate:hover:not(:disabled) {
+    background: linear-gradient(135deg, #224abe, #1e3b8a);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(78, 115, 223, 0.35);
+    color: white;
+}
+
+.btn-generate:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.progress-container {
+    margin-top: 20px;
+    display: none;
+}
+
+.progress {
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #4e73df, #36b9cc);
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    margin-top: 10px;
+    font-size: 0.875rem;
+    color: #5a5c69;
+}
+
+.generation-stats {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 15px;
+    font-size: 0.875rem;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-number {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #4e73df;
+}
+
+.stat-label {
+    color: #858796;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #858796;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.device-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.device-action-btn {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-view {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.btn-view:hover {
+    background: #bbdefb;
+}
+
+.btn-generate-single {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.btn-generate-single:hover {
+    background: #e1bee7;
+}
+
+@media (max-width: 768px) {
     .bulk-actions-card {
-        background: #fefefe;
-        border: 2px dashed #d1d5db;
-        border-radius: 8px;
-        padding: 2rem;
-        text-align: center;
-        margin-bottom: 1.5rem;
-        transition: all 0.3s ease;
+        position: static;
+        margin-bottom: 1rem;
     }
-
-    .bulk-actions-card.has-selection {
-        border-color: #2563eb;
-        background: #eff6ff;
-    }
-
-    .selection-counter {
-        font-weight: 600;
-        color: #2563eb;
-    }
-
-    .device-info {
-        min-width: 0;
-    }
-
-    .device-name {
-        font-weight: 500;
-        color: #1f2937;
-        margin-bottom: 0.25rem;
-    }
-
-    .device-details {
+    
+    .device-table {
         font-size: 0.875rem;
-        color: #6b7280;
     }
+    
+    .device-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .filter-section .row {
+        gap: 10px;
+    }
+    
+    .filter-section .col-md-3 {
+        margin-bottom: 15px;
+    }
+}
 
-    .category-badge {
-        background-color: #e0e7ff;
-        color: #3730a3;
-        padding: 0.125rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 500;
-    }
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
 
-    .status-badge {
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 500;
-    }
+.loading-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
 
-    .status-active {
-        background-color: #dcfce7;
-        color: #166534;
-    }
+.spinner {
+    border: 4px solid #f3f4f6;
+    border-top: 4px solid #4e73df;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
 
-    .status-inactive {
-        background-color: #fee2e2;
-        color: #991b1b;
-    }
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 
-    .status-maintenance {
-        background-color: #fef3c7;
-        color: #92400e;
-    }
+.result-summary {
+    background: #f8f9fc;
+    border: 1px solid #e3e6f0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
 
-    .action-buttons {
-        gap: 0.5rem;
-    }
+.result-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
 
-    .btn-generate {
-        background: linear-gradient(135deg, #2563eb, #1d4ed8);
-        border: none;
-        color: white;
-        padding: 0.75rem 1.5rem;
-        border-radius: 6px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
+.result-stat {
+    text-align: center;
+    padding: 1rem;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e3e6f0;
+}
 
-    .btn-generate:hover {
-        background: linear-gradient(135deg, #1d4ed8, #1e40af);
-        color: white;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
+.result-stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
 
-    .btn-generate:disabled {
-        background: #9ca3af;
-        transform: none;
-        box-shadow: none;
-    }
+.result-stat-label {
+    font-size: 0.875rem;
+    color: #858796;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
-    .progress-container {
-        display: none;
-        margin-top: 1rem;
-    }
-
-    .pagination-container {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        margin-top: 1.5rem;
-    }
-
-    @media (max-width: 768px) {
-        .device-table-responsive {
-            overflow-x: auto;
-        }
-        
-        .filter-section {
-            padding: 1rem;
-        }
-        
-        .bulk-actions-card {
-            padding: 1.5rem 1rem;
-        }
-    }
+.success-color { color: #1cc88a; }
+.warning-color { color: #f6c23e; }
+.danger-color { color: #e74a3b; }
+.info-color { color: #36b9cc; }
 </style>
 {% endblock %}
 
-{% block content %}
-<div class="container-fluid">
-    <!-- Filter Section -->
-    <div class="filter-section">
-        <form method="GET" class="row g-3">
+{% block qr_content %}
+<!-- Bulk Actions Card -->
+<div class="bulk-actions-card" id="bulkActionsCard">
+    <div id="noSelectionMessage">
+        <i class="fas fa-mouse-pointer fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted mb-2">Select devices to generate QR codes</h5>
+        <p class="text-muted mb-0">Use the checkboxes to select devices, then click "Generate QR Codes"</p>
+    </div>
+    
+    <div id="selectionMessage" style="display: none;">
+        <i class="fas fa-qrcode fa-3x text-primary mb-3"></i>
+        <h5 class="mb-3">
+            <span class="selection-counter" id="selectionCount">0</span> devices selected
+        </h5>
+        <div class="action-buttons d-flex justify-content-center flex-wrap gap-2">
+            <button type="button" class="btn btn-generate" id="generateBtn" disabled>
+                <i class="fas fa-magic me-2"></i>Generate QR Codes
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="clearSelectionBtn">
+                <i class="fas fa-times me-1"></i>Clear Selection
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="selectAllBtn">
+                <i class="fas fa-check-square me-1"></i>Select All
+            </button>
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress mb-2">
+                <div class="progress-bar" role="progressbar" style="width: 0%" id="progressBar">
+                    <span class="sr-only">0% Complete</span>
+                </div>
+            </div>
+            <div class="progress-text" id="progressText">Initializing...</div>
+            <div class="generation-stats" id="generationStats">
+                <div class="stat-item">
+                    <div class="stat-number" id="successCount">0</div>
+                    <div class="stat-label">Success</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="errorCount">0</div>
+                    <div class="stat-label">Errors</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="totalCount">0</div>
+                    <div class="stat-label">Total</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="filter-section">
+    <h6 class="mb-3">
+        <i class="fas fa-filter me-2"></i>Filter Devices
+    </h6>
+    
+    <form method="GET" class="filter-form">
+        <div class="row g-3">
             <div class="col-md-3">
-                <label for="category" class="form-label">
-                    <i class="fas fa-tag me-1"></i>Category
-                </label>
+                <label for="category" class="form-label">Category</label>
                 <select name="category" id="category" class="form-select">
                     <option value="">All Categories</option>
-                    {% for cat_id, cat_name in categories %}
-                        <option value="{{ cat_id }}" {% if filters.category == cat_id|stringformat:"s" %}selected{% endif %}>
-                            {{ cat_name }}
-                        </option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if request.GET.category == category.id|stringformat:"s" %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
             
             <div class="col-md-3">
-                <label for="status" class="form-label">
-                    <i class="fas fa-circle me-1"></i>Status
-                </label>
+                <label for="status" class="form-label">Status</label>
                 <select name="status" id="status" class="form-select">
-                    <option value="">All Status</option>
-                    <option value="active" {% if filters.status == 'active' %}selected{% endif %}>Active</option>
-                    <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>Inactive</option>
-                    <option value="maintenance" {% if filters.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
-                    <option value="retired" {% if filters.status == 'retired' %}selected{% endif %}>Retired</option>
+                    <option value="">All Statuses</option>
+                    <option value="available" {% if request.GET.status == 'available' %}selected{% endif %}>Available</option>
+                    <option value="assigned" {% if request.GET.status == 'assigned' %}selected{% endif %}>Assigned</option>
+                    <option value="maintenance" {% if request.GET.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
+                    <option value="retired" {% if request.GET.status == 'retired' %}selected{% endif %}>Retired</option>
                 </select>
             </div>
             
             <div class="col-md-3">
-                <label for="has_qr" class="form-label">
-                    <i class="fas fa-qrcode me-1"></i>QR Code Status
-                </label>
+                <label for="has_qr" class="form-label">QR Code Status</label>
                 <select name="has_qr" id="has_qr" class="form-select">
                     <option value="">All Devices</option>
-                    <option value="yes" {% if filters.has_qr == 'yes' %}selected{% endif %}>Has QR Code</option>
-                    <option value="no" {% if filters.has_qr == 'no' %}selected{% endif %}>No QR Code</option>
+                    <option value="yes" {% if request.GET.has_qr == 'yes' %}selected{% endif %}>Has QR Code</option>
+                    <option value="no" {% if request.GET.has_qr == 'no' %}selected{% endif %}>No QR Code</option>
                 </select>
             </div>
             
@@ -239,499 +476,598 @@
                     </a>
                 </div>
             </div>
-        </form>
-    </div>
-
-    <!-- Bulk Actions Card -->
-    <div class="bulk-actions-card" id="bulkActionsCard">
-        <div id="noSelectionMessage">
-            <i class="fas fa-mouse-pointer fa-2x text-muted mb-2"></i>
-            <h5 class="text-muted">Select devices to generate QR codes</h5>
-            <p class="text-muted mb-0">Use the checkboxes to select devices, then click "Generate QR Codes"</p>
         </div>
+    </form>
+</div>
+
+<!-- Devices Table -->
+<div class="device-selection-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0">
+            <i class="fas fa-laptop me-2"></i>Select Devices
+            {% if devices %}
+            <span class="text-muted">({{ devices|length }} devices)</span>
+            {% endif %}
+        </h6>
         
-        <div id="selectionMessage" style="display: none;">
-            <i class="fas fa-qrcode fa-2x text-primary mb-2"></i>
-            <h5>
-                <span class="selection-counter" id="selectionCount">0</span> devices selected
-            </h5>
-            <div class="action-buttons d-flex justify-content-center mt-3">
-                <button type="button" class="btn btn-generate" id="generateBtn" disabled>
-                    <i class="fas fa-magic me-2"></i>Generate QR Codes
-                </button>
-                <button type="button" class="btn btn-outline-secondary ms-2" id="clearSelectionBtn">
-                    <i class="fas fa-times me-1"></i>Clear Selection
-                </button>
-            </div>
-            
-            <div class="progress-container" id="progressContainer">
-                <div class="progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 0%" id="progressBar">
-                        <span id="progressText">0%</span>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <small class="text-muted" id="progressDetails">Preparing to generate QR codes...</small>
-                </div>
-            </div>
+        {% if devices %}
+        <div class="table-actions">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="selectAllVisibleBtn">
+                <i class="fas fa-check-square me-1"></i>Select All Visible
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="selectNoneBtn">
+                <i class="fas fa-square me-1"></i>Select None
+            </button>
         </div>
+        {% endif %}
     </div>
 
-    <!-- Device Selection Table -->
-    <div class="device-selection-card">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">
-                <i class="fas fa-laptop me-2"></i>Available Devices
-                {% if page_obj.paginator.count %}
-                    <span class="badge bg-primary ms-2">{{ page_obj.paginator.count }}</span>
-                {% endif %}
-            </h5>
-            
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllBtn">
-                    <i class="fas fa-check-square me-1"></i>Select All
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="selectNoneBtn">
-                    <i class="fas fa-square me-1"></i>Select None
-                </button>
-            </div>
-        </div>
-
-        {% if page_obj %}
-        <div class="device-table-responsive">
+    {% if devices %}
+    <div class="device-table">
+        <div class="table-responsive">
             <table class="table table-hover mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th width="50">
-                            <input type="checkbox" class="form-check-input device-checkbox" id="selectAllCheckbox">
+                        <th style="width: 40px;">
+                            <input type="checkbox" class="device-checkbox" id="selectAllCheckbox">
                         </th>
                         <th>Device Information</th>
-                        <th>Category</th>
-                        <th>Status</th>
-                        <th>QR Status</th>
-                        <th width="100">Actions</th>
+                        <th style="width: 120px;">Category</th>
+                        <th style="width: 100px;">Status</th>
+                        <th style="width: 120px;">QR Status</th>
+                        <th style="width: 120px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for device in page_obj %}
-                    <tr class="device-row">
+                    {% for device in devices %}
+                    <tr class="device-row" data-device-id="{{ device.device_id }}">
                         <td>
-                            <input type="checkbox" 
-                                   class="form-check-input device-checkbox device-select" 
-                                   value="{{ device.device_id }}"
+                            <input type="checkbox" class="device-checkbox device-select" 
+                                   value="{{ device.device_id }}" 
                                    data-device-name="{{ device.device_name }}">
                         </td>
                         <td>
                             <div class="device-info">
                                 <div class="device-name">{{ device.device_name }}</div>
                                 <div class="device-details">
-                                    <strong>ID:</strong> {{ device.device_id }} |
-                                    <strong>Asset:</strong> {{ device.asset_tag|default:"N/A" }}
-                                    {% if device.device_type %}
-                                        | <strong>Type:</strong> {{ device.device_type.name }}
+                                    <span class="text-muted">ID:</span> {{ device.device_id }}
+                                    {% if device.serial_number %}
+                                    | <span class="text-muted">SN:</span> {{ device.serial_number }}
                                     {% endif %}
                                 </div>
                             </div>
                         </td>
                         <td>
-                            {% if device.device_type.subcategory.category %}
-                                <span class="category-badge">
-                                    {{ device.device_type.subcategory.category.name }}
-                                </span>
-                            {% else %}
-                                <span class="text-muted">Uncategorized</span>
-                            {% endif %}
+                            <span class="category-badge">{{ device.category.name }}</span>
                         </td>
                         <td>
-                            <span class="status-badge status-{{ device.status }}">
-                                {% if device.status == 'active' %}
-                                    <i class="fas fa-circle me-1"></i>Active
-                                {% elif device.status == 'inactive' %}
-                                    <i class="fas fa-pause me-1"></i>Inactive
-                                {% elif device.status == 'maintenance' %}
-                                    <i class="fas fa-tools me-1"></i>Maintenance
-                                {% elif device.status == 'retired' %}
-                                    <i class="fas fa-archive me-1"></i>Retired
-                                {% else %}
-                                    <i class="fas fa-question me-1"></i>{{ device.status|title }}
-                                {% endif %}
+                            <span class="status-badge status-{{ device.status|lower }}">
+                                {{ device.get_status_display }}
                             </span>
                         </td>
                         <td>
                             {% if device.qr_code %}
                                 <span class="qr-status-badge qr-status-has">
-                                    <i class="fas fa-check me-1"></i>Has QR
+                                    <i class="fas fa-check-circle me-1"></i>Has QR
                                 </span>
                             {% else %}
                                 <span class="qr-status-badge qr-status-none">
-                                    <i class="fas fa-times me-1"></i>No QR
+                                    <i class="fas fa-times-circle me-1"></i>No QR
                                 </span>
                             {% endif %}
                         </td>
                         <td>
-                            <div class="btn-group btn-group-sm">
+                            <div class="device-actions">
                                 <a href="{% url 'inventory:device_detail' device.device_id %}" 
-                                   class="btn btn-outline-primary btn-sm" 
-                                   title="View Device">
+                                   class="device-action-btn btn-view" title="View Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                {% if device.qr_code %}
+                                {% if not device.qr_code %}
                                 <a href="{% url 'qr_management:qr_generate' device.device_id %}" 
-                                   class="btn btn-outline-success btn-sm" 
-                                   title="View QR Code">
+                                   class="device-action-btn btn-generate-single" title="Generate QR">
                                     <i class="fas fa-qrcode"></i>
                                 </a>
                                 {% endif %}
                             </div>
                         </td>
                     </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="6" class="text-center py-4">
-                            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
-                            <div class="text-muted">No devices found matching your criteria</div>
-                            <a href="{% url 'qr_management:qr_bulk_generate' %}" class="btn btn-sm btn-outline-primary mt-2">
-                                <i class="fas fa-refresh me-1"></i>Reset Filters
-                            </a>
-                        </td>
-                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% endif %}
     </div>
-
+    
     <!-- Pagination -->
-    {% if page_obj.has_other_pages %}
-    <div class="pagination-container">
+    {% if devices.has_other_pages %}
+    <div class="d-flex justify-content-center mt-4">
         <nav aria-label="Device pagination">
-            <ul class="pagination justify-content-center mb-0">
-                {% if page_obj.has_previous %}
+            <ul class="pagination">
+                {% if devices.has_previous %}
                     <li class="page-item">
                         <a class="page-link" href="?page=1{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
                             <i class="fas fa-angle-double-left"></i>
                         </a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
+                        <a class="page-link" href="?page={{ devices.previous_page_number }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
                             <i class="fas fa-angle-left"></i>
                         </a>
                     </li>
                 {% endif %}
 
-                {% for num in page_obj.paginator.page_range %}
-                    {% if page_obj.number == num %}
+                {% for num in devices.paginator.page_range %}
+                    {% if devices.number == num %}
                         <li class="page-item active">
                             <span class="page-link">{{ num }}</span>
                         </li>
-                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    {% elif num > devices.number|add:'-3' and num < devices.number|add:'3' %}
                         <li class="page-item">
                             <a class="page-link" href="?page={{ num }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">{{ num }}</a>
                         </li>
                     {% endif %}
                 {% endfor %}
 
-                {% if page_obj.has_next %}
+                {% if devices.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
+                        <a class="page-link" href="?page={{ devices.next_page_number }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
                             <i class="fas fa-angle-right"></i>
                         </a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
+                        <a class="page-link" href="?page={{ devices.paginator.num_pages }}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.has_qr %}&has_qr={{ request.GET.has_qr }}{% endif %}">
                             <i class="fas fa-angle-double-right"></i>
                         </a>
                     </li>
                 {% endif %}
             </ul>
         </nav>
-        
-        <div class="text-center mt-2">
-            <small class="text-muted">
-                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} devices
-            </small>
+    </div>
+    {% endif %}
+    
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="fas fa-search"></i>
         </div>
+        <h5>No devices found</h5>
+        <p>Try adjusting your filters or <a href="{% url 'qr_management:qr_bulk_generate' %}">clear all filters</a></p>
     </div>
     {% endif %}
 </div>
 
-<!-- QR Generation Form (Hidden) -->
+<!-- Results Summary (Hidden by default) -->
+<div class="result-summary" id="resultSummary" style="display: none;">
+    <h6 class="mb-3">
+        <i class="fas fa-chart-bar me-2"></i>Generation Results
+    </h6>
+    <div class="result-stats" id="resultStats">
+        <!-- Stats will be populated dynamically -->
+    </div>
+    <div class="result-actions text-center">
+        <button type="button" class="btn btn-primary" id="viewGeneratedBtn">
+            <i class="fas fa-eye me-2"></i>View Generated QR Codes
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="downloadReportBtn">
+            <i class="fas fa-download me-2"></i>Download Report
+        </button>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <div class="spinner"></div>
+        <h6>Generating QR Codes</h6>
+        <p class="text-muted mb-0">Please wait while we process your request...</p>
+    </div>
+</div>
+
+<!-- Hidden Form -->
 <form id="qrGenerationForm" method="POST" style="display: none;">
     {% csrf_token %}
     <input type="hidden" name="device_ids" id="selectedDeviceIds">
 </form>
 {% endblock %}
 
-{% block extra_js %}
+{% block qr_extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const deviceCheckboxes = document.querySelectorAll('.device-select');
-    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const selectAllBtn = document.getElementById('selectAllBtn');
-    const selectNoneBtn = document.getElementById('selectNoneBtn');
-    const generateBtn = document.getElementById('generateBtn');
-    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
-    const bulkActionsCard = document.getElementById('bulkActionsCard');
-    const noSelectionMessage = document.getElementById('noSelectionMessage');
-    const selectionMessage = document.getElementById('selectionMessage');
-    const selectionCount = document.getElementById('selectionCount');
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-    const progressDetails = document.getElementById('progressDetails');
-    const qrGenerationForm = document.getElementById('qrGenerationForm');
-    const selectedDeviceIds = document.getElementById('selectedDeviceIds');
-
+$(document).ready(function() {
     let selectedDevices = new Set();
-
-    // Update UI based on selection
-    function updateSelectionUI() {
+    
+    // Initialize
+    updateBulkActions();
+    
+    // Device selection handling
+    $('.device-select').change(function() {
+        const deviceId = $(this).val();
+        const isChecked = $(this).is(':checked');
+        const row = $(this).closest('.device-row');
+        
+        if (isChecked) {
+            selectedDevices.add(deviceId);
+            row.addClass('selected');
+        } else {
+            selectedDevices.delete(deviceId);
+            row.removeClass('selected');
+        }
+        
+        updateBulkActions();
+        updateSelectAllCheckbox();
+    });
+    
+    // Select all checkbox
+    $('#selectAllCheckbox').change(function() {
+        const isChecked = $(this).is(':checked');
+        $('.device-select').prop('checked', isChecked).trigger('change');
+    });
+    
+    // Select all visible button
+    $('#selectAllVisibleBtn').click(function() {
+        $('.device-select:visible').prop('checked', true).trigger('change');
+    });
+    
+    // Select all button (in bulk actions)
+    $('#selectAllBtn').click(function() {
+        $('.device-select').prop('checked', true).trigger('change');
+    });
+    
+    // Select none button
+    $('#selectNoneBtn').click(function() {
+        $('.device-select').prop('checked', false).trigger('change');
+    });
+    
+    // Clear selection button
+    $('#clearSelectionBtn').click(function() {
+        selectedDevices.clear();
+        $('.device-select').prop('checked', false);
+        $('.device-row').removeClass('selected');
+        updateBulkActions();
+        updateSelectAllCheckbox();
+    });
+    
+    // Generate button
+    $('#generateBtn').click(function() {
+        if (selectedDevices.size === 0) {
+            alert('Please select at least one device.');
+            return;
+        }
+        
+        if (confirm(`Generate QR codes for ${selectedDevices.size} selected devices?`)) {
+            generateQRCodes();
+        }
+    });
+    
+    // Row click selection
+    $('.device-row').click(function(e) {
+        if (e.target.type !== 'checkbox' && !$(e.target).closest('a').length) {
+            const checkbox = $(this).find('.device-select');
+            checkbox.prop('checked', !checkbox.is(':checked')).trigger('change');
+        }
+    });
+    
+    function updateBulkActions() {
         const count = selectedDevices.size;
-        selectionCount.textContent = count;
+        const bulkCard = $('#bulkActionsCard');
+        const generateBtn = $('#generateBtn');
         
         if (count > 0) {
-            bulkActionsCard.classList.add('has-selection');
-            noSelectionMessage.style.display = 'none';
-            selectionMessage.style.display = 'block';
-            generateBtn.disabled = false;
+            $('#noSelectionMessage').hide();
+            $('#selectionMessage').show();
+            $('#selectionCount').text(count);
+            generateBtn.prop('disabled', false);
+            bulkCard.addClass('has-selection');
         } else {
-            bulkActionsCard.classList.remove('has-selection');
-            noSelectionMessage.style.display = 'block';
-            selectionMessage.style.display = 'none';
-            generateBtn.disabled = true;
+            $('#noSelectionMessage').show();
+            $('#selectionMessage').hide();
+            generateBtn.prop('disabled', true);
+            bulkCard.removeClass('has-selection');
+            $('#progressContainer').hide();
         }
+    }
+    
+    function updateSelectAllCheckbox() {
+        const totalCheckboxes = $('.device-select').length;
+        const checkedCheckboxes = $('.device-select:checked').length;
+        const selectAllCheckbox = $('#selectAllCheckbox');
         
-        // Update select all checkbox state
-        if (count === 0) {
-            selectAllCheckbox.indeterminate = false;
-            selectAllCheckbox.checked = false;
-        } else if (count === deviceCheckboxes.length) {
-            selectAllCheckbox.indeterminate = false;
-            selectAllCheckbox.checked = true;
+        if (checkedCheckboxes === 0) {
+            selectAllCheckbox.prop('indeterminate', false);
+            selectAllCheckbox.prop('checked', false);
+        } else if (checkedCheckboxes === totalCheckboxes) {
+            selectAllCheckbox.prop('indeterminate', false);
+            selectAllCheckbox.prop('checked', true);
         } else {
-            selectAllCheckbox.indeterminate = true;
-            selectAllCheckbox.checked = false;
+            selectAllCheckbox.prop('indeterminate', true);
         }
     }
-
-    // Handle individual device selection
-    deviceCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const deviceId = this.value;
-            
-            if (this.checked) {
-                selectedDevices.add(deviceId);
-            } else {
-                selectedDevices.delete(deviceId);
-            }
-            
-            updateSelectionUI();
-        });
-    });
-
-    // Handle select all checkbox
-    selectAllCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-            selectAll();
-        } else {
-            selectNone();
-        }
-    });
-
-    // Select all button
-    selectAllBtn.addEventListener('click', selectAll);
     
-    function selectAll() {
-        deviceCheckboxes.forEach(checkbox => {
-            checkbox.checked = true;
-            selectedDevices.add(checkbox.value);
-        });
-        updateSelectionUI();
-    }
-
-    // Select none button
-    selectNoneBtn.addEventListener('click', selectNone);
-    clearSelectionBtn.addEventListener('click', selectNone);
-    
-    function selectNone() {
-        deviceCheckboxes.forEach(checkbox => {
-            checkbox.checked = false;
-        });
-        selectedDevices.clear();
-        updateSelectionUI();
-    }
-
-    // Generate QR codes
-    generateBtn.addEventListener('click', function() {
-        if (selectedDevices.size === 0) {
-            showNotification('Please select at least one device', 'warning');
-            return;
-        }
-
-        // Show confirmation dialog
-        if (!confirm(`Generate QR codes for ${selectedDevices.size} selected devices?`)) {
-            return;
-        }
-
+    function generateQRCodes() {
+        const deviceIds = Array.from(selectedDevices);
+        
+        // Show loading
+        $('#loadingOverlay').show();
+        $('#progressContainer').show();
+        
+        // Initialize progress
+        updateProgress(0, 'Starting generation...', 0, 0, deviceIds.length);
+        
         // Prepare form data
-        selectedDeviceIds.value = Array.from(selectedDevices).join(',');
+        $('#selectedDeviceIds').val(deviceIds.join(','));
         
-        // Show progress
-        progressContainer.style.display = 'block';
-        generateBtn.disabled = true;
-        generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
-        
-        // Simulate progress (you can replace this with actual progress tracking)
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += Math.random() * 15;
-            if (progress > 90) progress = 90;
-            
-            progressBar.style.width = progress + '%';
-            progressText.textContent = Math.round(progress) + '%';
-            progressDetails.textContent = `Processing ${Math.round(progress/100 * selectedDevices.size)} of ${selectedDevices.size} devices...`;
-        }, 200);
-
-        // Submit form
-        fetch(qrGenerationForm.action || window.location.href, {
+        // Submit form with AJAX
+        $.ajax({
+            url: '{% url "qr_management:qr_bulk_generate" %}',
             method: 'POST',
-            body: new FormData(qrGenerationForm),
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            clearInterval(progressInterval);
-            
-            // Complete progress
-            progressBar.style.width = '100%';
-            progressText.textContent = '100%';
-            progressDetails.textContent = 'Complete!';
-            
-            setTimeout(() => {
-                progressContainer.style.display = 'none';
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>Generate QR Codes';
+            data: $('#qrGenerationForm').serialize(),
+            dataType: 'json',
+            success: function(response) {
+                $('#loadingOverlay').hide();
                 
-                if (data.success) {
-                    showNotification(data.message || 'QR codes generated successfully!', 'success');
-                    // Optionally refresh the page to show updated QR status
-                    setTimeout(() => window.location.reload(), 1500);
+                if (response.success) {
+                    const results = response.results;
+                    const successCount = results.filter(r => r.success).length;
+                    const errorCount = results.filter(r => !r.success).length;
+                    
+                    updateProgress(100, 'Generation completed!', successCount, errorCount, deviceIds.length);
+                    showResults(results);
+                    
+                    // Update QR status in table
+                    updateTableQRStatus(results);
+                    
+                    QRManager.showToast(`Successfully generated ${successCount} QR codes`, 'success');
                 } else {
-                    showNotification(data.message || 'Error generating QR codes', 'error');
+                    QRManager.showToast('Generation failed: ' + response.message, 'error');
                 }
-            }, 1000);
-        })
-        .catch(error => {
-            clearInterval(progressInterval);
-            progressContainer.style.display = 'none';
-            generateBtn.disabled = false;
-            generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>Generate QR Codes';
-            
-            console.error('Error:', error);
-            showNotification('Error generating QR codes. Please try again.', 'error');
+            },
+            error: function(xhr, status, error) {
+                $('#loadingOverlay').hide();
+                console.error('Generation error:', error);
+                QRManager.showToast('An error occurred during generation', 'error');
+            }
         });
-    });
-
-    // Handle form submission for non-AJAX fallback
-    qrGenerationForm.addEventListener('submit', function(e) {
-        if (selectedDevices.size === 0) {
-            e.preventDefault();
-            showNotification('Please select at least one device', 'warning');
-            return;
-        }
+    }
+    
+    function updateProgress(percentage, message, successCount, errorCount, totalCount) {
+        $('#progressBar').css('width', percentage + '%');
+        $('#progressText').text(message);
+        $('#successCount').text(successCount);
+        $('#errorCount').text(errorCount);
+        $('#totalCount').text(totalCount);
+    }
+    
+    function showResults(results) {
+        const resultSummary = $('#resultSummary');
+        const resultStats = $('#resultStats');
         
-        selectedDeviceIds.value = Array.from(selectedDevices).join(',');
+        // Calculate statistics
+        const total = results.length;
+        const successful = results.filter(r => r.success).length;
+        const failed = results.filter(r => !r.success).length;
+        const existed = results.filter(r => r.existed).length;
+        
+        // Generate stats HTML
+        const statsHtml = `
+            <div class="result-stat">
+                <div class="result-stat-number success-color">${successful}</div>
+                <div class="result-stat-label">Generated</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number warning-color">${existed}</div>
+                <div class="result-stat-label">Already Existed</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number danger-color">${failed}</div>
+                <div class="result-stat-label">Failed</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number info-color">${total}</div>
+                <div class="result-stat-label">Total Processed</div>
+            </div>
+        `;
+        
+        resultStats.html(statsHtml);
+        resultSummary.show();
+        
+        // Scroll to results
+        $('html, body').animate({
+            scrollTop: resultSummary.offset().top - 100
+        }, 500);
+    }
+    
+    function updateTableQRStatus(results) {
+        results.forEach(function(result) {
+            if (result.success || result.existed) {
+                const row = $(`.device-row[data-device-id="${result.device_id}"]`);
+                const qrStatusCell = row.find('td:nth-child(5)');
+                
+                qrStatusCell.html(`
+                    <span class="qr-status-badge qr-status-has">
+                        <i class="fas fa-check-circle me-1"></i>Has QR
+                    </span>
+                `);
+                
+                // Remove generate button
+                row.find('.btn-generate-single').remove();
+            }
+        });
+    }
+    
+    // View generated QR codes
+    $('#viewGeneratedBtn').click(function() {
+        window.location.href = '{% url "qr_management:index" %}';
     });
-
-    // Initialize UI
-    updateSelectionUI();
-
+    
+    // Download report
+    $('#downloadReportBtn').click(function() {
+        // Implementation for downloading generation report
+        const deviceIds = Array.from(selectedDevices);
+        const downloadUrl = '{% url "qr_management:qr_bulk_generate" %}?download=report&device_ids=' + deviceIds.join(',');
+        window.open(downloadUrl, '_blank');
+    });
+    
+    // Auto-refresh QR status periodically
+    setInterval(function() {
+        // Only refresh if there are devices on the page
+        if ($('.device-row').length > 0) {
+            refreshQRStatus();
+        }
+    }, 30000); // Every 30 seconds
+    
+    function refreshQRStatus() {
+        const visibleDeviceIds = $('.device-row').map(function() {
+            return $(this).data('device-id');
+        }).get();
+        
+        if (visibleDeviceIds.length === 0) return;
+        
+        $.ajax({
+            url: '{% url "qr_management:qr_bulk_generate" %}',
+            method: 'GET',
+            data: {
+                'check_qr_status': 'true',
+                'device_ids': visibleDeviceIds.join(',')
+            },
+            success: function(response) {
+                if (response.qr_status) {
+                    updateQRStatusDisplay(response.qr_status);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('QR status refresh failed:', error);
+            }
+        });
+    }
+    
+    function updateQRStatusDisplay(qrStatus) {
+        Object.keys(qrStatus).forEach(function(deviceId) {
+            const hasQR = qrStatus[deviceId];
+            const row = $(`.device-row[data-device-id="${deviceId}"]`);
+            const qrStatusCell = row.find('td:nth-child(5)');
+            
+            if (hasQR) {
+                qrStatusCell.html(`
+                    <span class="qr-status-badge qr-status-has">
+                        <i class="fas fa-check-circle me-1"></i>Has QR
+                    </span>
+                `);
+                // Remove generate button if exists
+                row.find('.btn-generate-single').remove();
+            } else {
+                qrStatusCell.html(`
+                    <span class="qr-status-badge qr-status-none">
+                        <i class="fas fa-times-circle me-1"></i>No QR
+                    </span>
+                `);
+                // Add generate button if not exists
+                if (!row.find('.btn-generate-single').length) {
+                    const actionsCell = row.find('.device-actions');
+                    actionsCell.append(`
+                        <a href="/qr-management/generate/${deviceId}/" 
+                           class="device-action-btn btn-generate-single" title="Generate QR">
+                            <i class="fas fa-qrcode"></i>
+                        </a>
+                    `);
+                }
+            }
+        });
+    }
+    
     // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-        // Ctrl+A to select all
-        if (e.ctrlKey && e.key === 'a' && e.target.type !== 'text') {
+    $(document).keydown(function(e) {
+        // Ctrl/Cmd + A to select all
+        if ((e.ctrlKey || e.metaKey) && e.keyCode === 65) {
             e.preventDefault();
-            selectAll();
+            $('#selectAllBtn').click();
         }
         
         // Escape to clear selection
-        if (e.key === 'Escape') {
-            selectNone();
+        if (e.keyCode === 27) {
+            $('#clearSelectionBtn').click();
         }
         
-        // Enter to generate (when generate button is focused)
-        if (e.key === 'Enter' && document.activeElement === generateBtn) {
-            generateBtn.click();
+        // Enter to generate (if devices are selected)
+        if (e.keyCode === 13 && selectedDevices.size > 0) {
+            e.preventDefault();
+            $('#generateBtn').click();
         }
     });
-
-    // Auto-save selection to sessionStorage
-    function saveSelection() {
+    
+    // Filter form handling
+    $('.filter-form').submit(function(e) {
+        // Clear selection when filters change
+        selectedDevices.clear();
+        $('.device-select').prop('checked', false);
+        $('.device-row').removeClass('selected');
+        updateBulkActions();
+        updateSelectAllCheckbox();
+    });
+    
+    // Tooltips
+    $('[title]').tooltip();
+    
+    // Auto-save selection state
+    function saveSelectionState() {
         sessionStorage.setItem('qr_bulk_selection', JSON.stringify(Array.from(selectedDevices)));
     }
-
-    function loadSelection() {
+    
+    function loadSelectionState() {
         const saved = sessionStorage.getItem('qr_bulk_selection');
         if (saved) {
             try {
-                const savedDevices = JSON.parse(saved);
-                savedDevices.forEach(deviceId => {
-                    const checkbox = document.querySelector(`input[value="${deviceId}"]`);
-                    if (checkbox) {
-                        checkbox.checked = true;
-                        selectedDevices.add(deviceId);
+                const deviceIds = JSON.parse(saved);
+                deviceIds.forEach(function(deviceId) {
+                    const checkbox = $(`.device-select[value="${deviceId}"]`);
+                    if (checkbox.length) {
+                        checkbox.prop('checked', true).trigger('change');
                     }
                 });
-                updateSelectionUI();
             } catch (e) {
-                // Ignore invalid saved data
+                console.error('Failed to load selection state:', e);
             }
         }
     }
-
-    // Load saved selection
-    loadSelection();
-
-    // Save selection on change
-    deviceCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', saveSelection);
+    
+    // Load saved selection on page load
+    loadSelectionState();
+    
+    // Save selection when devices are selected/deselected
+    $('.device-select').change(function() {
+        saveSelectionState();
+    });
+    
+    // Clear saved selection when navigating away
+    $(window).on('beforeunload', function() {
+        sessionStorage.removeItem('qr_bulk_selection');
     });
 });
 
-// Utility function to show notifications (if not already defined in base template)
-if (typeof showNotification === 'undefined') {
-    function showNotification(message, type = 'info') {
-        const alertContainer = document.createElement('div');
-        alertContainer.className = `alert alert-${type} alert-dismissible fade show`;
-        alertContainer.setAttribute('role', 'alert');
-        
-        const iconMap = {
-            'success': 'check-circle',
-            'error': 'exclamation-circle',
-            'warning': 'exclamation-triangle',
-            'info': 'info-circle'
-        };
-        
-        alertContainer.innerHTML = `
-            <i class="fas fa-${iconMap[type] || 'info-circle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        `;
-
-        const container = document.querySelector('.container-fluid');
-        container.insertBefore(alertContainer, container.firstChild);
-
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-            if (alertContainer.parentNode) {
-                const bsAlert = new bootstrap.Alert(alertContainer);
-                bsAlert.close();
-            }
-        }, 5000);
+// Export functionality for external use
+window.QRBulkGenerator = {
+    getSelectedDevices: function() {
+        return Array.from($('.device-select:checked').map(function() {
+            return $(this).val();
+        }));
+    },
+    
+    selectDevice: function(deviceId) {
+        $(`.device-select[value="${deviceId}"]`).prop('checked', true).trigger('change');
+    },
+    
+    deselectDevice: function(deviceId) {
+        $(`.device-select[value="${deviceId}"]`).prop('checked', false).trigger('change');
+    },
+    
+    selectAll: function() {
+        $('#selectAllBtn').click();
+    },
+    
+    clearSelection: function() {
+        $('#clearSelectionBtn').click();
+    },
+    
+    generateSelected: function() {
+        $('#generateBtn').click();
     }
-}
+};
 </script>
+{% endblock %}
