@@ -1841,137 +1841,213 @@ def staff_assignments(request, staff_id):
 # ================================
 
 @login_required
+@permission_required('inventory.view_department', raise_exception=True)
 def department_list(request):
-    """List all departments with staff and device counts"""
-    try:
-        departments = Department.objects.prefetch_related(
-            'staff_members', 'staff_members__assignments'
-        ).annotate(
-            staff_count=Count('staff_members'),
-            active_assignments=Count(
-                'staff_members__assignments',
-                filter=Q(staff_members__assignments__status='ACTIVE')
-            )
-        ).order_by('name')
-        
-        # Search functionality
-        search = request.GET.get('search')
-        if search:
-            departments = departments.filter(
-                Q(name__icontains=search) |
-                Q(description__icontains=search) |
-                Q(head_name__icontains=search)
-            )
-        
-        # Pagination
-        paginator = Paginator(departments, 20)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        
-        context = {
-            'page_obj': page_obj,
+    """Enhanced department list with block support and comprehensive filtering"""
+    search = request.GET.get('search', '')
+    building_filter = request.GET.get('building', '')
+    block_filter = request.GET.get('block', '')
+    floor_filter = request.GET.get('floor', '')
+    is_active_filter = request.GET.get('is_active', '')
+    sort_by = request.GET.get('sort', 'name')
+    
+    departments = Department.objects.select_related('floor__building', 'floor__block')
+    
+    # Search functionality
+    if search:
+        departments = departments.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(head_of_department__icontains=search) |
+            Q(floor__building__name__icontains=search) |
+            Q(floor__block__name__icontains=search)
+        )
+    
+    # Filter by building
+    if building_filter:
+        departments = departments.filter(floor__building_id=building_filter)
+    
+    # Filter by block
+    if block_filter:
+        departments = departments.filter(floor__block_id=block_filter)
+    
+    # Filter by floor
+    if floor_filter:
+        departments = departments.filter(floor_id=floor_filter)
+    
+    # Filter by active status
+    if is_active_filter:
+        departments = departments.filter(is_active=is_active_filter == 'true')
+    
+    # Sorting
+    valid_sort_fields = ['name', 'code', 'floor__building__name', 'floor__block__name', '-created_at']
+    if sort_by in valid_sort_fields:
+        departments = departments.order_by(sort_by)
+    else:
+        departments = departments.order_by('name')
+    
+    # Add annotations for statistics
+    departments = departments.annotate(
+        rooms_count=Count('rooms'),
+        locations_count=Count('locations'),
+        staff_count=Count('staff'),
+        active_assignments=Count('staff__assignments', filter=Q(staff__assignments__status='ASSIGNED'))
+    )
+    
+    # Get data for filter dropdowns
+    buildings = Building.objects.filter(is_active=True).order_by('name')
+    blocks = Block.objects.filter(is_active=True).order_by('building__name', 'name')
+    floors = Floor.objects.filter(is_active=True).order_by('building__name', 'block__name', 'floor_number')
+    
+    # Pagination
+    paginator = Paginator(departments, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Statistics
+    total_departments = departments.count()
+    active_departments = departments.filter(is_active=True).count()
+    total_staff = departments.aggregate(total=Sum('staff_count'))['total'] or 0
+    total_active_assignments = departments.aggregate(total=Sum('active_assignments'))['total'] or 0
+    
+    context = {
+        'page_obj': page_obj,
+        'departments': page_obj.object_list,
+        'buildings': buildings,
+        'blocks': blocks,
+        'floors': floors,
+        'search': search,
+        'building_filter': building_filter,
+        'block_filter': block_filter,
+        'floor_filter': floor_filter,
+        'is_active_filter': is_active_filter,
+        'sort_by': sort_by,
+        'total_departments': total_departments,
+        'active_departments': active_departments,
+        'total_staff': total_staff,
+        'total_active_assignments': total_active_assignments,
+        'title': 'Department Management',
+        'current_filters': {
+            'building': building_filter,
+            'block': block_filter,
+            'floor': floor_filter,
+            'is_active': is_active_filter,
             'search': search,
-        }
-        
-        return render(request, 'inventory/department_list.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading department list: {str(e)}")
-        return render(request, 'inventory/department_list.html', {'page_obj': None})
+            'sort': sort_by,
+        },
+    }
+    
+    return render(request, 'inventory/locations/department_list.html', context)
 
 @login_required
+@permission_required('inventory.view_department', raise_exception=True)
 def department_detail(request, department_id):
-    """Department detail view with staff and assignments"""
-    try:
-        department = get_object_or_404(Department, id=department_id)
-        
-        # Get staff members in this department
-        staff_members = Staff.objects.filter(
-            department=department
-        ).annotate(
-            active_assignments=Count('assignments', filter=Q(assignments__status='ACTIVE'))
-        ).order_by('last_name', 'first_name')
-        
-        # Get all active assignments for this department
-        active_assignments = Assignment.objects.filter(
-            staff__department=department,
-            status='ACTIVE'
-        ).select_related(
-            'device', 'device__device_type', 'staff'
-        ).order_by('-assigned_date')
-        
-        # Calculate stats
-        total_staff = staff_members.count()
-        total_active_assignments = active_assignments.count()
-        
-        # Calculate total value of active assignments
-        total_value = active_assignments.aggregate(
-            total=Sum('device__purchase_price')
-        )['total'] or 0
-        
-        # Device category breakdown
-        category_breakdown = active_assignments.values(
-            'device__device_type__subcategory__category__name'
-        ).annotate(count=Count('id')).order_by('-count')
-        
-        # Recent assignment activity
-        recent_assignments = Assignment.objects.filter(
-            staff__department=department
-        ).select_related(
-            'device', 'device__device_type', 'staff'
-        ).order_by('-assigned_date')[:10]
-        
-        context = {
-            'department': department,
-            'staff_members': staff_members,
-            'active_assignments': active_assignments,
-            'total_staff': total_staff,
-            'total_active_assignments': total_active_assignments,
-            'total_value': total_value,
-            'category_breakdown': category_breakdown,
-            'recent_assignments': recent_assignments,
-        }
-        
-        return render(request, 'inventory/staff/department_detail.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading department details: {str(e)}")
-        return redirect('inventory:department_list')
+    """Enhanced department detail with block hierarchy and comprehensive statistics"""
+    department = get_object_or_404(
+        Department.objects.select_related('floor__building', 'floor__block'), 
+        id=department_id
+    )
+    
+    # Get related data
+    rooms = department.rooms.all().order_by('room_number')
+    staff = department.staff.filter(is_active=True).select_related('user').order_by('user__first_name', 'user__last_name')
+    locations = department.locations.all().select_related('room')
+    
+    # Get assignments for staff in this department
+    active_assignments = Assignment.objects.filter(
+        staff__department=department,
+        status='ASSIGNED'
+    ).select_related('device', 'device__device_type', 'staff__user', 'location')
+    
+    # Get recent assignments (last 30 days)
+    from datetime import datetime, timedelta
+    recent_assignments = Assignment.objects.filter(
+        staff__department=department,
+        assigned_date__gte=datetime.now() - timedelta(days=30)
+    ).select_related('device', 'staff__user').order_by('-assigned_date')[:10]
+    
+    # Statistics
+    total_rooms = rooms.count()
+    total_staff = staff.count()
+    total_locations = locations.count()
+    total_active_assignments = active_assignments.count()
+    
+    # Device statistics
+    device_categories = active_assignments.values(
+        'device__device_type__subcategory__category__name'
+    ).annotate(
+        count=Count('id'),
+        total_value=Sum('device__purchase_price')
+    ).order_by('-count')
+    
+    # Staff utilization
+    staff_with_assignments = staff.annotate(
+        assignment_count=Count('assignments', filter=Q(assignments__status='ASSIGNED'))
+    ).order_by('-assignment_count')
+    
+    # Total value of assigned devices
+    total_assignment_value = active_assignments.aggregate(
+        total=Sum('device__purchase_price')
+    )['total'] or 0
+    
+    # Room utilization
+    room_utilization = []
+    for room in rooms:
+        room_assignments = active_assignments.filter(location__room=room).count()
+        room_utilization.append({
+            'room': room,
+            'assignment_count': room_assignments,
+            'utilization_percentage': (room_assignments / room.capacity * 100) if room.capacity > 0 else 0
+        })
+    
+    context = {
+        'department': department,
+        'rooms': rooms,
+        'staff': staff,
+        'locations': locations,
+        'active_assignments': active_assignments,
+        'recent_assignments': recent_assignments,
+        'staff_with_assignments': staff_with_assignments,
+        'room_utilization': room_utilization,
+        'device_categories': device_categories,
+        'total_rooms': total_rooms,
+        'total_staff': total_staff,
+        'total_locations': total_locations,
+        'total_active_assignments': total_active_assignments,
+        'total_assignment_value': total_assignment_value,
+        'avg_assignments_per_staff': round(total_active_assignments / total_staff, 1) if total_staff > 0 else 0,
+        'title': f'Department: {department.name}',
+    }
+    
+    return render(request, 'inventory/locations/department_detail.html', context)
 
 @login_required
 @permission_required('inventory.add_department', raise_exception=True)
 def department_create(request):
-    """Create new department"""
+    """Create a new department"""
     if request.method == 'POST':
         form = DepartmentForm(request.POST)
         if form.is_valid():
             try:
                 department = form.save()
-                
-                # Log the activity
-                from .utils import log_user_activity
-                log_user_activity(
-                    user=request.user,
-                    action='CREATE',
-                    model_name='Department',
-                    object_id=department.id,
-                    object_repr=str(department),
-                    ip_address=request.META.get('REMOTE_ADDR')
-                )
-                
                 messages.success(request, f'Department "{department.name}" created successfully.')
                 return redirect('inventory:department_detail', department_id=department.id)
             except Exception as e:
                 messages.error(request, f'Error creating department: {str(e)}')
     else:
         form = DepartmentForm()
+        # Pre-select floor if provided in URL
+        floor_id = request.GET.get('floor')
+        if floor_id:
+            form.fields['floor'].initial = floor_id
     
     context = {
         'form': form,
         'title': 'Add New Department',
-        'action': 'Create',
+        'form_action': 'Create',
     }
-    return render(request, 'inventory/department_form.html', context)
+    
+    return render(request, 'inventory/locations/department_form.html', context)
 
 @login_required
 @permission_required('inventory.change_department', raise_exception=True)
@@ -2091,6 +2167,42 @@ def department_assignments(request, department_id):
         messages.error(request, f"Error loading department assignments: {str(e)}")
         return redirect('inventory:department_detail', department_id=department_id)
 
+@login_required
+@permission_required('inventory.delete_department', raise_exception=True)
+def department_delete(request, department_id):
+    """Delete a department"""
+    department = get_object_or_404(Department, id=department_id)
+    
+    if request.method == 'POST':
+        try:
+            # Check if department has staff or assignments
+            staff_count = department.staff.count()
+            room_count = department.rooms.count()
+            location_count = department.locations.count()
+            
+            if staff_count > 0:
+                messages.error(request, f'Cannot delete department "{department.name}": {staff_count} staff members are assigned.')
+                return redirect('inventory:department_detail', department_id=department.id)
+            
+            if room_count > 0:
+                messages.error(request, f'Cannot delete department "{department.name}": {room_count} rooms exist.')
+                return redirect('inventory:department_detail', department_id=department.id)
+            
+            if location_count > 0:
+                messages.error(request, f'Cannot delete department "{department.name}": {location_count} locations exist.')
+                return redirect('inventory:department_detail', department_id=department.id)
+            
+            department_name = department.name
+            department.delete()
+            messages.success(request, f'Department "{department_name}" deleted successfully.')
+            return redirect('inventory:department_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error deleting department: {str(e)}')
+            return redirect('inventory:department_detail', department_id=department.id)
+    
+    return redirect('inventory:department_detail', department_id=department.id)
+
 # ================================
 # LOCATION MANAGEMENT VIEWS
 # ================================
@@ -2098,78 +2210,89 @@ def department_assignments(request, department_id):
 @login_required
 @permission_required('inventory.view_location', raise_exception=True)
 def location_list(request):
-    """Enhanced location list with hierarchy support and filtering"""
+    """Enhanced location list with full block hierarchy support"""
     try:
-        # Base queryset with optimized joins
+        # Get filter parameters
+        search = request.GET.get('search', '')
+        building_filter = request.GET.get('building', '')
+        block_filter = request.GET.get('block', '')
+        floor_filter = request.GET.get('floor', '')
+        department_filter = request.GET.get('department', '')
+        room_filter = request.GET.get('room', '')
+        is_active_filter = request.GET.get('is_active', '')
+        sort_by = request.GET.get('sort', 'building__name')
+        
+        # Base queryset with proper relationships including block
         locations = Location.objects.select_related(
             'building', 'block', 'floor', 'department', 'room'
-        ).prefetch_related(
-            'current_assignments__device',
-            'assignment_history'
         ).annotate(
-            device_count=Count('current_assignments', distinct=True),
-            total_value=Sum('current_assignments__device__purchase_price')
+            device_count=Count('device_assignments'),
+            active_assignments=Count('device_assignments', filter=Q(device_assignments__status='ASSIGNED'))
         )
         
-        # Filtering
-        building_filter = request.GET.get('building')
-        block_filter = request.GET.get('block')
-        floor_filter = request.GET.get('floor')
-        department_filter = request.GET.get('department')
-        is_active_filter = request.GET.get('is_active')
-        search = request.GET.get('search')
-        
-        if building_filter:
-            locations = locations.filter(building_id=building_filter)
-        
-        if block_filter:
-            locations = locations.filter(block_id=block_filter)
-        
-        if floor_filter:
-            locations = locations.filter(floor_id=floor_filter)
-        
-        if department_filter:
-            locations = locations.filter(department_id=department_filter)
-        
-        if is_active_filter:
-            locations = locations.filter(is_active=(is_active_filter.lower() == 'true'))
-        
+        # Search functionality across all hierarchy levels
         if search:
             locations = locations.filter(
                 Q(building__name__icontains=search) |
+                Q(building__code__icontains=search) |
                 Q(block__name__icontains=search) |
+                Q(block__code__icontains=search) |
                 Q(floor__name__icontains=search) |
                 Q(department__name__icontains=search) |
+                Q(department__code__icontains=search) |
                 Q(room__room_number__icontains=search) |
+                Q(room__room_name__icontains=search) |
                 Q(description__icontains=search)
             )
         
-        # Sorting
-        sort_by = request.GET.get('sort', 'hierarchy')
-        if sort_by == 'hierarchy':
-            locations = locations.order_by('building__name', 'block__name', 'floor__floor_number', 'department__name', 'room__room_number')
-        elif sort_by == 'devices':
-            locations = locations.order_by('-device_count')
-        elif sort_by == 'value':
-            locations = locations.order_by('-total_value')
-        elif sort_by == 'name':
-            locations = locations.order_by('building__name')
+        # Apply hierarchical filters
+        if building_filter:
+            locations = locations.filter(building_id=building_filter)
+        if block_filter:
+            locations = locations.filter(block_id=block_filter)
+        if floor_filter:
+            locations = locations.filter(floor_id=floor_filter)
+        if department_filter:
+            locations = locations.filter(department_id=department_filter)
+        if room_filter:
+            locations = locations.filter(room_id=room_filter)
+        if is_active_filter:
+            locations = locations.filter(is_active=is_active_filter == 'true')
+        
+        # Sorting with block support
+        valid_sort_fields = [
+            'building__name', 'block__name', 'floor__floor_number', 
+            'department__name', 'room__room_number', '-created_at',
+            'device_count', '-device_count', 'active_assignments', '-active_assignments'
+        ]
+        if sort_by in valid_sort_fields:
+            locations = locations.order_by(sort_by)
+        else:
+            locations = locations.order_by('building__name', 'block__name', 'floor__floor_number', 'department__name')
         
         # Pagination
-        paginator = Paginator(locations, 20)
+        paginator = Paginator(locations, 15)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
-        # Filter options for dropdowns
+        # Get data for filter dropdowns with block hierarchy
         buildings = Building.objects.filter(is_active=True).order_by('name')
         blocks = Block.objects.filter(is_active=True).order_by('building__name', 'name')
         floors = Floor.objects.filter(is_active=True).order_by('building__name', 'block__name', 'floor_number')
         departments = Department.objects.filter(is_active=True).order_by('name')
+        rooms = Room.objects.filter(is_active=True).order_by('department__name', 'room_number')
         
         # Statistics
         total_locations = locations.count()
         active_locations = locations.filter(is_active=True).count()
-        total_devices_in_locations = locations.aggregate(total=Sum('device_count'))['total'] or 0
+        total_devices = locations.aggregate(total=Sum('device_count'))['total'] or 0
+        total_active_assignments = locations.aggregate(total=Sum('active_assignments'))['total'] or 0
+        
+        # Block-wise statistics
+        block_stats = blocks.annotate(
+            location_count=Count('locations'),
+            device_count=Count('locations__device_assignments')
+        ).order_by('building__name', 'name')[:10]
         
         context = {
             'page_obj': page_obj,
@@ -2178,14 +2301,18 @@ def location_list(request):
             'blocks': blocks,
             'floors': floors,
             'departments': departments,
+            'rooms': rooms,
+            'block_stats': block_stats,
             'total_locations': total_locations,
             'active_locations': active_locations,
-            'total_devices_in_locations': total_devices_in_locations,
+            'total_devices': total_devices,
+            'total_active_assignments': total_active_assignments,
             'current_filters': {
                 'building': building_filter,
                 'block': block_filter,
                 'floor': floor_filter,
                 'department': department_filter,
+                'room': room_filter,
                 'is_active': is_active_filter,
                 'search': search,
                 'sort': sort_by,
@@ -2202,7 +2329,7 @@ def location_list(request):
 @login_required
 @permission_required('inventory.view_location', raise_exception=True)
 def location_detail(request, location_id):
-    """Enhanced location detail with hierarchy display"""
+    """Enhanced location detail with full block hierarchy display"""
     try:
         location = get_object_or_404(
             Location.objects.select_related(
@@ -2213,63 +2340,72 @@ def location_detail(request, location_id):
         
         # Current assignments at this location
         current_assignments = Assignment.objects.filter(
-            assigned_to_location=location,
-            status='ACTIVE'
+            location=location,
+            status='ASSIGNED'
         ).select_related(
-            'device__device_type', 'assigned_to_staff__user'
-        ).order_by('-created_at')
+            'device', 'device__device_type', 'staff__user'
+        ).order_by('-assigned_date')
         
-        # Assignment history
+        # Assignment history for this location
         assignment_history = Assignment.objects.filter(
-            assigned_to_location=location
+            location=location
         ).select_related(
-            'device', 'assigned_to_staff__user'
-        ).order_by('-created_at')[:20]
+            'device', 'device__device_type', 'staff__user'
+        ).order_by('-assigned_date')[:20]
         
-        # Calculate statistics
-        total_devices = current_assignments.count()
-        total_value = current_assignments.aggregate(
+        # Devices ever assigned to this location
+        devices_history = Device.objects.filter(
+            assignments__location=location
+        ).distinct().select_related('device_type').order_by('asset_tag')
+        
+        # Statistics
+        total_assignments = assignment_history.count()
+        active_assignments = current_assignments.count()
+        
+        # Device type breakdown
+        device_types = current_assignments.values(
+            'device__device_type__name'
+        ).annotate(
+            count=Count('id'),
+            total_value=Sum('device__purchase_price')
+        ).order_by('-count')
+        
+        # Total value of current assignments
+        total_current_value = current_assignments.aggregate(
             total=Sum('device__purchase_price')
         )['total'] or 0
         
-        # Device categories at this location
-        category_breakdown = current_assignments.values(
-            'device__device_type__subcategory__category__name'
-        ).annotate(count=Count('id')).order_by('-count')
+        # Location hierarchy breadcrumb
+        hierarchy_path = []
+        if location.building:
+            hierarchy_path.append(('Building', location.building.name, 'inventory:building_detail', location.building.id))
+        if location.block:
+            hierarchy_path.append(('Block', location.block.name, 'inventory:block_detail', location.block.id))
+        if location.floor:
+            hierarchy_path.append(('Floor', location.floor.name, 'inventory:floor_detail', location.floor.id))
+        if location.department:
+            hierarchy_path.append(('Department', location.department.name, 'inventory:department_detail', location.department.id))
+        if location.room:
+            hierarchy_path.append(('Room', f"{location.room.room_number} - {location.room.room_name}", 'inventory:room_detail', location.room.id))
         
-        # Device conditions breakdown
-        condition_breakdown = current_assignments.values(
-            'device__condition'
-        ).annotate(count=Count('id')).order_by('device__condition')
-        
-        # Recent activity (last 30 days)
-        thirty_days_ago = timezone.now() - timedelta(days=30)
-        recent_assignments = assignment_history.filter(
-            created_at__gte=thirty_days_ago
-        )[:10]
-        
-        # Generate hierarchy breadcrumb
-        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
-        location_code = LocationHierarchyUtils.get_location_code(
-            building=location.building,
-            block=location.block,
-            floor=location.floor,
+        # Nearby locations (same department)
+        nearby_locations = Location.objects.filter(
             department=location.department,
-            room=location.room
-        )
+            is_active=True
+        ).exclude(id=location.id).select_related('room')[:5]
         
         context = {
             'location': location,
             'current_assignments': current_assignments,
             'assignment_history': assignment_history,
-            'recent_assignments': recent_assignments,
-            'total_devices': total_devices,
-            'total_value': total_value,
-            'category_breakdown': category_breakdown,
-            'condition_breakdown': condition_breakdown,
-            'hierarchy_breadcrumb': hierarchy_breadcrumb,
-            'location_code': location_code,
-            'title': f'Location: {hierarchy_breadcrumb}',
+            'devices_history': devices_history,
+            'device_types': device_types,
+            'nearby_locations': nearby_locations,
+            'hierarchy_path': hierarchy_path,
+            'total_assignments': total_assignments,
+            'active_assignments': active_assignments,
+            'total_current_value': total_current_value,
+            'title': f'Location: {str(location)}',
         }
         
         return render(request, 'inventory/locations/location_detail.html', context)
@@ -2281,212 +2417,986 @@ def location_detail(request, location_id):
 @login_required
 @permission_required('inventory.add_location', raise_exception=True)
 def location_create(request):
-    """Enhanced location creation with block support"""
+    """Create new location with block hierarchy support"""
     if request.method == 'POST':
         form = LocationForm(request.POST)
         if form.is_valid():
             try:
-                with transaction.atomic():
-                    location = form.save()
-                    
-                    # Generate location code
-                    location_code = LocationHierarchyUtils.get_location_code(
-                        building=location.building,
-                        block=location.block,
-                        floor=location.floor,
-                        department=location.department,
-                        room=location.room
-                    )
-                    
-                    # Create audit log
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='CREATE',
-                        model_name='Location',
-                        object_id=str(location.id),
-                        object_repr=str(location),
-                        changes={
-                            'created': 'New location added',
-                            'location_code': location_code,
-                            'hierarchy': str(location)
-                        },
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
-                    messages.success(request, f'Location "{hierarchy_breadcrumb}" created successfully.')
-                    return redirect('inventory:location_detail', location_id=location.id)
+                # Validate hierarchy consistency
+                building = form.cleaned_data.get('building')
+                block = form.cleaned_data.get('block')
+                floor = form.cleaned_data.get('floor')
+                department = form.cleaned_data.get('department')
+                room = form.cleaned_data.get('room')
+                
+                # Validate block belongs to building
+                if block and building and block.building != building:
+                    form.add_error('block', 'Selected block does not belong to the selected building.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Validate floor belongs to block
+                if floor and block and floor.block != block:
+                    form.add_error('floor', 'Selected floor does not belong to the selected block.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Validate department belongs to floor
+                if department and floor and department.floor != floor:
+                    form.add_error('department', 'Selected department does not belong to the selected floor.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Validate room belongs to department
+                if room and department and room.department != department:
+                    form.add_error('room', 'Selected room does not belong to the selected department.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Check for duplicate location
+                existing_location = Location.objects.filter(
+                    building=building,
+                    block=block,
+                    floor=floor,
+                    department=department,
+                    room=room
+                ).first()
+                
+                if existing_location:
+                    messages.error(request, 'A location with this exact hierarchy already exists.')
+                    raise ValidationError("Duplicate location")
+                
+                location = form.save()
+                messages.success(request, f'Location "{location}" created successfully.')
+                return redirect('inventory:location_detail', location_id=location.id)
+                
+            except ValidationError:
+                pass  # Form errors already added
             except Exception as e:
                 messages.error(request, f'Error creating location: {str(e)}')
     else:
         form = LocationForm()
         
-        # Apply form utilities
-        LocationHierarchyUtils.setup_cascade_filtering(form)
+        # Pre-populate from URL parameters for hierarchy drill-down
+        building_id = request.GET.get('building')
+        block_id = request.GET.get('block')
+        floor_id = request.GET.get('floor')
+        department_id = request.GET.get('department')
+        room_id = request.GET.get('room')
+        
+        if building_id:
+            form.fields['building'].initial = building_id
+        if block_id:
+            form.fields['block'].initial = block_id
+        if floor_id:
+            form.fields['floor'].initial = floor_id
+        if department_id:
+            form.fields['department'].initial = department_id
+        if room_id:
+            form.fields['room'].initial = room_id
+    
+    # Get hierarchy data for cascade dropdowns
+    buildings = Building.objects.filter(is_active=True).order_by('name')
     
     context = {
         'form': form,
+        'buildings': buildings,
         'title': 'Add New Location',
-        'action': 'Create',
-        'breadcrumb': 'Create Location',
+        'form_action': 'Create',
     }
+    
     return render(request, 'inventory/locations/location_form.html', context)
 
 @login_required
 @permission_required('inventory.change_location', raise_exception=True)
 def location_edit(request, location_id):
-    """Enhanced location editing with hierarchy validation"""
-    try:
-        location = get_object_or_404(
-            Location.objects.select_related('building', 'block', 'floor', 'department', 'room'),
-            id=location_id
-        )
-        
-        if request.method == 'POST':
-            form = LocationForm(request.POST, instance=location)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        old_hierarchy = str(location)
-                        location = form.save()
-                        new_hierarchy = str(location)
-                        
-                        # Generate new location code
-                        location_code = LocationHierarchyUtils.get_location_code(
-                            building=location.building,
-                            block=location.block,
-                            floor=location.floor,
-                            department=location.department,
-                            room=location.room
+    """Edit existing location with block hierarchy validation"""
+    location = get_object_or_404(Location, id=location_id)
+    
+    if request.method == 'POST':
+        form = LocationForm(request.POST, instance=location)
+        if form.is_valid():
+            try:
+                # Validate hierarchy consistency (same as create)
+                building = form.cleaned_data.get('building')
+                block = form.cleaned_data.get('block')
+                floor = form.cleaned_data.get('floor')
+                department = form.cleaned_data.get('department')
+                room = form.cleaned_data.get('room')
+                
+                # Validate block belongs to building
+                if block and building and block.building != building:
+                    form.add_error('block', 'Selected block does not belong to the selected building.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Validate floor belongs to block
+                if floor and block and floor.block != block:
+                    form.add_error('floor', 'Selected floor does not belong to the selected block.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Validate department belongs to floor
+                if department and floor and department.floor != floor:
+                    form.add_error('department', 'Selected department does not belong to the selected floor.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Validate room belongs to department
+                if room and department and room.department != department:
+                    form.add_error('room', 'Selected room does not belong to the selected department.')
+                    raise ValidationError("Hierarchy validation failed")
+                
+                # Check for duplicate location (excluding current)
+                existing_location = Location.objects.filter(
+                    building=building,
+                    block=block,
+                    floor=floor,
+                    department=department,
+                    room=room
+                ).exclude(id=location.id).first()
+                
+                if existing_location:
+                    messages.error(request, 'A location with this exact hierarchy already exists.')
+                    raise ValidationError("Duplicate location")
+                
+                # Check if location has active assignments before major changes
+                active_assignments = Assignment.objects.filter(
+                    location=location,
+                    status='ASSIGNED'
+                ).count()
+                
+                if active_assignments > 0:
+                    # Check if hierarchy changed significantly
+                    if (location.building != building or location.block != block or 
+                        location.floor != floor or location.department != department):
+                        messages.warning(
+                            request, 
+                            f'Warning: This location has {active_assignments} active device assignments. '
+                            'Consider transferring devices before major location changes.'
                         )
-                        
-                        # Log the activity
-                        from .utils import log_user_activity
-                        log_user_activity(
-                            user=request.user,
-                            action='UPDATE',
-                            model_name='Location',
-                            object_id=location.id,
-                            object_repr=str(location),
-                            changes={
-                                'old_hierarchy': old_hierarchy,
-                                'new_hierarchy': new_hierarchy,
-                                'location_code': location_code
-                            },
-                            ip_address=request.META.get('REMOTE_ADDR')
-                        )
-                        
-                        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
-                        messages.success(request, f'Location "{hierarchy_breadcrumb}" updated successfully.')
-                        return redirect('inventory:location_detail', location_id=location.id)
-                except Exception as e:
-                    messages.error(request, f'Error updating location: {str(e)}')
-        else:
-            form = LocationForm(instance=location)
-            
-        # Apply form utilities
-        LocationHierarchyUtils.setup_cascade_filtering(form)
-        
-        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
-        
-        context = {
-            'form': form,
-            'location': location,
-            'title': f'Edit Location: {hierarchy_breadcrumb}',
-            'action': 'Update',
-            'breadcrumb': f'Edit {hierarchy_breadcrumb}',
-        }
-        return render(request, 'inventory/locations/location_form.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading location for edit: {str(e)}")
-        return redirect('inventory:location_list')
+                
+                location = form.save()
+                messages.success(request, f'Location "{location}" updated successfully.')
+                return redirect('inventory:location_detail', location_id=location.id)
+                
+            except ValidationError:
+                pass  # Form errors already added
+            except Exception as e:
+                messages.error(request, f'Error updating location: {str(e)}')
+    else:
+        form = LocationForm(instance=location)
+    
+    # Get hierarchy data for cascade dropdowns
+    buildings = Building.objects.filter(is_active=True).order_by('name')
+    
+    # Get active assignments for warning
+    active_assignments = Assignment.objects.filter(
+        location=location,
+        status='ASSIGNED'
+    ).count()
+    
+    context = {
+        'form': form,
+        'location': location,
+        'buildings': buildings,
+        'active_assignments': active_assignments,
+        'title': f'Edit Location: {location}',
+        'form_action': 'Update',
+    }
+    
+    return render(request, 'inventory/locations/location_form.html', context)
 
 @login_required
 @permission_required('inventory.delete_location', raise_exception=True)
 def location_delete(request, location_id):
-    """Enhanced location deletion with dependency checking"""
-    try:
-        location = get_object_or_404(
-            Location.objects.select_related('building', 'block', 'floor', 'department', 'room'),
-            id=location_id
-        )
-        
-        # Check for dependencies
-        active_assignments = Assignment.objects.filter(
-            assigned_to_location=location,
-            status='ACTIVE'
-        ).count()
-        
-        total_assignments = Assignment.objects.filter(
-            assigned_to_location=location
-        ).count()
-        
-        staff_using_location = Staff.objects.filter(
-            office_location=location
-        ).count()
-        
-        # Check if location can be deleted
-        can_delete = active_assignments == 0 and staff_using_location == 0
-        
-        if request.method == 'POST':
-            if not can_delete:
+    """Delete location with safety checks"""
+    location = get_object_or_404(Location, id=location_id)
+    
+    if request.method == 'POST':
+        try:
+            # Check for active assignments
+            active_assignments = Assignment.objects.filter(
+                location=location,
+                status='ASSIGNED'
+            ).count()
+            
+            if active_assignments > 0:
                 messages.error(
                     request, 
-                    f'Cannot delete location. It has {active_assignments} active assignments and {staff_using_location} staff members.'
+                    f'Cannot delete location "{location}": {active_assignments} active device assignments exist. '
+                    'Please return or transfer all devices first.'
                 )
                 return redirect('inventory:location_detail', location_id=location.id)
             
-            try:
-                with transaction.atomic():
-                    hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
-                    location_code = LocationHierarchyUtils.get_location_code(
-                        building=location.building,
-                        block=location.block,
-                        floor=location.floor,
-                        department=location.department,
-                        room=location.room
+            # Check for assignment history
+            total_assignments = Assignment.objects.filter(location=location).count()
+            
+            if total_assignments > 0:
+                # Ask for confirmation if there's assignment history
+                confirm = request.POST.get('confirm_delete')
+                if not confirm:
+                    messages.warning(
+                        request,
+                        f'Location "{location}" has {total_assignments} assignment records in history. '
+                        'Are you sure you want to delete it? This action cannot be undone.'
                     )
-                    
-                    # Log the activity before deletion
-                    from .utils import log_user_activity
-                    log_user_activity(
-                        user=request.user,
-                        action='DELETE',
-                        model_name='Location',
-                        object_id=location.id,
-                        object_repr=str(location),
-                        changes={
-                            'deleted_hierarchy': hierarchy_breadcrumb,
-                            'location_code': location_code,
-                            'total_assignments_history': total_assignments
-                        },
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    location.delete()
-                    messages.success(request, f'Location "{hierarchy_breadcrumb}" deleted successfully.')
-                    return redirect('inventory:location_list')
-            except Exception as e:
-                messages.error(request, f'Error deleting location: {str(e)}')
-                return redirect('inventory:location_detail', location_id=location.id)
+                    return redirect('inventory:location_detail', location_id=location.id)
+            
+            location_name = str(location)
+            location.delete()
+            messages.success(request, f'Location "{location_name}" deleted successfully.')
+            return redirect('inventory:location_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error deleting location: {str(e)}')
+            return redirect('inventory:location_detail', location_id=location.id)
+    
+    return redirect('inventory:location_detail', location_id=location.id)
+
+# ================================
+# LOCATION HIERARCHY UTILITIES
+# ================================
+
+@login_required
+def location_hierarchy_overview(request):
+    """Display complete location hierarchy with block support"""
+    try:
+        # Get complete hierarchy with statistics
+        buildings = Building.objects.filter(is_active=True).prefetch_related(
+            'blocks__floors__departments__rooms__locations'
+        ).annotate(
+            total_locations=Count('locations'),
+            total_devices=Count('locations__device_assignments')
+        ).order_by('name')
         
-        hierarchy_breadcrumb = LocationHierarchyUtils.get_hierarchy_breadcrumb(location)
+        hierarchy_data = []
+        for building in buildings:
+            building_data = {
+                'building': building,
+                'blocks': []
+            }
+            
+            for block in building.blocks.filter(is_active=True):
+                block_data = {
+                    'block': block,
+                    'floors': []
+                }
+                
+                for floor in block.floors.filter(is_active=True):
+                    floor_data = {
+                        'floor': floor,
+                        'departments': []
+                    }
+                    
+                    for department in floor.departments.filter(is_active=True):
+                        dept_data = {
+                            'department': department,
+                            'rooms': department.rooms.filter(is_active=True),
+                            'location_count': department.locations.count(),
+                            'device_count': Assignment.objects.filter(
+                                location__department=department,
+                                status='ASSIGNED'
+                            ).count()
+                        }
+                        floor_data['departments'].append(dept_data)
+                    
+                    block_data['floors'].append(floor_data)
+                
+                building_data['blocks'].append(block_data)
+            
+            hierarchy_data.append(building_data)
         
         context = {
-            'location': location,
-            'hierarchy_breadcrumb': hierarchy_breadcrumb,
-            'active_assignments': active_assignments,
-            'total_assignments': total_assignments,
-            'staff_using_location': staff_using_location,
-            'can_delete': can_delete,
-            'title': f'Delete Location: {hierarchy_breadcrumb}',
+            'hierarchy_data': hierarchy_data,
+            'title': 'Location Hierarchy Overview',
         }
-        return render(request, 'inventory/locations/location_delete.html', context)
+        
+        return render(request, 'inventory/locations/hierarchy_overview.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading location for deletion: {str(e)}")
+        messages.error(request, f"Error loading hierarchy overview: {str(e)}")
         return redirect('inventory:location_list')
+
+# ================================
+# BUILDING MANAGEMENT VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.view_building', raise_exception=True)
+def building_list(request):
+    """Display list of all buildings with search and filtering"""
+    search = request.GET.get('search', '')
+    is_active_filter = request.GET.get('is_active', '')
+    sort_by = request.GET.get('sort', 'name')
+    
+    buildings = Building.objects.all()
+    
+    # Search functionality
+    if search:
+        buildings = buildings.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(address__icontains=search)
+        )
+    
+    # Filter by active status
+    if is_active_filter:
+        buildings = buildings.filter(is_active=is_active_filter == 'true')
+    
+    # Sorting
+    valid_sort_fields = ['name', 'code', '-created_at', 'created_at']
+    if sort_by in valid_sort_fields:
+        buildings = buildings.order_by(sort_by)
+    else:
+        buildings = buildings.order_by('name')
+    
+    # Add annotations for statistics
+    buildings = buildings.annotate(
+        blocks_count=Count('blocks'),
+        floors_count=Count('blocks__floors'),
+        departments_count=Count('blocks__floors__departments'),
+        locations_count=Count('locations')
+    )
+    
+    # Pagination
+    paginator = Paginator(buildings, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'buildings': page_obj.object_list,
+        'search': search,
+        'is_active_filter': is_active_filter,
+        'sort_by': sort_by,
+        'title': 'Building Management',
+    }
+    
+    return render(request, 'inventory/locations/building_list.html', context)
+
+@login_required
+@permission_required('inventory.view_building', raise_exception=True)
+def building_detail(request, building_id):
+    """Display detailed information about a building"""
+    building = get_object_or_404(Building, id=building_id)
+    
+    # Get related data
+    blocks = building.blocks.all().annotate(
+        floors_count=Count('floors'),
+        departments_count=Count('floors__departments')
+    )
+    
+    # Statistics
+    total_blocks = blocks.count()
+    total_floors = building.floors.count()
+    total_departments = building.departments.count()
+    total_locations = building.locations.count()
+    
+    context = {
+        'building': building,
+        'blocks': blocks,
+        'total_blocks': total_blocks,
+        'total_floors': total_floors,
+        'total_departments': total_departments,
+        'total_locations': total_locations,
+        'title': f'Building: {building.name}',
+    }
+    
+    return render(request, 'inventory/locations/building_detail.html', context)
+
+@login_required
+@permission_required('inventory.add_building', raise_exception=True)
+def building_create(request):
+    """Create a new building"""
+    if request.method == 'POST':
+        form = forms.BuildingForm(request.POST)
+        if form.is_valid():
+            try:
+                building = form.save()
+                messages.success(request, f'Building "{building.name}" created successfully.')
+                return redirect('inventory:building_detail', building_id=building.id)
+            except Exception as e:
+                messages.error(request, f'Error creating building: {str(e)}')
+    else:
+        form = forms.BuildingForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Building',
+        'form_action': 'Create',
+    }
+    
+    return render(request, 'inventory/locations/building_form.html', context)
+
+@login_required
+@permission_required('inventory.change_building', raise_exception=True)
+def building_edit(request, building_id):
+    """Edit an existing building"""
+    building = get_object_or_404(Building, id=building_id)
+    
+    if request.method == 'POST':
+        form = forms.BuildingForm(request.POST, instance=building)
+        if form.is_valid():
+            try:
+                building = form.save()
+                messages.success(request, f'Building "{building.name}" updated successfully.')
+                return redirect('inventory:building_detail', building_id=building.id)
+            except Exception as e:
+                messages.error(request, f'Error updating building: {str(e)}')
+    else:
+        form = forms.BuildingForm(instance=building)
+    
+    context = {
+        'form': form,
+        'building': building,
+        'title': f'Edit Building: {building.name}',
+        'form_action': 'Update',
+    }
+    
+    return render(request, 'inventory/locations/building_form.html', context)
+
+@login_required
+@permission_required('inventory.delete_building', raise_exception=True)
+def building_delete(request, building_id):
+    """Delete a building"""
+    building = get_object_or_404(Building, id=building_id)
+    
+    if request.method == 'POST':
+        try:
+            building_name = building.name
+            building.delete()
+            messages.success(request, f'Building "{building_name}" deleted successfully.')
+            return redirect('inventory:building_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting building: {str(e)}')
+            return redirect('inventory:building_detail', building_id=building.id)
+    
+    return redirect('inventory:building_detail', building_id=building.id)
+
+# ================================
+# BLOCK MANAGEMENT VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.view_block', raise_exception=True)
+def block_list(request):
+    """Display list of all blocks with search and filtering"""
+    search = request.GET.get('search', '')
+    building_filter = request.GET.get('building', '')
+    is_active_filter = request.GET.get('is_active', '')
+    sort_by = request.GET.get('sort', 'building__name')
+    
+    blocks = Block.objects.select_related('building')
+    
+    # Search functionality
+    if search:
+        blocks = blocks.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(building__name__icontains=search)
+        )
+    
+    # Filter by building
+    if building_filter:
+        blocks = blocks.filter(building_id=building_filter)
+    
+    # Filter by active status
+    if is_active_filter:
+        blocks = blocks.filter(is_active=is_active_filter == 'true')
+    
+    # Sorting
+    valid_sort_fields = ['building__name', 'name', 'code', '-created_at']
+    if sort_by in valid_sort_fields:
+        blocks = blocks.order_by(sort_by)
+    else:
+        blocks = blocks.order_by('building__name', 'name')
+    
+    # Add annotations for statistics
+    blocks = blocks.annotate(
+        floors_count=Count('floors'),
+        departments_count=Count('floors__departments'),
+        locations_count=Count('locations')
+    )
+    
+    # Get buildings for filter dropdown
+    buildings = Building.objects.filter(is_active=True).order_by('name')
+    
+    # Pagination
+    paginator = Paginator(blocks, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'blocks': page_obj.object_list,
+        'buildings': buildings,
+        'search': search,
+        'building_filter': building_filter,
+        'is_active_filter': is_active_filter,
+        'sort_by': sort_by,
+        'title': 'Block Management',
+    }
+    
+    return render(request, 'inventory/locations/block_list.html', context)
+
+@login_required
+@permission_required('inventory.view_block', raise_exception=True)
+def block_detail(request, block_id):
+    """Display detailed information about a block"""
+    block = get_object_or_404(Block.objects.select_related('building'), id=block_id)
+    
+    # Get related data
+    floors = block.floors.all().annotate(
+        departments_count=Count('departments')
+    ).order_by('floor_number')
+    
+    # Statistics
+    total_floors = floors.count()
+    total_departments = sum(floor.departments_count for floor in floors)
+    total_locations = block.locations.count()
+    
+    context = {
+        'block': block,
+        'floors': floors,
+        'total_floors': total_floors,
+        'total_departments': total_departments,
+        'total_locations': total_locations,
+        'title': f'Block: {block.name}',
+    }
+    
+    return render(request, 'inventory/locations/block_detail.html', context)
+
+@login_required
+@permission_required('inventory.add_block', raise_exception=True)
+def block_create(request):
+    """Create a new block"""
+    if request.method == 'POST':
+        form = BlockForm(request.POST)
+        if form.is_valid():
+            try:
+                block = form.save()
+                messages.success(request, f'Block "{block.name}" created successfully.')
+                return redirect('inventory:block_detail', block_id=block.id)
+            except Exception as e:
+                messages.error(request, f'Error creating block: {str(e)}')
+    else:
+        form = BlockForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add New Block',
+        'form_action': 'Create',
+    }
+    
+    return render(request, 'inventory/locations/block_form.html', context)
+
+@login_required
+@permission_required('inventory.change_block', raise_exception=True)
+def block_edit(request, block_id):
+    """Edit an existing block"""
+    block = get_object_or_404(Block, id=block_id)
+    
+    if request.method == 'POST':
+        form = BlockForm(request.POST, instance=block)
+        if form.is_valid():
+            try:
+                block = form.save()
+                messages.success(request, f'Block "{block.name}" updated successfully.')
+                return redirect('inventory:block_detail', block_id=block.id)
+            except Exception as e:
+                messages.error(request, f'Error updating block: {str(e)}')
+    else:
+        form = BlockForm(instance=block)
+    
+    context = {
+        'form': form,
+        'block': block,
+        'title': f'Edit Block: {block.name}',
+        'form_action': 'Update',
+    }
+    
+    return render(request, 'inventory/locations/block_form.html', context)
+
+@login_required
+@permission_required('inventory.delete_block', raise_exception=True)
+def block_delete(request, block_id):
+    """Delete a block"""
+    block = get_object_or_404(Block, id=block_id)
+    
+    if request.method == 'POST':
+        try:
+            block_name = block.name
+            block.delete()
+            messages.success(request, f'Block "{block_name}" deleted successfully.')
+            return redirect('inventory:block_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting block: {str(e)}')
+            return redirect('inventory:block_detail', block_id=block.id)
+    
+    return redirect('inventory:block_detail', block_id=block.id)
+
+# ================================
+# FLOOR MANAGEMENT VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.view_floor', raise_exception=True)
+def floor_list(request):
+    """Display list of all floors with search and filtering"""
+    search = request.GET.get('search', '')
+    building_filter = request.GET.get('building', '')
+    block_filter = request.GET.get('block', '')
+    is_active_filter = request.GET.get('is_active', '')
+    sort_by = request.GET.get('sort', 'building__name')
+    
+    floors = Floor.objects.select_related('building', 'block')
+    
+    # Search functionality
+    if search:
+        floors = floors.filter(
+            Q(name__icontains=search) |
+            Q(building__name__icontains=search) |
+            Q(block__name__icontains=search)
+        )
+    
+    # Filter by building
+    if building_filter:
+        floors = floors.filter(building_id=building_filter)
+    
+    # Filter by block
+    if block_filter:
+        floors = floors.filter(block_id=block_filter)
+    
+    # Filter by active status
+    if is_active_filter:
+        floors = floors.filter(is_active=is_active_filter == 'true')
+    
+    # Sorting
+    valid_sort_fields = ['building__name', 'block__name', 'floor_number', 'name', '-created_at']
+    if sort_by in valid_sort_fields:
+        floors = floors.order_by(sort_by)
+    else:
+        floors = floors.order_by('building__name', 'block__name', 'floor_number')
+    
+    # Add annotations for statistics
+    floors = floors.annotate(
+        departments_count=Count('departments'),
+        locations_count=Count('locations')
+    )
+    
+    # Get data for filter dropdowns
+    buildings = Building.objects.filter(is_active=True).order_by('name')
+    blocks = Block.objects.filter(is_active=True).order_by('building__name', 'name')
+    
+    # Pagination
+    paginator = Paginator(floors, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'floors': page_obj.object_list,
+        'buildings': buildings,
+        'blocks': blocks,
+        'search': search,
+        'building_filter': building_filter,
+        'block_filter': block_filter,
+        'is_active_filter': is_active_filter,
+        'sort_by': sort_by,
+        'title': 'Floor Management',
+    }
+    
+    return render(request, 'inventory/locations/floor_list.html', context)
+
+@login_required
+@permission_required('inventory.view_floor', raise_exception=True)
+def floor_detail(request, floor_id):
+    """Display detailed information about a floor"""
+    floor = get_object_or_404(Floor.objects.select_related('building', 'block'), id=floor_id)
+    
+    # Get related data
+    departments = floor.departments.all().annotate(
+        rooms_count=Count('rooms')
+    ).order_by('name')
+    
+    # Statistics
+    total_departments = departments.count()
+    total_rooms = sum(dept.rooms_count for dept in departments)
+    total_locations = floor.locations.count()
+    
+    context = {
+        'floor': floor,
+        'departments': departments,
+        'total_departments': total_departments,
+        'total_rooms': total_rooms,
+        'total_locations': total_locations,
+        'title': f'Floor: {floor.name}',
+    }
+    
+    return render(request, 'inventory/locations/floor_detail.html', context)
+
+@login_required
+@permission_required('inventory.add_floor', raise_exception=True)
+def floor_create(request):
+    """Create a new floor"""
+    if request.method == 'POST':
+        form = FloorForm(request.POST)
+        if form.is_valid():
+            try:
+                floor = form.save()
+                messages.success(request, f'Floor "{floor.name}" created successfully.')
+                return redirect('inventory:floor_detail', floor_id=floor.id)
+            except Exception as e:
+                messages.error(request, f'Error creating floor: {str(e)}')
+    else:
+        form = FloorForm()
+        # Pre-select building and block if provided in URL
+        building_id = request.GET.get('building')
+        block_id = request.GET.get('block')
+        if building_id:
+            form.fields['building'].initial = building_id
+        if block_id:
+            form.fields['block'].initial = block_id
+    
+    context = {
+        'form': form,
+        'title': 'Add New Floor',
+        'form_action': 'Create',
+    }
+    
+    return render(request, 'inventory/locations/floor_form.html', context)
+
+@login_required
+@permission_required('inventory.change_floor', raise_exception=True)
+def floor_edit(request, floor_id):
+    """Edit an existing floor"""
+    floor = get_object_or_404(Floor, id=floor_id)
+    
+    if request.method == 'POST':
+        form = FloorForm(request.POST, instance=floor)
+        if form.is_valid():
+            try:
+                floor = form.save()
+                messages.success(request, f'Floor "{floor.name}" updated successfully.')
+                return redirect('inventory:floor_detail', floor_id=floor.id)
+            except Exception as e:
+                messages.error(request, f'Error updating floor: {str(e)}')
+    else:
+        form = FloorForm(instance=floor)
+    
+    context = {
+        'form': form,
+        'floor': floor,
+        'title': f'Edit Floor: {floor.name}',
+        'form_action': 'Update',
+    }
+    
+    return render(request, 'inventory/locations/floor_form.html', context)
+
+@login_required
+@permission_required('inventory.delete_floor', raise_exception=True)
+def floor_delete(request, floor_id):
+    """Delete a floor"""
+    floor = get_object_or_404(Floor, id=floor_id)
+    
+    if request.method == 'POST':
+        try:
+            floor_name = floor.name
+            floor.delete()
+            messages.success(request, f'Floor "{floor_name}" deleted successfully.')
+            return redirect('inventory:floor_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting floor: {str(e)}')
+            return redirect('inventory:floor_detail', floor_id=floor.id)
+    
+    return redirect('inventory:floor_detail', floor_id=floor.id)
+
+# ================================
+# ROOM MANAGEMENT VIEWS
+# ================================
+
+@login_required
+@permission_required('inventory.view_room', raise_exception=True)
+def room_list(request):
+    """Display list of all rooms with enhanced filtering"""
+    search = request.GET.get('search', '')
+    building_filter = request.GET.get('building', '')
+    block_filter = request.GET.get('block', '')
+    floor_filter = request.GET.get('floor', '')
+    department_filter = request.GET.get('department', '')
+    is_active_filter = request.GET.get('is_active', '')
+    sort_by = request.GET.get('sort', 'department__name')
+    
+    rooms = Room.objects.select_related(
+        'department__floor__building', 
+        'department__floor__block',
+        'department'
+    )
+    
+    # Search functionality
+    if search:
+        rooms = rooms.filter(
+            Q(room_number__icontains=search) |
+            Q(room_name__icontains=search) |
+            Q(department__name__icontains=search) |
+            Q(department__floor__building__name__icontains=search) |
+            Q(department__floor__block__name__icontains=search)
+        )
+    
+    # Apply filters
+    if building_filter:
+        rooms = rooms.filter(department__floor__building_id=building_filter)
+    if block_filter:
+        rooms = rooms.filter(department__floor__block_id=block_filter)
+    if floor_filter:
+        rooms = rooms.filter(department__floor_id=floor_filter)
+    if department_filter:
+        rooms = rooms.filter(department_id=department_filter)
+    if is_active_filter:
+        rooms = rooms.filter(is_active=is_active_filter == 'true')
+    
+    # Sorting
+    valid_sort_fields = ['department__name', 'room_number', 'room_name', 'capacity', '-created_at']
+    if sort_by in valid_sort_fields:
+        rooms = rooms.order_by(sort_by)
+    else:
+        rooms = rooms.order_by('department__name', 'room_number')
+    
+    # Add annotations
+    rooms = rooms.annotate(
+        locations_count=Count('locations')
+    )
+    
+    # Get data for filter dropdowns
+    buildings = Building.objects.filter(is_active=True).order_by('name')
+    blocks = Block.objects.filter(is_active=True).order_by('building__name', 'name')
+    floors = Floor.objects.filter(is_active=True).order_by('building__name', 'block__name', 'floor_number')
+    departments = Department.objects.filter(is_active=True).order_by('name')
+    
+    # Pagination
+    paginator = Paginator(rooms, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'rooms': page_obj.object_list,
+        'buildings': buildings,
+        'blocks': blocks,
+        'floors': floors,
+        'departments': departments,
+        'search': search,
+        'building_filter': building_filter,
+        'block_filter': block_filter,
+        'floor_filter': floor_filter,
+        'department_filter': department_filter,
+        'is_active_filter': is_active_filter,
+        'sort_by': sort_by,
+        'title': 'Room Management',
+    }
+    
+    return render(request, 'inventory/locations/room_list.html', context)
+
+@login_required
+@permission_required('inventory.view_room', raise_exception=True)
+def room_detail(request, room_id):
+    """Display detailed information about a room"""
+    room = get_object_or_404(
+        Room.objects.select_related(
+            'department__floor__building',
+            'department__floor__block',
+            'department'
+        ), 
+        id=room_id
+    )
+    
+    # Get related data
+    locations = room.locations.all()
+    
+    # Statistics
+    total_locations = locations.count()
+    active_assignments = Assignment.objects.filter(
+        location__room=room,
+        status='ASSIGNED'
+    ).count()
+    
+    context = {
+        'room': room,
+        'locations': locations,
+        'total_locations': total_locations,
+        'active_assignments': active_assignments,
+        'title': f'Room: {room.room_number} - {room.room_name}',
+    }
+    
+    return render(request, 'inventory/locations/room_detail.html', context)
+
+@login_required
+@permission_required('inventory.add_room', raise_exception=True)
+def room_create(request):
+    """Create a new room"""
+    if request.method == 'POST':
+        form = forms.RoomForm(request.POST)
+        if form.is_valid():
+            try:
+                room = form.save()
+                messages.success(request, f'Room "{room.room_number}" created successfully.')
+                return redirect('inventory:room_detail', room_id=room.id)
+            except Exception as e:
+                messages.error(request, f'Error creating room: {str(e)}')
+    else:
+        form = forms.RoomForm()
+        # Pre-select department if provided in URL
+        department_id = request.GET.get('department')
+        if department_id:
+            form.fields['department'].initial = department_id
+    
+    context = {
+        'form': form,
+        'title': 'Add New Room',
+        'form_action': 'Create',
+    }
+    
+    return render(request, 'inventory/locations/room_form.html', context)
+
+@login_required
+@permission_required('inventory.change_room', raise_exception=True)
+def room_edit(request, room_id):
+    """Edit an existing room"""
+    room = get_object_or_404(Room, id=room_id)
+    
+    if request.method == 'POST':
+        form = forms.RoomForm(request.POST, instance=room)
+        if form.is_valid():
+            try:
+                room = form.save()
+                messages.success(request, f'Room "{room.room_number}" updated successfully.')
+                return redirect('inventory:room_detail', room_id=room.id)
+            except Exception as e:
+                messages.error(request, f'Error updating room: {str(e)}')
+    else:
+        form = forms.RoomForm(instance=room)
+    
+    context = {
+        'form': form,
+        'room': room,
+        'title': f'Edit Room: {room.room_number}',
+        'form_action': 'Update',
+    }
+    
+    return render(request, 'inventory/locations/room_form.html', context)
+
+@login_required
+@permission_required('inventory.delete_room', raise_exception=True)
+def room_delete(request, room_id):
+    """Delete a room"""
+    room = get_object_or_404(Room, id=room_id)
+    
+    if request.method == 'POST':
+        try:
+            room_number = room.room_number
+            room.delete()
+            messages.success(request, f'Room "{room_number}" deleted successfully.')
+            return redirect('inventory:room_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting room: {str(e)}')
+            return redirect('inventory:room_detail', room_id=room.id)
+    
+    return redirect('inventory:room_detail', room_id=room.id)
+
 
 # ================================
 # VENDOR MANAGEMENT VIEWS
@@ -2779,11 +3689,11 @@ def maintenance_list(request):
             }
         }
         
-        return render(request, 'inventory/maintenance/list.html', context)
+        return render(request, 'inventory/maintenance/maintenance_list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance list: {str(e)}")
-        return render(request, 'inventory/maintenance/list.html', {})
+        return render(request, 'inventory/maintenance/maintenance_list.html', {})
 
 @login_required
 def maintenance_create(request):
@@ -2824,7 +3734,7 @@ def maintenance_create(request):
             'vendors': Vendor.objects.filter(is_active=True),
         }
         
-        return render(request, 'inventory/maintenance/create.html', context)
+        return render(request, 'inventory/maintenance/maintenance_create.html', context)
         
     except Exception as e:
         messages.error(request, f"Error creating maintenance schedule: {str(e)}")
@@ -2852,7 +3762,7 @@ def maintenance_detail(request, maintenance_id):
             'can_edit': request.user.has_perm('inventory.change_maintenanceschedule'),
         }
         
-        return render(request, 'inventory/maintenance/detail.html', context)
+        return render(request, 'inventory/maintenance/maintenance_detail.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance details: {str(e)}")
@@ -2911,7 +3821,7 @@ def maintenance_edit(request, maintenance_id):
             'title': 'Edit Maintenance Schedule',
         }
         
-        return render(request, 'inventory/maintenance/edit.html', context)
+        return render(request, 'inventory/maintenance/maintenance_edit.html', context)
         
     except Exception as e:
         messages.error(request, f"Error editing maintenance schedule: {str(e)}")
@@ -2966,7 +3876,7 @@ def maintenance_complete(request, maintenance_id):
             'maintenance': maintenance,
             'title': f'Complete Maintenance: {maintenance.device}',
         }
-        return render(request, 'inventory/maintenance_complete.html', context)
+        return render(request, 'inventory/maintenance/maintenance_complete.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance for completion: {str(e)}")
@@ -3027,11 +3937,11 @@ def maintenance_schedule(request):
             'status_choices': MaintenanceSchedule.STATUS_CHOICES,
         }
         
-        return render(request, 'inventory/maintenance/schedule.html', context)
+        return render(request, 'inventory/maintenance/maintenance_schedule.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading maintenance schedule: {str(e)}")
-        return render(request, 'inventory/maintenance/schedule.html', {})
+        return render(request, 'inventory/maintenance/maintenance_schedule.html', {})
 
 # ================================
 # DEVICE TYPE MANAGEMENT VIEWS
@@ -3076,11 +3986,11 @@ def device_type_list(request):
             'selected_category': category_id,
         }
         
-        return render(request, 'inventory/device_type_list.html', context)
+        return render(request, 'inventory/device_type/device_type_list.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading device types: {str(e)}")
-        return render(request, 'inventory/device_type_list.html', {'page_obj': None})
+        return render(request, 'inventory/device_type/device_type_list.html', {'page_obj': None})
 
 @login_required
 @permission_required('inventory.add_devicetype', raise_exception=True)
@@ -3115,7 +4025,7 @@ def device_type_create(request):
         'title': 'Add New Device Type',
         'action': 'Create',
     }
-    return render(request, 'inventory/device_type_form.html', context)
+    return render(request, 'inventory/device_type/device_type_form.html', context)
 
 # ================================
 # AJAX & API VIEWS
@@ -6222,9 +7132,432 @@ def assignment_search_api(request):
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+def api_blocks_by_building(request, building_id):
+    """API endpoint to get blocks by building for cascade dropdowns"""
+    try:
+        blocks = Block.objects.filter(
+            building_id=building_id, 
+            is_active=True
+        ).values('id', 'name', 'code').order_by('name')
+        
+        return JsonResponse({
+            'success': True,
+            'blocks': list(blocks)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_floors_by_block(request, block_id):
+    """API endpoint to get floors by block for cascade dropdowns"""
+    try:
+        floors = Floor.objects.filter(
+            block_id=block_id, 
+            is_active=True
+        ).values('id', 'name', 'floor_number').order_by('floor_number')
+        
+        return JsonResponse({
+            'success': True,
+            'floors': list(floors)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_floors_by_building(request, building_id):
+    """API endpoint to get floors by building (for direct building-to-floor cascade)"""
+    try:
+        floors = Floor.objects.filter(
+            building_id=building_id,
+            is_active=True
+        ).select_related('block').values(
+            'id', 'name', 'floor_number', 'block__name', 'block__code'
+        ).order_by('block__name', 'floor_number')
+        
+        return JsonResponse({
+            'success': True,
+            'floors': list(floors)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_departments_by_floor(request, floor_id):
+    """API endpoint to get departments by floor for cascade dropdowns"""
+    try:
+        departments = Department.objects.filter(
+            floor_id=floor_id, 
+            is_active=True
+        ).values('id', 'name', 'code').order_by('name')
+        
+        return JsonResponse({
+            'success': True,
+            'departments': list(departments)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_departments_by_building(request, building_id):
+    """API endpoint to get departments by building (for building-wide views)"""
+    try:
+        departments = Department.objects.filter(
+            floor__building_id=building_id,
+            is_active=True
+        ).select_related('floor__block').values(
+            'id', 'name', 'code', 'floor__name', 'floor__block__name'
+        ).order_by('floor__block__name', 'floor__name', 'name')
+        
+        return JsonResponse({
+            'success': True,
+            'departments': list(departments)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_departments_by_block(request, block_id):
+    """API endpoint to get departments by block"""
+    try:
+        departments = Department.objects.filter(
+            floor__block_id=block_id,
+            is_active=True
+        ).select_related('floor').values(
+            'id', 'name', 'code', 'floor__name', 'floor__floor_number'
+        ).order_by('floor__floor_number', 'name')
+        
+        return JsonResponse({
+            'success': True,
+            'departments': list(departments)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_rooms_by_department(request, department_id):
+    """API endpoint to get rooms by department for cascade dropdowns"""
+    try:
+        rooms = Room.objects.filter(
+            department_id=department_id, 
+            is_active=True
+        ).values('id', 'room_number', 'room_name', 'capacity').order_by('room_number')
+        
+        return JsonResponse({
+            'success': True,
+            'rooms': list(rooms)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_rooms_by_floor(request, floor_id):
+    """API endpoint to get rooms by floor (across all departments)"""
+    try:
+        rooms = Room.objects.filter(
+            department__floor_id=floor_id,
+            is_active=True
+        ).select_related('department').values(
+            'id', 'room_number', 'room_name', 'capacity', 'department__name', 'department__code'
+        ).order_by('department__name', 'room_number')
+        
+        return JsonResponse({
+            'success': True,
+            'rooms': list(rooms)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_rooms_by_building(request, building_id):
+    """API endpoint to get rooms by building (for building-wide views)"""
+    try:
+        rooms = Room.objects.filter(
+            department__floor__building_id=building_id,
+            is_active=True
+        ).select_related('department__floor__block', 'department').values(
+            'id', 'room_number', 'room_name', 'capacity',
+            'department__name', 'department__floor__name', 'department__floor__block__name'
+        ).order_by('department__floor__block__name', 'department__floor__name', 'department__name', 'room_number')
+        
+        return JsonResponse({
+            'success': True,
+            'rooms': list(rooms)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_locations_by_building(request, building_id):
+    """API endpoint to get locations by building"""
+    try:
+        locations = Location.objects.filter(
+            building_id=building_id,
+            is_active=True
+        ).select_related('block', 'floor', 'department', 'room').values(
+            'id', 'description',
+            'block__name', 'floor__name', 'department__name', 'room__room_number'
+        ).order_by('block__name', 'floor__floor_number', 'department__name', 'room__room_number')
+        
+        # Format location display name
+        formatted_locations = []
+        for loc in locations:
+            display_name = f"{loc['block__name']} - {loc['floor__name']} - {loc['department__name']}"
+            if loc['room__room_number']:
+                display_name += f" - Room {loc['room__room_number']}"
+            
+            formatted_locations.append({
+                'id': loc['id'],
+                'display_name': display_name,
+                'description': loc['description']
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'locations': formatted_locations
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_locations_by_department(request, department_id):
+    """API endpoint to get locations by department"""
+    try:
+        locations = Location.objects.filter(
+            department_id=department_id,
+            is_active=True
+        ).select_related('room').values(
+            'id', 'description', 'room__room_number', 'room__room_name'
+        ).order_by('room__room_number')
+        
+        # Format location display name
+        formatted_locations = []
+        for loc in locations:
+            if loc['room__room_number']:
+                display_name = f"Room {loc['room__room_number']}"
+                if loc['room__room_name']:
+                    display_name += f" - {loc['room__room_name']}"
+            else:
+                display_name = "Department General Area"
+            
+            formatted_locations.append({
+                'id': loc['id'],
+                'display_name': display_name,
+                'description': loc['description']
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'locations': formatted_locations
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+# ================================
+# HIERARCHY VALIDATION API
+# ================================
+
+@login_required
+def api_validate_hierarchy(request):
+    """API endpoint to validate location hierarchy relationships"""
+    try:
+        building_id = request.GET.get('building_id')
+        block_id = request.GET.get('block_id')
+        floor_id = request.GET.get('floor_id')
+        department_id = request.GET.get('department_id')
+        room_id = request.GET.get('room_id')
+        
+        errors = []
+        
+        # Validate block belongs to building
+        if building_id and block_id:
+            try:
+                block = Block.objects.get(id=block_id)
+                if str(block.building_id) != building_id:
+                    errors.append('Selected block does not belong to the selected building.')
+            except Block.DoesNotExist:
+                errors.append('Selected block does not exist.')
+        
+        # Validate floor belongs to block
+        if block_id and floor_id:
+            try:
+                floor = Floor.objects.get(id=floor_id)
+                if str(floor.block_id) != block_id:
+                    errors.append('Selected floor does not belong to the selected block.')
+            except Floor.DoesNotExist:
+                errors.append('Selected floor does not exist.')
+        
+        # Validate department belongs to floor
+        if floor_id and department_id:
+            try:
+                department = Department.objects.get(id=department_id)
+                if str(department.floor_id) != floor_id:
+                    errors.append('Selected department does not belong to the selected floor.')
+            except Department.DoesNotExist:
+                errors.append('Selected department does not exist.')
+        
+        # Validate room belongs to department
+        if department_id and room_id:
+            try:
+                room = Room.objects.get(id=room_id)
+                if str(room.department_id) != department_id:
+                    errors.append('Selected room does not belong to the selected department.')
+            except Room.DoesNotExist:
+                errors.append('Selected room does not exist.')
+        
+        return JsonResponse({
+            'success': len(errors) == 0,
+            'errors': errors,
+            'valid': len(errors) == 0
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+# ================================
+# SEARCH API ENDPOINTS
+# ================================
+
+@login_required
+def api_location_search(request):
+    """API endpoint for location search with hierarchy context"""
+    try:
+        query = request.GET.get('q', '').strip()
+        building_id = request.GET.get('building')
+        department_id = request.GET.get('department')
+        limit = int(request.GET.get('limit', 20))
+        
+        if len(query) < 2:
+            return JsonResponse({'success': True, 'locations': []})
+        
+        locations = Location.objects.select_related(
+            'building', 'block', 'floor', 'department', 'room'
+        ).filter(is_active=True)
+        
+        # Apply building filter
+        if building_id:
+            locations = locations.filter(building_id=building_id)
+        
+        # Apply department filter
+        if department_id:
+            locations = locations.filter(department_id=department_id)
+        
+        # Search across hierarchy
+        locations = locations.filter(
+            Q(building__name__icontains=query) |
+            Q(block__name__icontains=query) |
+            Q(floor__name__icontains=query) |
+            Q(department__name__icontains=query) |
+            Q(room__room_number__icontains=query) |
+            Q(room__room_name__icontains=query) |
+            Q(description__icontains=query)
+        )[:limit]
+        
+        results = []
+        for location in locations:
+            results.append({
+                'id': location.id,
+                'display_name': str(location),
+                'description': location.description,
+                'building': location.building.name,
+                'block': location.block.name if location.block else '',
+                'floor': location.floor.name if location.floor else '',
+                'department': location.department.name if location.department else '',
+                'room': f"{location.room.room_number} - {location.room.room_name}" if location.room else '',
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'locations': results
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+@login_required
+def api_hierarchy_stats(request):
+    """API endpoint to get hierarchy statistics"""
+    try:
+        building_id = request.GET.get('building_id')
+        
+        if building_id:
+            # Building-specific stats
+            building = get_object_or_404(Building, id=building_id)
+            stats = {
+                'building': building.name,
+                'blocks': building.blocks.filter(is_active=True).count(),
+                'floors': Floor.objects.filter(building=building, is_active=True).count(),
+                'departments': Department.objects.filter(floor__building=building, is_active=True).count(),
+                'rooms': Room.objects.filter(department__floor__building=building, is_active=True).count(),
+                'locations': Location.objects.filter(building=building, is_active=True).count(),
+                'active_assignments': Assignment.objects.filter(
+                    location__building=building,
+                    status='ASSIGNED'
+                ).count()
+            }
+        else:
+            # System-wide stats
+            stats = {
+                'buildings': Building.objects.filter(is_active=True).count(),
+                'blocks': Block.objects.filter(is_active=True).count(),
+                'floors': Floor.objects.filter(is_active=True).count(),
+                'departments': Department.objects.filter(is_active=True).count(),
+                'rooms': Room.objects.filter(is_active=True).count(),
+                'locations': Location.objects.filter(is_active=True).count(),
+                'active_assignments': Assignment.objects.filter(status='ASSIGNED').count()
+            }
+        
+        return JsonResponse({
+            'success': True,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
     
 # ================================
-# BACKUP & RECOVERY VIEWS - LOW PRIORITY
+# BACKUP & RECOVERY VIEWS
 # ================================
 
 # Backup form for forms.py
