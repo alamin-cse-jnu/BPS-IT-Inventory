@@ -1,6 +1,3 @@
-# inventory/management/commands/setup_bps.py
-# Location: bps_inventory/apps/inventory/management/commands/setup_bps.py
-
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -116,13 +113,14 @@ class Command(BaseCommand):
         )
         self.stdout.write(f'  {"Created" if created else "Found"} building: {main_building.name}')
 
-        # Create blocks within the main building
+        # Create blocks within the main building - FIXED: Added Central Block
         blocks_data = [
             {'code': 'EB', 'name': 'East Block', 'description': 'Eastern section of Parliament Building'},
             {'code': 'WB', 'name': 'West Block', 'description': 'Western section of Parliament Building'},
             {'code': 'NB', 'name': 'North Block', 'description': 'Northern section of Parliament Building'},
             {'code': 'SB', 'name': 'South Block', 'description': 'Southern section of Parliament Building'},
             {'code': 'PB', 'name': 'Parliament Block', 'description': 'Parliament Block of Parliament Building'},
+            {'code': 'CB', 'name': 'Central Block', 'description': 'Central administration block of Parliament Building'},
         ]
 
         blocks = {}
@@ -165,10 +163,15 @@ class Command(BaseCommand):
             {'block_code': 'SB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Archives Department'},
             {'block_code': 'SB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Records Management'},
             
+            # Parliament Block - Main Parliament Activities
+            {'block_code': 'PB', 'floor_number': 0, 'name': 'Ground Floor', 'description': 'Parliament Ground Level'},
+            {'block_code': 'PB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Parliament First Floor'},
+            {'block_code': 'PB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Parliament Second Floor'},
+            
             # Central Block - Main Administration
             {'block_code': 'CB', 'floor_number': 1, 'name': 'First Floor', 'description': 'Secretary Office'},
             {'block_code': 'CB', 'floor_number': 2, 'name': 'Second Floor', 'description': 'Administrative Hub'},
-            {'block_code': 'CB', 'floor_number': 3, 'name': 'Third Floor', 'description': 'Offices'},
+            {'block_code': 'CB', 'floor_number': 3, 'name': 'Third Floor', 'description': 'Executive Offices'},
         ]
 
         floors = {}
