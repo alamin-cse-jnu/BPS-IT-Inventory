@@ -1742,16 +1742,16 @@ def staff_detail(request, staff_id):
         
         # Get assignments with pagination
         assignments = Assignment.objects.filter(
-            staff=staff
+            assigned_to_staff=staff 
         ).select_related(
-            'device', 'device__device_type', 'assigned_by', 'returned_by'
-        ).order_by('-assigned_date')
+            'device', 'device__device_type', 'created_by'  
+        ).order_by('-created_at')
         
         # Current assignments
-        current_assignments = assignments.filter(status='ACTIVE')
+        current_assignments = assignments.filter(is_active=True)
         
         # Assignment history
-        assignment_history = assignments.filter(status__in=['RETURNED', 'TRANSFERRED'])
+        assignment_history = assignments.filter(is_active=False) 
         
         # Calculate stats
         total_assignments = assignments.count()
@@ -1779,7 +1779,7 @@ def staff_detail(request, staff_id):
         
     except Exception as e:
         messages.error(request, f"Error loading staff details: {str(e)}")
-        return redirect('inventory:staff_list')
+        return redirect('inventory:staff_list') 
 
 @permission_required('inventory.add_staff', raise_exception=True)
 def staff_create(request):
@@ -1868,8 +1868,8 @@ def staff_delete(request, staff_id):
         
         # Check if staff has active assignments
         active_assignments = Assignment.objects.filter(
-            staff=staff,
-            status='ACTIVE'
+            assigned_to_staff=staff,
+            is_active=True            
         ).count()
         
         if active_assignments > 0:
@@ -1880,37 +1880,19 @@ def staff_delete(request, staff_id):
             return redirect('inventory:staff_detail', staff_id=staff.id)
         
         if request.method == 'POST':
-            try:
-                with transaction.atomic():
-                    staff_name = staff.get_full_name()
-                    
-                    # Log the activity before deletion
-                    from .utils import log_user_activity
-                    log_user_activity(
-                        user=request.user,
-                        action='DELETE',
-                        model_name='Staff',
-                        object_id=staff.id,
-                        object_repr=str(staff),
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    staff.delete()
-                    messages.success(request, f'Staff member "{staff_name}" deleted successfully.')
-                    return redirect('inventory:staff_list')
-            except Exception as e:
-                messages.error(request, f'Error deleting staff member: {str(e)}')
-                return redirect('inventory:staff_detail', staff_id=staff.id)
+            staff_name = staff.get_full_name()
+            staff.delete()
+            messages.success(request, f'Staff member "{staff_name}" deleted successfully.')
+            return redirect('inventory:staff_list')
         
         context = {
             'staff': staff,
             'active_assignments': active_assignments,
-            'title': f'Delete Staff: {staff.get_full_name()}',
         }
-        return render(request, 'inventory/staff/staff_delete.html', context)
+        return render(request, 'inventory/staff/staff_delete_confirm.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading staff for deletion: {str(e)}")
+        messages.error(request, f"Error deleting staff member: {str(e)}")
         return redirect('inventory:staff_list')
 
 @login_required
@@ -1921,36 +1903,37 @@ def staff_assignments(request, staff_id):
         
         # Get all assignments for this staff member
         assignments = Assignment.objects.filter(
-            staff=staff
+            assigned_to_staff=staff
         ).select_related(
-            'device', 'device__device_type', 'assigned_by', 'returned_by'
-        ).order_by('-assigned_date')
+            'device', 'device__device_type', 'created_by'
+        ).order_by('-created_at')
         
-        # Filter by status if specified
-        status_filter = request.GET.get('status')
-        if status_filter:
-            assignments = assignments.filter(status=status_filter)
-        
-        # Search within assignments
-        search = request.GET.get('search')
+        # Filter by search query if provided
+        search = request.GET.get('search', '')
         if search:
             assignments = assignments.filter(
-                Q(device__asset_tag__icontains=search) |
-                Q(device__serial_number__icontains=search) |
-                Q(device__device_type__name__icontains=search)
+                Q(device__device_id__icontains=search) |
+                Q(device__device_name__icontains=search) |
+                Q(device__asset_tag__icontains=search)
             )
         
+        # Filter by status if provided
+        status_filter = request.GET.get('status', '')
+        if status_filter == 'active':
+            assignments = assignments.filter(is_active=True) 
+        elif status_filter == 'inactive':
+            assignments = assignments.filter(is_active=False)  
+        
         # Pagination
-        paginator = Paginator(assignments, 20)
+        paginator = Paginator(assignments, 25)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
-        # Stats
+        # Calculate statistics
         stats = {
             'total': assignments.count(),
-            'active': assignments.filter(status='ACTIVE').count(),
-            'returned': assignments.filter(status='RETURNED').count(),
-            'transferred': assignments.filter(status='TRANSFERRED').count(),
+            'active': assignments.filter(is_active=True).count(),  
+            'inactive': assignments.filter(is_active=False).count(),  
         }
         
         context = {
@@ -2225,61 +2208,101 @@ def department_edit(request, department_id):
         return redirect('inventory:department_list')
 
 @login_required
+@permission_required('inventory.view_assignment', raise_exception=True)
 def department_assignments(request, department_id):
     """View all assignments for a specific department"""
     try:
-        department = get_object_or_404(Department, id=department_id)
+        department = get_object_or_404(Department.objects.select_related('floor__building', 'floor__block'), id=department_id)
         
-        # Get all assignments for staff in this department
+        # Get all assignments for this department
         assignments = Assignment.objects.filter(
-            staff__department=department
+            assigned_to_department=department
         ).select_related(
-            'device', 'device__device_type', 'staff', 'assigned_by'
-        ).order_by('-assigned_date')
+            'device', 'device__device_type', 'assigned_to_staff__user', 'created_by'
+        ).order_by('-created_at')
         
-        # Filter by status if specified
-        status_filter = request.GET.get('status')
-        if status_filter:
-            assignments = assignments.filter(status=status_filter)
+        # Also get assignments to staff members in this department
+        staff_assignments = Assignment.objects.filter(
+            assigned_to_staff__department=department
+        ).select_related(
+            'device', 'device__device_type', 'assigned_to_staff__user', 'created_by'
+        ).order_by('-created_at')
         
-        # Filter by staff member if specified
-        staff_filter = request.GET.get('staff')
-        if staff_filter:
-            assignments = assignments.filter(staff_id=staff_filter)
+        # Combine both querysets
+        all_assignments = assignments.union(staff_assignments).order_by('-created_at')
         
-        # Search within assignments
-        search = request.GET.get('search')
+        # Apply filters
+        search = request.GET.get('search', '')
+        status_filter = request.GET.get('status', '')
+        staff_filter = request.GET.get('staff', '')
+        assignment_type_filter = request.GET.get('type', '')
+        
+        # Search functionality
         if search:
-            assignments = assignments.filter(
+            all_assignments = all_assignments.filter(
+                Q(device__device_id__icontains=search) |
+                Q(device__device_name__icontains=search) |
                 Q(device__asset_tag__icontains=search) |
-                Q(device__serial_number__icontains=search) |
-                Q(device__device_type__name__icontains=search) |
-                Q(staff__first_name__icontains=search) |
-                Q(staff__last_name__icontains=search)
+                Q(assigned_to_staff__user__first_name__icontains=search) |
+                Q(assigned_to_staff__user__last_name__icontains=search) |
+                Q(assigned_to_staff__employee_id__icontains=search)
             )
         
+        # Filter by status
+        if status_filter == 'active':
+            all_assignments = all_assignments.filter(is_active=True)
+        elif status_filter == 'inactive':
+            all_assignments = all_assignments.filter(is_active=False)
+        
+        # Filter by assignment type
+        if assignment_type_filter:
+            all_assignments = all_assignments.filter(assignment_type=assignment_type_filter)
+        
+        # Filter by specific staff member
+        if staff_filter:
+            all_assignments = all_assignments.filter(assigned_to_staff_id=staff_filter)
+        
+        # Get staff members in this department for filter
+        staff_members = Staff.objects.filter(
+            department=department,
+            is_active=True
+        ).select_related('user').order_by('user__first_name', 'user__last_name')
+        
         # Pagination
-        paginator = Paginator(assignments, 25)
+        paginator = Paginator(all_assignments, 25)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
-        # Get staff members for filter
-        staff_members = Staff.objects.filter(
-            department=department
-        ).order_by('last_name', 'first_name')
+        # Calculate statistics
+        total_assignments = all_assignments.count()
+        active_assignments = all_assignments.filter(is_active=True).count()
+        inactive_assignments = all_assignments.filter(is_active=False).count()
         
-        # Stats
-        stats = {
-            'total': assignments.count(),
-            'active': assignments.filter(status='ACTIVE').count(),
-            'returned': assignments.filter(status='RETURNED').count(),
-            'transferred': assignments.filter(status='TRANSFERRED').count(),
-        }
+        # Assignment type statistics
+        permanent_assignments = all_assignments.filter(assignment_type='PERMANENT').count()
+        temporary_assignments = all_assignments.filter(assignment_type='TEMPORARY').count()
         
-        # Total value of active assignments
-        active_value = assignments.filter(status='ACTIVE').aggregate(
+        # Calculate total value of active assignments
+        active_value = all_assignments.filter(is_active=True).aggregate(
             total=Sum('device__purchase_price')
         )['total'] or 0
+        
+        # Get overdue assignments
+        overdue_assignments = all_assignments.filter(
+            assignment_type='TEMPORARY',
+            is_active=True,
+            expected_return_date__lt=timezone.now().date()
+        ).count()
+        
+        stats = {
+            'total': total_assignments,
+            'active': active_assignments,
+            'inactive': inactive_assignments,
+            'permanent': permanent_assignments,
+            'temporary': temporary_assignments,
+            'overdue': overdue_assignments,
+            'total_value': active_value,
+        }
         
         context = {
             'department': department,
@@ -2287,12 +2310,12 @@ def department_assignments(request, department_id):
             'search': search,
             'status_filter': status_filter,
             'staff_filter': staff_filter,
+            'assignment_type_filter': assignment_type_filter,
             'staff_members': staff_members,
             'stats': stats,
-            'active_value': active_value,
         }
         
-        return render(request, 'inventory/department_assignments.html', context)
+        return render(request, 'inventory/department/department_assignments.html', context)
         
     except Exception as e:
         messages.error(request, f"Error loading department assignments: {str(e)}")
@@ -8289,8 +8312,8 @@ def my_assignments(request):
         assignments = Assignment.objects.filter(
             assigned_to_staff=staff_profile
         ).select_related(
-            'device', 'device__device_type', 'assigned_by', 'returned_by'
-        ).order_by('-assigned_date')
+            'device', 'device__device_type', 'created_by'
+        ).order_by('-created_at')
         
         # Apply filters
         status_filter = request.GET.get('status', 'all')
@@ -8304,23 +8327,23 @@ def my_assignments(request):
             assignments = assignments.filter(is_active=False)
         elif status_filter == 'overdue':
             assignments = assignments.filter(
-                is_temporary=True,
+                assignment_type='TEMPORARY', 
                 is_active=True,
                 expected_return_date__lt=timezone.now().date()
             )
         
         # Filter by assignment type
         if assignment_type_filter == 'temporary':
-            assignments = assignments.filter(is_temporary=True)
+            assignments = assignments.filter(assignment_type='TEMPORARY')
         elif assignment_type_filter == 'permanent':
-            assignments = assignments.filter(is_temporary=False)
+            assignments = assignments.filter(assignment_type='PERMANENT')
         
         # Search functionality
         if search_query:
             assignments = assignments.filter(
                 Q(device__device_name__icontains=search_query) |
                 Q(device__device_id__icontains=search_query) |
-                Q(assignment_id__icontains=search_query)
+                Q(device__asset_tag__icontains=search_query) 
             )
         
         # Calculate statistics
@@ -8332,12 +8355,12 @@ def my_assignments(request):
             ).count(),
             'temporary_assignments': Assignment.objects.filter(
                 assigned_to_staff=staff_profile, 
-                is_temporary=True, 
+                assignment_type='TEMPORARY',
                 is_active=True
             ).count(),
             'overdue_assignments': Assignment.objects.filter(
                 assigned_to_staff=staff_profile,
-                is_temporary=True,
+                assignment_type='TEMPORARY',
                 is_active=True,
                 expected_return_date__lt=timezone.now().date()
             ).count(),
@@ -8361,7 +8384,7 @@ def my_assignments(request):
         # Get upcoming returns (next 30 days)
         upcoming_returns = Assignment.objects.filter(
             assigned_to_staff=staff_profile,
-            is_temporary=True,
+            assignment_type='TEMPORARY', 
             is_active=True,
             expected_return_date__gte=timezone.now().date(),
             expected_return_date__lte=timezone.now().date() + timedelta(days=30)
