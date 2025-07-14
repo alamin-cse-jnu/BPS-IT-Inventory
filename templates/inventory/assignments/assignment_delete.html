@@ -1,0 +1,288 @@
+<!-- Location: D:\Development\projects\BPS-IT-Inventory\templates\inventory\assignments\assignment_delete.html -->
+
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Assignment - {{ assignment.device.device_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-warning {
+        background: linear-gradient(135deg, #dc3545, #b02a37);
+        color: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .assignment-details-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #495057;
+        flex: 0 0 40%;
+    }
+    
+    .detail-value {
+        color: #212529;
+        flex: 1;
+        text-align: right;
+    }
+    
+    .danger-zone {
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        padding: 1.5rem;
+        background: #fff5f5;
+    }
+    
+    .btn-delete-confirm {
+        background: #dc3545;
+        border-color: #dc3545;
+        color: white;
+        min-width: 120px;
+    }
+    
+    .btn-delete-confirm:hover {
+        background: #c82333;
+        border-color: #bd2130;
+        color: white;
+    }
+    
+    .deletion-reason {
+        margin-bottom: 1rem;
+    }
+    
+    .warning-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_list' %}">Assignments</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_detail' assignment.pk %}">{{ assignment.device.device_name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Delete</li>
+        </ol>
+    </nav>
+
+    <!-- Warning Header -->
+    <div class="delete-warning text-center">
+        <i class="fas fa-exclamation-triangle warning-icon"></i>
+        <h2 class="mb-3">Delete Assignment</h2>
+        <p class="mb-0">{{ warning_message }}</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Assignment Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Assignment Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="assignment-details-card">
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-desktop me-2"></i>Device
+                            </span>
+                            <span class="detail-value">
+                                <strong>{{ assignment.device.device_name }}</strong>
+                                <br><small class="text-muted">{{ assignment.device.device_id }}</small>
+                            </span>
+                        </div>
+                        
+                        {% if assignment.assigned_to_staff %}
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-user me-2"></i>Assigned To (Staff)
+                            </span>
+                            <span class="detail-value">
+                                {{ assignment.assigned_to_staff.user.get_full_name }}
+                                <br><small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if assignment.assigned_to_department %}
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-building me-2"></i>Assigned To (Department)
+                            </span>
+                            <span class="detail-value">{{ assignment.assigned_to_department.name }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if assignment.assigned_to_location %}
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-map-marker-alt me-2"></i>Assigned To (Location)
+                            </span>
+                            <span class="detail-value">{{ assignment.assigned_to_location }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-tag me-2"></i>Assignment Type
+                            </span>
+                            <span class="detail-value">
+                                <span class="badge bg-primary">{{ assignment.get_assignment_type_display }}</span>
+                            </span>
+                        </div>
+                        
+                        {% if assignment.purpose %}
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-clipboard me-2"></i>Purpose
+                            </span>
+                            <span class="detail-value">{{ assignment.purpose }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if assignment.expected_return_date %}
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-calendar me-2"></i>Expected Return
+                            </span>
+                            <span class="detail-value">{{ assignment.expected_return_date|date:"M d, Y" }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="detail-row">
+                            <span class="detail-label">
+                                <i class="fas fa-user-plus me-2"></i>Created By
+                            </span>
+                            <span class="detail-value">
+                                {{ assignment.created_by.get_full_name|default:assignment.created_by.username }}
+                                {% if assignment.created_at %}
+                                <br><small class="text-muted">{{ assignment.created_at|date:"M d, Y H:i" }}</small>
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {% if device_will_be_available %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> After deletion, device {{ assignment.device.device_id }} will be marked as "Available" and can be reassigned.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Deletion Form -->
+            <div class="danger-zone">
+                <h5 class="text-danger mb-3">
+                    <i class="fas fa-trash-alt me-2"></i>Confirm Deletion
+                </h5>
+                
+                <form method="post" id="deleteForm">
+                    {% csrf_token %}
+                    
+                    <div class="deletion-reason">
+                        <label for="deletion_reason" class="form-label">
+                            Reason for deletion <small class="text-muted">(optional)</small>
+                        </label>
+                        <textarea 
+                            name="deletion_reason" 
+                            id="deletion_reason" 
+                            class="form-control" 
+                            rows="3" 
+                            placeholder="Explain why this assignment is being deleted..."></textarea>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input 
+                            class="form-check-input" 
+                            type="checkbox" 
+                            id="confirmDelete" 
+                            name="confirm_delete" 
+                            value="yes" 
+                            required>
+                        <label class="form-check-label text-danger" for="confirmDelete">
+                            <strong>I understand this action cannot be undone</strong>
+                        </label>
+                    </div>
+                    
+                    <div class="d-flex gap-3">
+                        <button 
+                            type="submit" 
+                            class="btn btn-delete-confirm" 
+                            id="deleteButton" 
+                            disabled>
+                            <i class="fas fa-trash-alt me-2"></i>Delete Assignment
+                        </button>
+                        
+                        <a href="{% url 'inventory:assignment_detail' assignment.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmCheckbox = document.getElementById('confirmDelete');
+    const deleteButton = document.getElementById('deleteButton');
+    const deleteForm = document.getElementById('deleteForm');
+    
+    // Enable/disable delete button based on confirmation checkbox
+    confirmCheckbox.addEventListener('change', function() {
+        deleteButton.disabled = !this.checked;
+    });
+    
+    // Add confirmation dialog on form submission
+    deleteForm.addEventListener('submit', function(e) {
+        if (!confirmCheckbox.checked) {
+            e.preventDefault();
+            alert('Please confirm that you understand this action cannot be undone.');
+            return false;
+        }
+        
+        const deviceName = '{{ assignment.device.device_name|escapejs }}';
+        const confirmMessage = `Are you sure you want to permanently delete the assignment for "${deviceName}"?\n\nThis action cannot be undone.`;
+        
+        if (!confirm(confirmMessage)) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Show loading state
+        deleteButton.disabled = true;
+        deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+        
+        return true;
+    });
+});
+</script>
+{% endblock %}

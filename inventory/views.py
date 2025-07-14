@@ -17,6 +17,7 @@ from django.core.serializers import serialize
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from .form_utils import LocationHierarchyUtils, BlockValidationUtils
+from .utils import get_client_ip
 
 # Django contrib imports
 from django.contrib import messages
@@ -52,7 +53,7 @@ import base64
 from .models import (
     Device, Assignment, Staff, Department, Location, 
     DeviceCategory, DeviceType, DeviceSubCategory, Vendor,
-    MaintenanceSchedule, AuditLog, Room, Building, Block, Floor,
+    MaintenanceSchedule, AuditLog, Room, Building, Block, Floor, AssignmentHistory,
 )
 from .forms import (
     DeviceForm, AssignmentForm, StaffForm, ReturnForm, 
@@ -1000,57 +1001,83 @@ def ajax_device_types_by_subcategory(request):
 
 @login_required
 def assignment_list(request):
-    """List all assignments"""
+    """List all assignments with search and filtering"""
+    form = AssignmentSearchForm(request.GET)
     assignments = Assignment.objects.select_related(
-        'device', 'assigned_to_staff', 'assigned_to_department'
-    ).all()
+        'device__device_type',
+        'device__current_location__building',
+        'device__current_location__block',
+        'assigned_to_staff__user',
+        'assigned_to_staff__department',
+        'assigned_to_department',
+        'assigned_to_location__building',
+        'assigned_to_location__block',
+        'created_by'
+    ).order_by('-created_at')
     
     # Apply filters
-    form = AssignmentSearchForm(request.GET)
     if form.is_valid():
-        search = form.cleaned_data.get('search')
-        if search:
+        search_query = form.cleaned_data.get('search_query')
+        if search_query:
             assignments = assignments.filter(
-                Q(device__device_name__icontains=search) |
-                Q(device__device_id__icontains=search) |
-                Q(assigned_to_staff__user__first_name__icontains=search) |
-                Q(assigned_to_staff__user__last_name__icontains=search) |
-                Q(assigned_to_department__name__icontains=search)
+                Q(device__device_id__icontains=search_query) |
+                Q(device__device_name__icontains=search_query) |
+                Q(assigned_to_staff__user__first_name__icontains=search_query) |
+                Q(assigned_to_staff__user__last_name__icontains=search_query) |
+                Q(assigned_to_staff__employee_id__icontains=search_query) |
+                Q(assigned_to_department__name__icontains=search_query) |
+                Q(purpose__icontains=search_query)
             )
         
-        status = form.cleaned_data.get('status')
-        if status == 'active':
-            assignments = assignments.filter(is_active=True)
-        elif status == 'inactive':
-            assignments = assignments.filter(is_active=False)
-        
         assignment_type = form.cleaned_data.get('assignment_type')
-        if assignment_type == 'temporary':
-            assignments = assignments.filter(is_temporary=True)
-        elif assignment_type == 'permanent':
-            assignments = assignments.filter(is_temporary=False)
+        if assignment_type:
+            assignments = assignments.filter(assignment_type=assignment_type)
+        
+        staff = form.cleaned_data.get('staff')
+        if staff:
+            assignments = assignments.filter(assigned_to_staff=staff)
         
         department = form.cleaned_data.get('department')
         if department:
-            assignments = assignments.filter(assigned_to_department=department)
+            assignments = assignments.filter(
+                Q(assigned_to_department=department) |
+                Q(assigned_to_staff__department=department)
+            )
+        
+        date_from = form.cleaned_data.get('date_from')
+        if date_from:
+            assignments = assignments.filter(start_date__gte=date_from)
+        
+        date_to = form.cleaned_data.get('date_to')
+        if date_to:
+            assignments = assignments.filter(start_date__lte=date_to)
     
     # Pagination
     paginator = Paginator(assignments, 25)
-    page_number = request.GET.get('page')
-    assignments_page = paginator.get_page(page_number)
+    page = request.GET.get('page')
+    assignments = paginator.get_page(page)
+    
+    # Statistics
+    total_assignments = Assignment.objects.count()
+    active_assignments = Assignment.objects.filter(is_active=True).count()
+    overdue_assignments = Assignment.objects.filter(
+        is_active=True,
+        expected_return_date__lt=timezone.now().date()
+    ).count()
     
     context = {
-        'assignments': assignments_page,
+        'assignments': assignments,
         'form': form,
-        'title': 'Assignment Management'
+        'total_assignments': total_assignments,
+        'active_assignments': active_assignments,
+        'overdue_assignments': overdue_assignments,
     }
     
     return render(request, 'inventory/assignments/assignment_list.html', context)
 
 @login_required
-@permission_required('inventory.add_assignment', raise_exception=True)
 def assignment_create(request):
-    """Your existing assignment_create function"""
+    """Create a new assignment"""
     if request.method == 'POST':
         form = AssignmentForm(request.POST)
         if form.is_valid():
@@ -1058,350 +1085,454 @@ def assignment_create(request):
                 with transaction.atomic():
                     assignment = form.save(commit=False)
                     assignment.created_by = request.user
-                    assignment.updated_by = request.user
-                    assignment.requested_by = request.user
+                    assignment.start_date = timezone.now().date()
                     assignment.save()
                     
-                    # Update device status - FIXED: This should work now with correct STATUS_CHOICES
+                    # Update device status
                     device = assignment.device
                     device.status = 'ASSIGNED'
-                    device.updated_by = request.user
                     device.save()
                     
-                    # Create audit logs
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action='CREATE',
-                        model_name='Assignment',
-                        object_id=assignment.assignment_id,
-                        object_repr=str(assignment),
-                        changes={'created': 'New assignment created'},
-                        ip_address=request.META.get('REMOTE_ADDR')
+                    # Create assignment history entry
+                    AssignmentHistory.objects.create(
+                        assignment=assignment,
+                        changed_by=request.user,
+                        change_type='CREATED',
+                        new_values={
+                            'device': device.device_id,
+                            'assigned_to_staff': str(assignment.assigned_to_staff) if assignment.assigned_to_staff else None,
+                            'assigned_to_department': str(assignment.assigned_to_department) if assignment.assigned_to_department else None,
+                            'assigned_to_location': str(assignment.assigned_to_location) if assignment.assigned_to_location else None,
+                            'assignment_type': assignment.assignment_type,
+                            'purpose': assignment.purpose,
+                        },
+                        reason='New assignment created',
+                        ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
                     )
                     
-                    messages.success(request, f'Assignment "{assignment.assignment_id}" created successfully.')
-                    return redirect('inventory:assignment_detail', assignment_id=assignment.assignment_id)
+                    # Determine assignment target for message
+                    target = (
+                        assignment.assigned_to_staff or 
+                        assignment.assigned_to_department or 
+                        assignment.assigned_to_location
+                    )
+                    
+                    messages.success(
+                        request, 
+                        f'Assignment created successfully! Device {device.device_id} assigned to {target}.'
+                    )
+                    return redirect('inventory:assignment_detail', pk=assignment.pk)
+                    
+            except ValidationError as e:
+                messages.error(request, f'Assignment creation failed: {e.message}')
             except Exception as e:
-                messages.error(request, f'Error creating assignment: {str(e)}')
+                messages.error(request, f'An error occurred: {str(e)}')
     else:
-        form = AssignmentForm()
-        
-        # Pre-fill device if provided in URL
+        # Pre-populate device if specified in URL
         device_id = request.GET.get('device')
+        initial_data = {}
         if device_id:
             try:
-                device = Device.objects.get(device_id=device_id, status='AVAILABLE')
-                form.fields['device'].initial = device
+                device = Device.objects.get(pk=device_id, status='AVAILABLE')
+                initial_data['device'] = device
             except Device.DoesNotExist:
-                messages.warning(request, f'Device {device_id} not found or not available.')
+                messages.warning(request, 'Selected device is not available for assignment.')
+        
+        form = AssignmentForm(initial=initial_data)
     
     context = {
         'form': form,
-        'title': 'Create Assignment'
+        'title': 'Create Assignment',
+        'available_devices': Device.objects.filter(status='AVAILABLE').count(),
+        'active_staff': Staff.objects.filter(is_active=True).count(),
     }
     
     return render(request, 'inventory/assignments/assignment_form.html', context)
 
 @login_required
-def assignment_detail(request, assignment_id):
-    """Display comprehensive assignment details"""
-    try:
-        assignment = get_object_or_404(Assignment.objects.select_related(
-            'device', 'assigned_to_staff', 'assigned_to_department',
-            'assigned_to_location', 'created_by', 'updated_by', 'requested_by'
-        ), assignment_id=assignment_id)
-        
-        # Calculate assignment duration
-        assignment_duration = None
-        if assignment.start_date:
-            start_date = validate_date_field(assignment.start_date)
-            if start_date:
-                end_date = assignment.actual_return_date or timezone.now().date()
-                assignment_duration = (end_date - start_date).days
-        
-        # Check if overdue
-        is_overdue = False
-        days_overdue = 0
-        if (assignment.is_temporary and assignment.is_active and 
-            assignment.expected_return_date):
-            expected_date = validate_date_field(assignment.expected_return_date)
-            if expected_date:
-                today = timezone.now().date()
-                if expected_date < today:
-                    is_overdue = True
-                    days_overdue = (today - expected_date).days
-        
-        # Get audit logs for this assignment
-        audit_logs = AuditLog.objects.filter(
-            model_name='Assignment',
-            object_id=assignment.assignment_id
-        ).order_by('-timestamp')[:10]
-        
-        context = {
-            'assignment': assignment,
-            'assignment_duration': assignment_duration,
-            'is_overdue': is_overdue,
-            'days_overdue': days_overdue,
-            'audit_logs': audit_logs,
-        }
-        
-        return render(request, 'inventory/assignments/assignment_detail.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading assignment: {str(e)}")
-        return redirect('inventory:assignment_list')
+def assignment_detail(request, pk):
+    """View assignment details"""
+    assignment = get_object_or_404(
+        Assignment.objects.select_related(
+            'device__device_type',
+            'device__current_location__building',
+            'device__current_location__block',
+            'assigned_to_staff__user',
+            'assigned_to_staff__department',
+            'assigned_to_department',
+            'assigned_to_location__building',
+            'assigned_to_location__block',
+            'created_by'
+        ).prefetch_related(
+            'assignment_history__changed_by'
+        ),
+        pk=pk
+    )
+    
+    # Get assignment history
+    history = assignment.assignment_history.select_related('changed_by').order_by('-timestamp')[:10]
+    
+    # Check if assignment is overdue
+    is_overdue = assignment.is_overdue
+    days_until_due = assignment.days_until_due
+    
+    context = {
+        'assignment': assignment,
+        'history': history,
+        'is_overdue': is_overdue,
+        'days_until_due': days_until_due,
+        'can_edit': request.user.has_perm('inventory.change_assignment'),
+        'can_return': assignment.is_active and request.user.has_perm('inventory.change_assignment'),
+    }
+    
+    return render(request, 'inventory/assignments/assignment_detail.html', context)
 
 @login_required
-@permission_required('inventory.change_assignment', raise_exception=True)
-def assignment_return(request, assignment_id):
-    """Complete assignment return function - safe version"""
+def assignment_edit(request, pk):
+    """Edit an existing assignment"""
+    assignment = get_object_or_404(Assignment, pk=pk)
+    
+    # Check permissions
+    if not request.user.has_perm('inventory.change_assignment'):
+        messages.error(request, 'You do not have permission to edit assignments.')
+        return redirect('inventory:assignment_detail', pk=assignment.pk)
+    
+    if request.method == 'POST':
+        # Store old values for history
+        old_values = {
+            'assigned_to_staff': str(assignment.assigned_to_staff) if assignment.assigned_to_staff else None,
+            'assigned_to_department': str(assignment.assigned_to_department) if assignment.assigned_to_department else None,
+            'assigned_to_location': str(assignment.assigned_to_location) if assignment.assigned_to_location else None,
+            'assignment_type': assignment.assignment_type,
+            'purpose': assignment.purpose,
+            'expected_return_date': str(assignment.expected_return_date) if assignment.expected_return_date else None,
+        }
+        
+        form = AssignmentForm(request.POST, instance=assignment)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    updated_assignment = form.save()
+                    
+                    # Create history entry
+                    new_values = {
+                        'assigned_to_staff': str(updated_assignment.assigned_to_staff) if updated_assignment.assigned_to_staff else None,
+                        'assigned_to_department': str(updated_assignment.assigned_to_department) if updated_assignment.assigned_to_department else None,
+                        'assigned_to_location': str(updated_assignment.assigned_to_location) if updated_assignment.assigned_to_location else None,
+                        'assignment_type': updated_assignment.assignment_type,
+                        'purpose': updated_assignment.purpose,
+                        'expected_return_date': str(updated_assignment.expected_return_date) if updated_assignment.expected_return_date else None,
+                    }
+                    
+                    AssignmentHistory.objects.create(
+                        assignment=updated_assignment,
+                        changed_by=request.user,
+                        change_type='MODIFIED',
+                        old_values=old_values,
+                        new_values=new_values,
+                        reason='Assignment updated',
+                        ip_address=get_client_ip(request),
+                        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
+                    )
+                    
+                    messages.success(request, 'Assignment updated successfully!')
+                    return redirect('inventory:assignment_detail', pk=assignment.pk)
+                    
+            except ValidationError as e:
+                messages.error(request, f'Assignment update failed: {e.message}')
+            except Exception as e:
+                messages.error(request, f'An error occurred: {str(e)}')
+    else:
+        form = AssignmentForm(instance=assignment)
+    
+    context = {
+        'form': form,
+        'assignment': assignment,
+        'title': 'Edit Assignment',
+    }
+    
+    return render(request, 'inventory/assignments/assignment_form.html', context)
+@login_required
+@permission_required('inventory.delete_assignment', raise_exception=True)
+def assignment_delete(request, pk):
+    """Delete an assignment with confirmation"""
     try:
-        # Safe import and get assignment
-        try:
-            from .models import Assignment
-            assignment = get_object_or_404(
-                Assignment.objects.select_related(
-                    'device', 'assigned_to_staff__user', 'assigned_to_department'
-                ),
-                assignment_id=assignment_id,
-                is_active=True
-            )
-        except ImportError:
-            messages.error(request, "Assignment model not found. Please add missing models.")
-            return redirect('inventory:device_list')
+        assignment = get_object_or_404(
+            Assignment.objects.select_related(
+                'device__device_type',
+                'assigned_to_staff__user',
+                'assigned_to_staff__department',
+                'assigned_to_department',
+                'assigned_to_location__building',
+                'assigned_to_location__block',
+                'created_by'
+            ),
+            pk=pk
+        )
+        
+        # Check if user has permission to delete this specific assignment
+        # Allow deletion if user created it or has admin privileges
+        if not (request.user == assignment.created_by or 
+                request.user.has_perm('inventory.delete_assignment') or
+                request.user.is_superuser):
+            messages.error(request, 'You do not have permission to delete this assignment.')
+            return redirect('inventory:assignment_detail', pk=pk)
+        
+        # Store assignment details for logging before deletion
+        assignment_details = {
+            'assignment_id': str(assignment.pk),
+            'device_id': assignment.device.device_id,
+            'device_name': assignment.device.device_name,
+            'assigned_to_staff': str(assignment.assigned_to_staff) if assignment.assigned_to_staff else None,
+            'assigned_to_department': str(assignment.assigned_to_department) if assignment.assigned_to_department else None,
+            'assigned_to_location': str(assignment.assigned_to_location) if assignment.assigned_to_location else None,
+            'assignment_type': assignment.assignment_type,
+            'purpose': assignment.purpose,
+            'created_at': assignment.created_at.isoformat() if hasattr(assignment, 'created_at') else None,
+            'deleted_by': request.user.username,
+            'deleted_at': timezone.now().isoformat()
+        }
         
         if request.method == 'POST':
-            form = ReturnForm(request.POST)
-            if form.is_valid():
+            # Get deletion confirmation and reason
+            confirm_delete = request.POST.get('confirm_delete')
+            deletion_reason = request.POST.get('deletion_reason', '').strip()
+            
+            if confirm_delete == 'yes':
                 try:
                     with transaction.atomic():
-                        # Get form data
-                        return_date = form.cleaned_data['return_date']
-                        return_condition = form.cleaned_data.get('return_condition')
-                        return_notes = form.cleaned_data.get('return_notes', '')
-                        device_condition = form.cleaned_data.get('device_condition')
-                        
-                        # Update assignment
-                        assignment.is_active = False
-                        assignment.actual_return_date = return_date
-                        assignment.return_condition = return_condition
-                        assignment.return_notes = return_notes
-                        assignment.updated_by = request.user
-                        assignment.save()
-                        
-                        # Update device status and condition
+                        # Store device reference before deletion
                         device = assignment.device
-                        device.status = 'AVAILABLE'
-                        if device_condition:
-                            device.condition = device_condition
-                        device.current_location = None  # Or set to default storage location
-                        device.updated_by = request.user
-                        device.save()
                         
-                        # Create assignment history record - safe
+                        # Create assignment history entry for deletion
                         try:
-                            from .models import AssignmentHistory
                             AssignmentHistory.objects.create(
                                 assignment=assignment,
-                                device=device,
-                                action='RETURNED',
                                 changed_by=request.user,
-                                reason=f'Device returned on {return_date}',
-                                notes=return_notes
+                                change_type='CANCELLED',
+                                old_values=assignment_details,
+                                new_values={'status': 'DELETED'},
+                                reason=f'Assignment deleted: {deletion_reason}' if deletion_reason else 'Assignment deleted',
+                                notes=f'Assignment permanently deleted by {request.user.get_full_name() or request.user.username}',
+                                ip_address=get_client_ip(request),
+                                user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
                             )
-                        except ImportError:
-                            pass  # Skip if model doesn't exist
+                        except Exception as history_error:
+                            # Log history creation error but don't fail the deletion
+                            print(f"Warning: Could not create assignment history: {history_error}")
                         
-                        # Create audit log - safe
+                        # Update device status back to available if this was an active assignment
+                        if assignment.is_active:
+                            device.status = 'AVAILABLE'
+                            device.save()
+                        
+                        # Create audit log entry
                         try:
-                            from .models import AuditLog
                             AuditLog.objects.create(
                                 user=request.user,
-                                action='RETURN',
+                                action='DELETE',
                                 model_name='Assignment',
-                                object_id=assignment.assignment_id,
-                                object_repr=str(assignment),
-                                changes={
-                                    'returned_date': str(return_date),
-                                    'condition': return_condition,
-                                    'notes': return_notes,
-                                    'device_status_changed_to': 'AVAILABLE'
-                                },
-                                ip_address=request.META.get('REMOTE_ADDR')
+                                object_id=str(assignment.pk),
+                                object_repr=f'Assignment {assignment.pk} - {assignment.device.device_name}',
+                                changes=assignment_details,
+                                ip_address=get_client_ip(request)
                             )
-                        except ImportError:
-                            pass  # Skip if model doesn't exist
+                        except Exception as audit_error:
+                            # Log audit creation error but don't fail the deletion
+                            print(f"Warning: Could not create audit log: {audit_error}")
+                        
+                        # Delete the assignment
+                        assignment.delete()
+                        
+                        # Success message with details
+                        target = (
+                            assignment_details['assigned_to_staff'] or 
+                            assignment_details['assigned_to_department'] or 
+                            assignment_details['assigned_to_location'] or
+                            'Unknown'
+                        )
                         
                         messages.success(
                             request, 
-                            f'Device "{device.device_name}" returned successfully from assignment {assignment.assignment_id}'
+                            f'Assignment deleted successfully! Device {device.device_id} '
+                            f'(previously assigned to {target}) is now available for reassignment.'
                         )
-                        return redirect('inventory:device_detail', device_id=device.device_id)
+                        
+                        # Redirect to appropriate view
+                        redirect_to = request.GET.get('next')
+                        if redirect_to in ['assignment_list', 'device_detail', 'staff_detail']:
+                            if redirect_to == 'device_detail':
+                                return redirect('inventory:device_detail', device_id=device.device_id)
+                            elif redirect_to == 'staff_detail' and assignment_details['assigned_to_staff']:
+                                # Extract staff ID if available
+                                try:
+                                    staff = Staff.objects.get(user__username=assignment_details['assigned_to_staff'])
+                                    return redirect('inventory:staff_detail', staff_id=staff.employee_id)
+                                except (Staff.DoesNotExist, KeyError):
+                                    pass
+                            return redirect('inventory:assignment_list')
+                        else:
+                            return redirect('inventory:assignment_list')
                         
                 except Exception as e:
-                    messages.error(request, f'Error returning device: {str(e)}')
+                    messages.error(request, f'Error deleting assignment: {str(e)}')
+                    return redirect('inventory:assignment_detail', pk=pk)
             else:
-                messages.error(request, 'Please correct the form errors.')
-        else:
-            # Initialize form with current device condition
-            initial_data = {
-                'return_date': timezone.now().date(),
-                'device_condition': assignment.device.condition,
-                'return_condition': assignment.device.condition
-            }
-            form = ReturnForm(initial=initial_data)
+                messages.info(request, 'Assignment deletion cancelled.')
+                return redirect('inventory:assignment_detail', pk=pk)
         
-        # Calculate assignment duration
-        assignment_duration = None
-        if assignment.start_date:
-            assignment_duration = (timezone.now().date() - assignment.start_date).days
-        
-        # Check if assignment is overdue
-        is_overdue = False
-        days_overdue = 0
-        if assignment.is_temporary and assignment.expected_return_date:
-            if assignment.expected_return_date < timezone.now().date():
-                is_overdue = True
-                days_overdue = (timezone.now().date() - assignment.expected_return_date).days
-        
+        # GET request - show confirmation page
         context = {
-            'form': form,
             'assignment': assignment,
-            'assignment_duration': assignment_duration,
-            'is_overdue': is_overdue,
-            'days_overdue': days_overdue,
-            'title': f'Return Device from Assignment {assignment.assignment_id}',
+            'assignment_details': assignment_details,
+            'title': f'Delete Assignment - {assignment.device.device_name}',
+            'can_delete': True,
+            'warning_message': 'This action cannot be undone. The assignment will be permanently deleted.',
+            'device_will_be_available': assignment.is_active,
         }
         
-        return render(request, 'inventory/assignments/assignment_return.html', context)
+        return render(request, 'inventory/assignments/assignment_delete.html', context)
         
-    except Exception as e:
-        messages.error(request, f"Error loading assignment: {str(e)}")
+    except Assignment.DoesNotExist:
+        messages.error(request, 'Assignment not found.')
         return redirect('inventory:assignment_list')
-    
-@login_required
-@permission_required('inventory.change_assignment', raise_exception=True)
-def assignment_transfer(request, assignment_id):
-    """Transfer assignment to another staff/department - CORRECTED"""
-    try:
-        assignment = get_object_or_404(Assignment, assignment_id=assignment_id, is_active=True)
-        
-        if request.method == 'POST':
-            form = DeviceTransferForm(request.POST)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        # Create new assignment using the CORRECTED field names
-                        new_assignment = Assignment.objects.create(
-                            device=assignment.device,
-                            assigned_to_staff=form.cleaned_data.get('new_assigned_to_staff'),
-                            assigned_to_department=form.cleaned_data.get('new_assigned_to_department'),
-                            assigned_to_location=form.cleaned_data.get('new_assigned_to_location'),
-                            is_temporary=assignment.is_temporary,
-                            expected_return_date=assignment.expected_return_date,
-                            purpose=form.cleaned_data.get('transfer_reason', ''),
-                            conditions=form.cleaned_data.get('conditions', ''),
-                            created_by=request.user,
-                            updated_by=request.user,
-                            requested_by=request.user
-                        )
-                        
-                        # Close old assignment
-                        assignment.is_active = False
-                        assignment.actual_return_date = timezone.now().date()
-                        assignment.updated_by = request.user
-                        assignment.save()
-                        
-                        # Create audit log
-                        AuditLog.objects.create(
-                            user=request.user,
-                            action='TRANSFER',
-                            model_name='Assignment',
-                            object_id=assignment.assignment_id,
-                            object_repr=str(assignment),
-                            changes={
-                                'transferred_to': str(new_assignment.assignment_id),
-                                'reason': form.cleaned_data.get('transfer_reason', '')
-                            },
-                            ip_address=request.META.get('REMOTE_ADDR')
-                        )
-                        
-                        messages.success(request, f'Assignment transferred successfully. New assignment ID: {new_assignment.assignment_id}')
-                        return redirect('inventory:assignment_detail', assignment_id=new_assignment.assignment_id)
-                        
-                except Exception as e:
-                    messages.error(request, f'Error transferring assignment: {str(e)}')
-        else:
-            form = DeviceTransferForm()
-        
-        context = {
-            'form': form,
-            'assignment': assignment,
-            'title': f'Transfer Assignment {assignment.assignment_id}',
-        }
-        return render(request, 'inventory/assignments/assignment_transfer.html', context)
         
     except Exception as e:
-        messages.error(request, f"Error loading assignment: {str(e)}")
+        messages.error(request, f'Error accessing assignment: {str(e)}')
         return redirect('inventory:assignment_list')
 
 @login_required
-@permission_required('inventory.change_assignment', raise_exception=True)
-def assignment_edit(request, assignment_id):
-    """Edit assignment details"""
-    try:
-        assignment = get_object_or_404(Assignment, assignment_id=assignment_id)
-        original_data = {
-            'assigned_to_staff': assignment.assigned_to_staff,
-            'assigned_to_department': assignment.assigned_to_department,
-            'expected_return_date': assignment.expected_return_date,
-        }
-        
-        if request.method == 'POST':
-            form = AssignmentForm(request.POST, instance=assignment)
-            if form.is_valid():
-                try:
-                    with transaction.atomic():
-                        assignment = form.save(commit=False)
-                        assignment.updated_by = request.user
-                        assignment.save()
-                        
-                        # Track changes
-                        changes = {}
-                        for field, old_value in original_data.items():
-                            new_value = getattr(assignment, field)
-                            if old_value != new_value:
-                                changes[field] = {'old': str(old_value), 'new': str(new_value)}
-                        
-                        if changes:
-                            AuditLog.objects.create(
-                                user=request.user,
-                                action='UPDATE',
-                                model_name='Assignment',
-                                object_id=assignment.assignment_id,
-                                object_repr=str(assignment),
-                                changes=changes,
-                                ip_address=request.META.get('REMOTE_ADDR')
-                            )
-                        
-                        messages.success(request, f'Assignment "{assignment.assignment_id}" updated successfully.')
-                        return redirect('inventory:assignment_detail', assignment_id=assignment.assignment_id)
-                except Exception as e:
-                    messages.error(request, f'Error updating assignment: {str(e)}')
-        else:
-            form = AssignmentForm(instance=assignment)
-        
-        context = {
-            'form': form,
-            'assignment': assignment,
-            'title': f'Edit Assignment {assignment.assignment_id}',
-            'action': 'Update',
-        }
-        return render(request, 'inventory/assignments/assignment_form.html', context)
-        
-    except Exception as e:
-        messages.error(request, f"Error loading assignment: {str(e)}")
-        return redirect('inventory:assignment_list')
+@require_http_methods(["POST"])
+def assignment_return(request, pk):
+    """Return a device from assignment"""
+    assignment = get_object_or_404(Assignment, pk=pk, is_active=True)
+    
+    # Check permissions
+    if not request.user.has_perm('inventory.change_assignment'):
+        messages.error(request, 'You do not have permission to return assignments.')
+        return redirect('inventory:assignment_detail', pk=assignment.pk)
+    
+    form = ReturnForm(request.POST)
+    if form.is_valid():
+        try:
+            with transaction.atomic():
+                # Update assignment
+                assignment.actual_return_date = form.cleaned_data['return_date']
+                assignment.is_active = False
+                assignment.save()
+                
+                # Update device
+                device = assignment.device
+                device.status = 'AVAILABLE'
+                
+                # Update device condition if specified
+                device_condition = form.cleaned_data.get('device_condition')
+                if device_condition:
+                    device.condition = device_condition
+                
+                device.save()
+                
+                # Create history entry
+                AssignmentHistory.objects.create(
+                    assignment=assignment,
+                    changed_by=request.user,
+                    change_type='RETURNED',
+                    new_values={
+                        'return_date': str(form.cleaned_data['return_date']),
+                        'return_condition': form.cleaned_data.get('return_condition', ''),
+                        'return_notes': form.cleaned_data.get('return_notes', ''),
+                        'device_condition': device_condition or device.condition,
+                    },
+                    reason='Device returned',
+                    notes=form.cleaned_data.get('return_notes', ''),
+                    ip_address=get_client_ip(request),
+                    user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
+                )
+                
+                messages.success(
+                    request, 
+                    f'Device {device.device_id} returned successfully!'
+                )
+                return redirect('inventory:assignment_detail', pk=assignment.pk)
+                
+        except Exception as e:
+            messages.error(request, f'Return failed: {str(e)}')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f'{field}: {error}')
+    
+    return redirect('inventory:assignment_detail', pk=assignment.pk)
+
+@login_required
+@require_http_methods(["POST"])
+def assignment_transfer(request, pk):
+    """Transfer an assignment to a different target"""
+    assignment = get_object_or_404(Assignment, pk=pk, is_active=True)
+    
+    # Check permissions
+    if not request.user.has_perm('inventory.change_assignment'):
+        messages.error(request, 'You do not have permission to transfer assignments.')
+        return redirect('inventory:assignment_detail', pk=assignment.pk)
+    
+    form = TransferForm(request.POST)
+    if form.is_valid():
+        try:
+            with transaction.atomic():
+                # Store old assignment details
+                old_values = {
+                    'assigned_to_staff': str(assignment.assigned_to_staff) if assignment.assigned_to_staff else None,
+                    'assigned_to_department': str(assignment.assigned_to_department) if assignment.assigned_to_department else None,
+                    'assigned_to_location': str(assignment.assigned_to_location) if assignment.assigned_to_location else None,
+                }
+                
+                # Update assignment
+                assignment.assigned_to_staff = form.cleaned_data.get('new_assigned_to_staff')
+                assignment.assigned_to_department = form.cleaned_data.get('new_assigned_to_department')
+                assignment.assigned_to_location = form.cleaned_data.get('new_assigned_to_location')
+                assignment.save()
+                
+                # Create history entry
+                new_values = {
+                    'assigned_to_staff': str(assignment.assigned_to_staff) if assignment.assigned_to_staff else None,
+                    'assigned_to_department': str(assignment.assigned_to_department) if assignment.assigned_to_department else None,
+                    'assigned_to_location': str(assignment.assigned_to_location) if assignment.assigned_to_location else None,
+                }
+                
+                AssignmentHistory.objects.create(
+                    assignment=assignment,
+                    changed_by=request.user,
+                    change_type='TRANSFERRED',
+                    old_values=old_values,
+                    new_values=new_values,
+                    reason=form.cleaned_data.get('transfer_reason', 'Assignment transferred'),
+                    notes=form.cleaned_data.get('conditions', ''),
+                    ip_address=get_client_ip(request),
+                    user_agent=request.META.get('HTTP_USER_AGENT', '')[:500]
+                )
+                
+                # Determine new assignment target for message
+                new_target = (
+                    assignment.assigned_to_staff or 
+                    assignment.assigned_to_department or 
+                    assignment.assigned_to_location
+                )
+                
+                messages.success(
+                    request, 
+                    f'Assignment transferred successfully to {new_target}!'
+                )
+                return redirect('inventory:assignment_detail', pk=assignment.pk)
+                
+        except Exception as e:
+            messages.error(request, f'Transfer failed: {str(e)}')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f'{field}: {error}')
+    
+    return redirect('inventory:assignment_detail', pk=assignment.pk)
 
 @login_required
 @permission_required('inventory.change_assignment', raise_exception=True)
@@ -3942,6 +4073,196 @@ def maintenance_schedule(request):
     except Exception as e:
         messages.error(request, f"Error loading maintenance schedule: {str(e)}")
         return render(request, 'inventory/maintenance/maintenance_schedule.html', {})
+
+@login_required
+@permission_required('inventory.delete_maintenanceschedule', raise_exception=True)
+def maintenance_delete(request, maintenance_id):
+    """Delete a maintenance schedule with confirmation"""
+    try:
+        maintenance = get_object_or_404(
+            MaintenanceSchedule.objects.select_related(
+                'device__device_type',
+                'vendor',
+                'assigned_technician__user',
+                'assigned_technician__department'
+            ),
+            id=maintenance_id
+        )
+        
+        # Check if user has permission to delete this specific maintenance
+        # Allow deletion if user has admin privileges or created the schedule
+        if not (request.user.has_perm('inventory.delete_maintenanceschedule') or
+                request.user.is_superuser or
+                (hasattr(maintenance, 'created_by') and request.user == maintenance.created_by)):
+            messages.error(request, 'You do not have permission to delete this maintenance schedule.')
+            return redirect('inventory:maintenance_detail', maintenance_id=maintenance_id)
+        
+        # Check if maintenance is in progress - prevent deletion
+        if maintenance.status == 'IN_PROGRESS':
+            messages.error(request, 
+                'Cannot delete maintenance schedule that is currently in progress. '
+                'Please complete or cancel the maintenance first.')
+            return redirect('inventory:maintenance_detail', maintenance_id=maintenance_id)
+        
+        # Store maintenance details for logging before deletion
+        maintenance_details = {
+            'maintenance_id': maintenance_id,
+            'device_id': maintenance.device.device_id,
+            'device_name': maintenance.device.device_name,
+            'maintenance_type': maintenance.get_maintenance_type_display(),
+            'next_due_date': maintenance.next_due_date.isoformat(),
+            'status': maintenance.get_status_display(),
+            'vendor': str(maintenance.vendor) if maintenance.vendor else None,
+            'assigned_technician': str(maintenance.assigned_technician) if maintenance.assigned_technician else None,
+            'cost_estimate': float(maintenance.cost_estimate) if maintenance.cost_estimate else None,
+            'description': maintenance.description,
+            'frequency': maintenance.get_frequency_display(),
+            'is_active': maintenance.is_active,
+            'created_at': maintenance.created_at.isoformat() if hasattr(maintenance, 'created_at') else None,
+            'deleted_by': request.user.username,
+            'deleted_at': timezone.now().isoformat()
+        }
+        
+        if request.method == 'POST':
+            # Get deletion confirmation and reason
+            confirm_delete = request.POST.get('confirm_delete')
+            deletion_reason = request.POST.get('deletion_reason', '').strip()
+            
+            if confirm_delete == 'yes':
+                try:
+                    with transaction.atomic():
+                        # Store device and vendor references before deletion
+                        device = maintenance.device
+                        vendor_name = str(maintenance.vendor) if maintenance.vendor else 'No vendor'
+                        
+                        # Check if there are any maintenance records linked to this schedule
+                        linked_records_count = 0
+                        try:
+                            # Check for MaintenanceRecord if it exists
+                            if hasattr(maintenance, 'records'):
+                                linked_records = maintenance.records.all()
+                                linked_records_count = linked_records.count()
+                                
+                                if linked_records_count > 0:
+                                    # Option 1: Prevent deletion if records exist
+                                    messages.error(request, 
+                                        f'Cannot delete maintenance schedule. It has {linked_records_count} '
+                                        'linked maintenance records. Please remove the records first.')
+                                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance_id)
+                                    
+                                    # Option 2: Delete linked records (uncomment if preferred)
+                                    # linked_records.delete()
+                        except Exception:
+                            # Handle case where MaintenanceRecord model doesn't exist or no relation
+                            pass
+                        
+                        # Create audit log entry before deletion
+                        try:
+                            AuditLog.objects.create(
+                                user=request.user,
+                                action='DELETE',
+                                model_name='MaintenanceSchedule',
+                                object_id=str(maintenance_id),
+                                object_repr=f'Maintenance Schedule {maintenance_id} - {maintenance.device.device_name}',
+                                changes=maintenance_details,
+                                ip_address=get_client_ip(request)
+                            )
+                        except Exception as audit_error:
+                            # Log audit creation error but don't fail the deletion
+                            print(f"Warning: Could not create audit log: {audit_error}")
+                        
+                        # Update device maintenance status if needed
+                        if device.status == 'MAINTENANCE' and maintenance.status in ['SCHEDULED', 'IN_PROGRESS']:
+                            # Check if this is the only active maintenance for this device
+                            other_active_maintenance = MaintenanceSchedule.objects.filter(
+                                device=device,
+                                status__in=['SCHEDULED', 'IN_PROGRESS'],
+                                is_active=True
+                            ).exclude(id=maintenance_id)
+                            
+                            if not other_active_maintenance.exists():
+                                # No other active maintenance, set device back to available
+                                device.status = 'AVAILABLE'
+                                device.save()
+                        
+                        # Delete the maintenance schedule
+                        maintenance.delete()
+                        
+                        # Success message with details
+                        messages.success(
+                            request, 
+                            f'Maintenance schedule deleted successfully! '
+                            f'{maintenance_details["maintenance_type"]} for device {device.device_id} '
+                            f'(scheduled with {vendor_name}) has been removed.'
+                        )
+                        
+                        # Redirect to appropriate view
+                        redirect_to = request.GET.get('next')
+                        if redirect_to in ['maintenance_list', 'device_detail', 'vendor_detail']:
+                            if redirect_to == 'device_detail':
+                                return redirect('inventory:device_detail', device_id=device.device_id)
+                            elif redirect_to == 'vendor_detail' and maintenance_details['vendor']:
+                                try:
+                                    vendor = Vendor.objects.get(name=maintenance_details['vendor'])
+                                    return redirect('inventory:vendor_detail', vendor_id=vendor.id)
+                                except Vendor.DoesNotExist:
+                                    pass
+                            return redirect('inventory:maintenance_list')
+                        else:
+                            return redirect('inventory:maintenance_list')
+                        
+                except Exception as e:
+                    messages.error(request, f'Error deleting maintenance schedule: {str(e)}')
+                    return redirect('inventory:maintenance_detail', maintenance_id=maintenance_id)
+            else:
+                messages.info(request, 'Maintenance schedule deletion cancelled.')
+                return redirect('inventory:maintenance_detail', maintenance_id=maintenance_id)
+        
+        # GET request - show confirmation page
+        # Check for dependent records
+        warnings = []
+        linked_records_count = 0
+        
+        try:
+            if hasattr(maintenance, 'records'):
+                linked_records_count = maintenance.records.count()
+                if linked_records_count > 0:
+                    warnings.append(f'This maintenance schedule has {linked_records_count} linked maintenance records.')
+        except:
+            pass
+        
+        # Check if device will be affected
+        device_status_warning = None
+        if maintenance.device.status == 'MAINTENANCE' and maintenance.status in ['SCHEDULED', 'IN_PROGRESS']:
+            other_maintenance = MaintenanceSchedule.objects.filter(
+                device=maintenance.device,
+                status__in=['SCHEDULED', 'IN_PROGRESS'],
+                is_active=True
+            ).exclude(id=maintenance_id).count()
+            
+            if other_maintenance == 0:
+                device_status_warning = f'Device {maintenance.device.device_id} will be set back to "Available" status.'
+        
+        context = {
+            'maintenance': maintenance,
+            'maintenance_details': maintenance_details,
+            'title': f'Delete Maintenance Schedule - {maintenance.device.device_name}',
+            'can_delete': maintenance.status != 'IN_PROGRESS',
+            'warnings': warnings,
+            'device_status_warning': device_status_warning,
+            'linked_records_count': linked_records_count,
+            'warning_message': 'This action cannot be undone. The maintenance schedule will be permanently deleted.',
+        }
+        
+        return render(request, 'inventory/maintenance/maintenance_delete.html', context)
+        
+    except MaintenanceSchedule.DoesNotExist:
+        messages.error(request, 'Maintenance schedule not found.')
+        return redirect('inventory:maintenance_list')
+        
+    except Exception as e:
+        messages.error(request, f'Error accessing maintenance schedule: {str(e)}')
+        return redirect('inventory:maintenance_list')
 
 # ================================
 # DEVICE TYPE MANAGEMENT VIEWS

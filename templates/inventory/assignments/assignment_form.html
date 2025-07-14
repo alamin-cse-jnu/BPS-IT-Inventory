@@ -1,721 +1,612 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load widget_tweaks %}
 
-{% block title %}{{ title }} - BPS Inventory{% endblock %}
+{% block title %}
+    {% if form.instance.pk %}Edit Assignment{% else %}Create Assignment{% endif %} - BPS IT Inventory
+{% endblock %}
 
 {% block extra_css %}
+<link href="{% static 'css/assignment-form.css' %}" rel="stylesheet">
 <style>
-.location-hierarchy-selector {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
+.assignment-wizard {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
 }
 
-.cascade-parent, .cascade-child {
+.assignment-tabs {
+    border: none;
+    background: transparent;
+}
+
+.assignment-tabs .nav-link {
+    border: 2px solid rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.8);
+    border-radius: 10px;
+    margin: 0 5px;
+    padding: 12px 20px;
     transition: all 0.3s ease;
 }
 
-.cascade-child:disabled {
-    background-color: #f8f9fa;
-    opacity: 0.7;
+.assignment-tabs .nav-link.active,
+.assignment-tabs .nav-link:hover {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border-color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
 
-.location-breadcrumb {
-    animation: fadeIn 0.3s ease-in;
+.assignment-panel {
+    background: white;
+    border-radius: 15px;
+    padding: 2rem;
+    margin-top: 1rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+.assignee-preview {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border-left: 4px solid #007bff;
 }
 
-.location-badges .badge {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
+.location-hierarchy-selector {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
 }
 
-.assignee-preview.active {
-    border-left: 4px solid #28a745;
-    background-color: #f8fff9;
+.hierarchy-step {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid #28a745;
 }
 
-.form-group label i {
-    width: 16px;
-    text-align: center;
-    margin-right: 0.5rem;
+.form-section {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.device-info-card {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 30px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+    border-radius: 8px;
+    padding: 12px 30px;
+    font-weight: 600;
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-12">
-            <h2 class="mb-4">{{ title }}</h2>
-        </div>
-    </div>
-    
+<div class="container-fluid">
+    <!-- Page Header -->
     <div class="row mb-4">
-        <div class="col-auto">
-            <a href="{% url 'inventory:assignment_list' %}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left"></i> Back to List
-            </a>
-            {% if form.instance.pk %}
-                <a href="{% url 'inventory:assignment_detail' form.instance.pk %}" class="btn btn-outline-info">
-                    <i class="fas fa-eye"></i> View Details
-                </a>
-            {% endif %}
+        <div class="col-12">
+            <div class="assignment-wizard text-center">
+                <h1 class="display-4 mb-3">
+                    <i class="fas fa-user-plus"></i>
+                    {% if form.instance.pk %}
+                        Edit Assignment
+                    {% else %}
+                        Create New Assignment
+                    {% endif %}
+                </h1>
+                <p class="lead mb-0">Assign devices to staff, departments, or locations</p>
+            </div>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-lg-8">
-            <form method="post" id="assignmentForm">
-                {% csrf_token %}
-                
-                <!-- Device Selection -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5><i class="fas fa-laptop"></i> Device Selection</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label for="{{ form.device.id_for_label }}" class="font-weight-bold">
-                                Device *
-                            </label>
-                            {{ form.device }}
-                            {% if form.device.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.device.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Select the device to be assigned. Only available devices are shown.
-                            </small>
-                        </div>
-                        <div class="assignee-preview" id="devicePreview">
-                            <p class="text-muted">Select a device to see details</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Assignment Details -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5><i class="fas fa-info-circle"></i> Assignment Details</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label for="{{ form.assignment_type.id_for_label }}" class="font-weight-bold">
-                                Assignment Type *
-                            </label>
-                            {{ form.assignment_type }}
-                            {% if form.assignment_type.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.assignment_type.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Select the type of assignment (e.g., Permanent, Temporary, Project, Pool).
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="{{ form.start_date.id_for_label }}" class="font-weight-bold">
-                                Start Date *
-                            </label>
-                            {{ form.start_date }}
-                            {% if form.start_date.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.start_date.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="form-group">
-                            <label for="{{ form.expected_return_date.id_for_label }}" class="font-weight-bold">
-                                Expected Return Date
-                            </label>
-                            {{ form.expected_return_date }}
-                            {% if form.expected_return_date.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.expected_return_date.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Required for temporary assignments, optional for permanent ones.
-                            </small>
-                            <small class="form-text text-info">
-                                Return date should be after start date.
-                            </small>
-                        </div>
-
-                        <div class="form-group">
-                            <div class="custom-control custom-checkbox">
-                                {{ form.is_temporary }}
-                                <label class="custom-control-label" for="{{ form.is_temporary.id_for_label }}">
-                                    This is a temporary assignment
+    <form method="post" id="assignmentForm" novalidate>
+        {% csrf_token %}
+        
+        <!-- Device Selection Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="form-section">
+                    <h3 class="text-primary mb-3">
+                        <i class="fas fa-desktop"></i> Device Information
+                    </h3>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.device.id_for_label }}" class="font-weight-bold">
+                                    <i class="fas fa-laptop"></i> Select Device
                                 </label>
+                                {{ form.device|add_class:"form-control" }}
+                                {% if form.device.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.device.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Choose the device to assign</small>
                             </div>
-                            <small class="form-text text-muted">
-                                Check if this assignment has a specific return date.
-                            </small>
                         </div>
-
-                        <div class="form-group">
-                            <label for="{{ form.purpose.id_for_label }}" class="font-weight-bold">
-                                Assignment Purpose
-                            </label>
-                            {{ form.purpose }}
-                            {% if form.purpose.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.purpose.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Brief description of why this device is being assigned.
-                            </small>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.assignment_type.id_for_label }}" class="font-weight-bold">
+                                    <i class="fas fa-tag"></i> Assignment Type
+                                </label>
+                                {{ form.assignment_type|add_class:"form-control" }}
+                                {% if form.assignment_type.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assignment_type.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Type of assignment</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Device Info Preview (populated via JavaScript) -->
+                    <div id="deviceInfoPreview" class="device-info-card" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5 class="text-primary mb-2" id="deviceName">Device Name</h5>
+                                <p class="mb-1"><strong>Status:</strong> <span id="deviceStatus"></span></p>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                <span class="badge badge-success badge-lg" id="deviceCondition">Condition</span>
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Assignment Target -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5><i class="fas fa-user-tag"></i> Assignment Target</h5>
-                        <p class="mb-0">Choose who or where this device will be assigned. Select only one option.</p>
-                    </div>
-                    <div class="card-body">
-                        <ul class="nav nav-tabs" role="tablist">
-                            <li class="nav-item">
-                                <a class="nav-link active" id="staff-tab" data-toggle="tab" href="#staff-panel" role="tab" aria-controls="staff-panel" aria-selected="true">
-                                    Staff Member
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" id="department-tab" data-toggle="tab" href="#department-panel" role="tab" aria-controls="department-panel" aria-selected="false">
-                                    Department
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" id="location-tab" data-toggle="tab" href="#location-panel" role="tab" aria-controls="location-panel" aria-selected="false">
-                                    Location
-                                </a>
-                            </li>
-                        </ul>
+        <!-- Assignment Target Selection -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="form-section">
+                    <h3 class="text-primary mb-3">
+                        <i class="fas fa-users"></i> Assignment Target
+                    </h3>
+                    
+                    <!-- Assignment Type Tabs -->
+                    <ul class="nav nav-tabs assignment-tabs" id="assignmentTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link active" id="staff-tab" data-toggle="tab" href="#staff-panel" 
+                               role="tab" aria-controls="staff-panel" aria-selected="true">
+                                <i class="fas fa-user"></i> Staff Member
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link" id="department-tab" data-toggle="tab" href="#department-panel" 
+                               role="tab" aria-controls="department-panel" aria-selected="false">
+                                <i class="fas fa-users"></i> Department
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link" id="location-tab" data-toggle="tab" href="#location-panel" 
+                               role="tab" aria-controls="location-panel" aria-selected="false">
+                                <i class="fas fa-map-marker-alt"></i> Location
+                            </a>
+                        </li>
+                    </ul>
 
-                        <div class="tab-content mt-3">
-                            <!-- Staff Member Assignment -->
-                            <div class="tab-pane fade show active" id="staff-panel" role="tabpanel" aria-labelledby="staff-tab">
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="assignmentTabContent">
+                        <!-- Staff Assignment Panel -->
+                        <div class="tab-pane fade show active assignment-panel" id="staff-panel" 
+                             role="tabpanel" aria-labelledby="staff-tab">
+                            <div class="form-group">
+                                <label for="{{ form.assigned_to_staff.id_for_label }}" class="font-weight-bold">
+                                    <i class="fas fa-user"></i> Select Staff Member
+                                </label>
+                                {{ form.assigned_to_staff|add_class:"form-control" }}
+                                {% if form.assigned_to_staff.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assigned_to_staff.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    Assign device to a specific staff member
+                                </small>
+                            </div>
+                            <div class="assignee-preview" id="staffPreview" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-circle fa-3x text-primary mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-1 font-weight-bold" id="staffName">Staff Name</h6>
+                                        <p class="text-muted mb-1" id="staffPosition">Position</p>
+                                        <p class="text-muted mb-0" id="staffDepartment">Department</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Department Assignment Panel -->
+                        <div class="tab-pane fade assignment-panel" id="department-panel" 
+                             role="tabpanel" aria-labelledby="department-tab">
+                            <div class="form-group">
+                                <label for="{{ form.assigned_to_department.id_for_label }}" class="font-weight-bold">
+                                    <i class="fas fa-building"></i> Select Department
+                                </label>
+                                {{ form.assigned_to_department|add_class:"form-control" }}
+                                {% if form.assigned_to_department.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.assigned_to_department.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">
+                                    Assign device to department pool
+                                </small>
+                            </div>
+                            <div class="assignee-preview" id="departmentPreview" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-users fa-3x text-info mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-1 font-weight-bold" id="departmentName">Department Name</h6>
+                                        <p class="text-muted mb-0">Department Pool Assignment</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Location Assignment Panel -->
+                        <div class="tab-pane fade assignment-panel" id="location-panel" 
+                             role="tabpanel" aria-labelledby="location-tab">
+                            <div class="location-hierarchy-selector">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i>
+                                    Assign device to a specific location in the building hierarchy
+                                </div>
+                                
                                 <div class="form-group">
-                                    <label for="{{ form.assigned_to_staff.id_for_label }}" class="font-weight-bold">
-                                        Select Staff Member
+                                    <label for="{{ form.assigned_to_location.id_for_label }}" class="font-weight-bold">
+                                        <i class="fas fa-map-marker-alt"></i> Select Location
                                     </label>
-                                    {{ form.assigned_to_staff }}
-                                    {% if form.assigned_to_staff.errors %}
+                                    {{ form.assigned_to_location|add_class:"form-control" }}
+                                    {% if form.assigned_to_location.errors %}
                                         <div class="invalid-feedback d-block">
-                                            {{ form.assigned_to_staff.errors.0 }}
+                                            {{ form.assigned_to_location.errors.0 }}
                                         </div>
                                     {% endif %}
                                     <small class="form-text text-muted">
-                                        Assign device to a specific staff member.
+                                        Choose the specific location for this device
                                     </small>
                                 </div>
-                                <div class="assignee-preview" id="staffPreview">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-user fa-2x text-primary mr-3"></i>
-                                        <div>
-                                            <h6 class="mb-1 font-weight-bold">Staff Name</h6>
-                                            <p class="text-muted mb-0">Department • Employee ID</p>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
-
-                            <!-- Department Assignment -->
-                            <div class="tab-pane fade" id="department-panel" role="tabpanel" aria-labelledby="department-tab">
-                                <div class="form-group">
-                                    <label for="{{ form.assigned_to_department.id_for_label }}" class="font-weight-bold">
-                                        Select Department
-                                    </label>
-                                    {{ form.assigned_to_department }}
-                                    {% if form.assigned_to_department.errors %}
-                                        <div class="invalid-feedback d-block">
-                                            {{ form.assigned_to_department.errors.0 }}
-                                        </div>
-                                    {% endif %}
-                                    <small class="form-text text-muted">
-                                        Assign device to a department pool for shared use.
-                                    </small>
-                                </div>
-                                <div class="assignee-preview" id="departmentPreview">
-                                    <div class="d-flex align-items-center">
-                                        <i class="fas fa-users fa-2x text-info mr-3"></i>
-                                        <div>
-                                            <h6 class="mb-1 font-weight-bold">Department Name</h6>
-                                            <p class="text-muted mb-0">Department Pool Assignment</p>
-                                        </div>
+                            
+                            <div class="assignee-preview" id="locationPreview" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-map-marker-alt fa-3x text-success mr-3"></i>
+                                    <div>
+                                        <h6 class="mb-1 font-weight-bold" id="locationHierarchy">Location</h6>
+                                        <p class="text-muted mb-0">Fixed Location Assignment</p>
                                     </div>
-                                </div>
-                            </div>
-
-                            <!-- Location Assignment with Hierarchy Support -->
-                            <div class="tab-pane fade" id="location-panel" role="tabpanel" aria-labelledby="location-tab">
-                                <div class="location-hierarchy-selector">
-                                    <div class="alert alert-info">
-                                        <i class="fas fa-info-circle"></i>
-                                        Select the location hierarchy: Building → Block → Floor → Department → Room
-                                    </div>
-                                    
-                                    <!-- Building Selection -->
-                                    <div class="form-group">
-                                        <label for="location_building" class="font-weight-bold">
-                                            <i class="fas fa-building"></i> Building
-                                        </label>
-                                        <select class="form-control cascade-parent" 
-                                                id="location_building" 
-                                                name="location_building"
-                                                data-cascade-target="location_block"
-                                                data-cascade-url="{% url 'inventory:ajax_get_blocks' %}">
-                                            <option value="">Select Building...</option>
-                                            {% for building in buildings %}
-                                                <option value="{{ building.id }}">{{ building.name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-
-                                    <!-- Block Selection -->
-                                    <div class="form-group">
-                                        <label for="location_block" class="font-weight-bold">
-                                            <i class="fas fa-th-large"></i> Block
-                                        </label>
-                                        <select class="form-control cascade-child" 
-                                                id="location_block" 
-                                                name="location_block"
-                                                data-cascade-parent="location_building"
-                                                data-cascade-target="location_floor"
-                                                data-cascade-url="{% url 'inventory:ajax_get_floors' %}"
-                                                disabled>
-                                            <option value="">Select Block...</option>
-                                        </select>
-                                        <small class="form-text text-muted">Choose a building first</small>
-                                    </div>
-
-                                    <!-- Floor Selection -->
-                                    <div class="form-group">
-                                        <label for="location_floor" class="font-weight-bold">
-                                            <i class="fas fa-layer-group"></i> Floor
-                                        </label>
-                                        <select class="form-control cascade-child" 
-                                                id="location_floor" 
-                                                name="location_floor"
-                                                data-cascade-parent="location_block"
-                                                data-cascade-target="location_department"
-                                                data-cascade-url="{% url 'inventory:ajax_get_departments' %}"
-                                                disabled>
-                                            <option value="">Select Floor...</option>
-                                        </select>
-                                        <small class="form-text text-muted">Choose a block first</small>
-                                    </div>
-
-                                    <!-- Department Selection -->
-                                    <div class="form-group">
-                                        <label for="location_department" class="font-weight-bold">
-                                            <i class="fas fa-users"></i> Department
-                                        </label>
-                                        <select class="form-control cascade-child" 
-                                                id="location_department" 
-                                                name="location_department"
-                                                data-cascade-parent="location_floor"
-                                                data-cascade-target="location_room"
-                                                data-cascade-url="{% url 'inventory:ajax_get_rooms' %}"
-                                                disabled>
-                                            <option value="">Select Department...</option>
-                                        </select>
-                                        <small class="form-text text-muted">Choose a floor first</small>
-                                    </div>
-
-                                    <!-- Room Selection (Optional) -->
-                                    <div class="form-group">
-                                        <label for="location_room" class="font-weight-bold">
-                                            <i class="fas fa-door-open"></i> Room <span class="text-muted">(Optional)</span>
-                                        </label>
-                                        <select class="form-control cascade-child" 
-                                                id="location_room" 
-                                                name="location_room"
-                                                data-cascade-parent="location_department"
-                                                disabled>
-                                            <option value="">Select Room (Optional)...</option>
-                                        </select>
-                                        <small class="form-text text-muted">Choose a department first</small>
-                                    </div>
-
-                                    <!-- Final Location Selection -->
-                                    <div class="form-group" id="final-location-group" style="display: none;">
-                                        <label for="{{ form.assigned_to_location.id_for_label }}" class="font-weight-bold">
-                                            <i class="fas fa-map-marker-alt"></i> Final Location
-                                        </label>
-                                        {{ form.assigned_to_location }}
-                                        {% if form.assigned_to_location.errors %}
-                                            <div class="invalid-feedback d-block">
-                                                {{ form.assigned_to_location.errors.0 }}
-                                            </div>
-                                        {% endif %}
-                                    </div>
-
-                                    <!-- Location Breadcrumb Display -->
-                                    <div class="location-breadcrumb" id="location-breadcrumb" style="display: none;">
-                                        <div class="alert alert-success">
-                                            <i class="fas fa-check-circle"></i>
-                                            <strong>Selected Location:</strong>
-                                            <span id="location-breadcrumb-text"></span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="form-help">
-                                    <i class="fas fa-lightbulb"></i>
-                                    Navigate through the hierarchy to select the exact location for device assignment.
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Additional Information -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5><i class="fas fa-sticky-note"></i> Additional Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label for="{{ form.notes.id_for_label }}" class="font-weight-bold">
-                                Assignment Notes
-                            </label>
-                            {{ form.notes }}
-                            {% if form.notes.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.notes.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Any additional notes or special instructions for this assignment.
-                            </small>
+        <!-- Assignment Details Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="form-section">
+                    <h3 class="text-primary mb-3">
+                        <i class="fas fa-info-circle"></i> Assignment Details
+                    </h3>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.purpose.id_for_label }}" class="font-weight-bold">
+                                    <i class="fas fa-bullseye"></i> Purpose
+                                </label>
+                                {{ form.purpose|add_class:"form-control" }}
+                                {% if form.purpose.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.purpose.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Purpose of this assignment</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.expected_return_date.id_for_label }}" class="font-weight-bold">
+                                    <i class="fas fa-calendar-alt"></i> Expected Return Date
+                                </label>
+                                {{ form.expected_return_date|add_class:"form-control" }}
+                                {% if form.expected_return_date.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.expected_return_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                <small class="form-text text-muted">Leave blank for permanent assignments</small>
+                            </div>
                         </div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.notes.id_for_label }}" class="font-weight-bold">
+                            <i class="fas fa-sticky-note"></i> Notes
+                        </label>
+                        {{ form.notes|add_class:"form-control" }}
+                        {% if form.notes.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.notes.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Additional notes or special instructions</small>
+                    </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Form Actions -->
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
+        <!-- Form Validation Errors -->
+        {% if form.non_field_errors %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        <h5><i class="fas fa-exclamation-triangle"></i> Assignment Errors</h5>
+                        {% for error in form.non_field_errors %}
+                            <p class="mb-0">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="row">
+            <div class="col-12">
+                <div class="form-section">
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'inventory:assignment_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Cancel
+                        </a>
+                        
+                        <div>
+                            <button type="button" class="btn btn-outline-primary mr-2" id="previewBtn">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-save"></i>
-                                {% if form.instance.pk %}Update Assignment{% else %}Create Assignment{% endif %}
+                                {% if form.instance.pk %}
+                                    Update Assignment
+                                {% else %}
+                                    Create Assignment
+                                {% endif %}
                             </button>
-                            <a href="{% url 'inventory:assignment_list' %}" class="btn btn-outline-secondary">
-                                <i class="fas fa-times"></i> Cancel
-                            </a>
-                            {% if not form.instance.pk %}
-                                <button type="button" class="btn btn-outline-info" data-toggle="modal" data-target="#previewModal">
-                                    <i class="fas fa-eye"></i> Preview Assignment
-                                </button>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
-            </form>
+            </div>
         </div>
+    </form>
+</div>
 
-        <!-- Sidebar -->
-        <div class="col-lg-4">
-            <!-- Assignment Guidelines -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5><i class="fas fa-book"></i> Assignment Guidelines</h5>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <h6 class="font-weight-bold">Permanent Assignments</h6>
-                        <p class="text-muted">
-                            Long-term assignments with no expected return date. Ideal for personal laptops, 
-                            office equipment, and role-specific devices.
-                        </p>
-                    </div>
-                    <div class="mb-3">
-                        <h6 class="font-weight-bold">Temporary Assignments</h6>
-                        <p class="text-muted">
-                            Short-term assignments with a specific return date. Perfect for project work, 
-                            training sessions, or temporary replacements.
-                        </p>
-                    </div>
-                    <div class="mb-3">
-                        <h6 class="font-weight-bold">Project Assignments</h6>
-                        <p class="text-muted">
-                            Devices assigned for specific projects with defined timelines and deliverables.
-                        </p>
-                    </div>
-                    <div>
-                        <h6 class="font-weight-bold">Pool Assignments</h6>
-                        <p class="text-muted">
-                            Shared devices available to multiple users within a department or location.
-                        </p>
-                    </div>
+<!-- Assignment Preview Modal -->
+<div class="modal fade" id="assignmentPreviewModal" tabindex="-1" role="dialog" aria-labelledby="previewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="previewModalLabel">
+                    <i class="fas fa-eye"></i> Assignment Preview
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent">
+                    <!-- Preview content will be populated via JavaScript -->
                 </div>
             </div>
-
-            <!-- Assignment Checklist -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5><i class="fas fa-check-circle"></i> Assignment Checklist</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="list-unstyled">
-                        <li class="mb-2"><i class="fas fa-check text-success mr-2"></i> Device is available and functional</li>
-                        <li class="mb-2"><i class="fas fa-check text-success mr-2"></i> Assignee contact information verified</li>
-                        <li class="mb-2"><i class="fas fa-check text-success mr-2"></i> Assignment purpose documented</li>
-                        <li class="mb-2"><i class="fas fa-check text-success mr-2"></i> Return date set (if temporary)</li>
-                        <li><i class="fas fa-check text-success mr-2"></i> All required fields completed</li>
-                    </ul>
-                </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="$('#assignmentForm').submit()">
+                    <i class="fas fa-save"></i> Confirm & Save
+                </button>
             </div>
-
-            <!-- Quick Actions -->
-            {% if form.instance.pk %}
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-bolt"></i> Quick Actions</h5>
-                    </div>
-                    <div class="card-body">
-                        <a href="{% url 'inventory:assignment_detail' form.instance.pk %}" class="btn btn-outline-info btn-block mb-2">
-                            <i class="fas fa-eye"></i> View Assignment Details
-                        </a>
-                        {% if form.instance.is_active %}
-                            <a href="{% url 'inventory:assignment_transfer' form.instance.pk %}" class="btn btn-outline-warning btn-block mb-2">
-                                <i class="fas fa-exchange-alt"></i> Transfer Assignment
-                            </a>
-                            {% if form.instance.is_temporary %}
-                                <a href="{% url 'inventory:assignment_return' form.instance.pk %}" class="btn btn-outline-success btn-block">
-                                    <i class="fas fa-undo"></i> Return Device
-                                </a>
-                            {% endif %}
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 <script>
-// ================================
-// LOCATION HIERARCHY CASCADE FUNCTIONALITY
-// ================================
-
-// Initialize location hierarchy cascade
-function initializeLocationCascade() {
-    // Hide final location field initially
-    $('#final-location-group').hide();
-    $('#location-breadcrumb').hide();
-    
-    // Building change handler
-    $('#location_building').on('change', function() {
-        const buildingId = $(this).val();
-        const blockSelect = $('#location_block');
-        
-        // Reset dependent fields
-        resetCascadeFields(['location_block', 'location_floor', 'location_department', 'location_room']);
-        
-        if (buildingId) {
-            loadCascadeOptions('{% url "inventory:ajax_get_blocks" %}', {building_id: buildingId}, blockSelect);
-        }
-        
-        updateLocationBreadcrumb();
-    });
-    
-    // Block change handler
-    $('#location_block').on('change', function() {
-        const blockId = $(this).val();
-        const floorSelect = $('#location_floor');
-        
-        // Reset dependent fields
-        resetCascadeFields(['location_floor', 'location_department', 'location_room']);
-        
-        if (blockId) {
-            loadCascadeOptions('{% url "inventory:ajax_get_floors" %}', {block_id: blockId}, floorSelect);
-        }
-        
-        updateLocationBreadcrumb();
-    });
-    
-    // Floor change handler
-    $('#location_floor').on('change', function() {
-        const floorId = $(this).val();
-        const departmentSelect = $('#location_department');
-        
-        // Reset dependent fields
-        resetCascadeFields(['location_department', 'location_room']);
-        
-        if (floorId) {
-            loadCascadeOptions('{% url "inventory:ajax_get_departments" %}', {floor_id: floorId}, departmentSelect);
-        }
-        
-        updateLocationBreadcrumb();
-    });
-    
-    // Department change handler
-    $('#location_department').on('change', function() {
-        const departmentId = $(this).val();
-        const roomSelect = $('#location_room');
-        
-        // Reset dependent fields
-        resetCascadeFields(['location_room']);
-        
-        if (departmentId) {
-            loadCascadeOptions('{% url "inventory:ajax_get_rooms" %}', {department_id: departmentId}, roomSelect);
-            // Show final location selection when department is selected
-            loadFinalLocations();
-        }
-        
-        updateLocationBreadcrumb();
-    });
-    
-    // Room change handler (optional)
-    $('#location_room').on('change', function() {
-        loadFinalLocations();
-        updateLocationBreadcrumb();
-    });
-}
-
-// Load cascade options via AJAX
-function loadCascadeOptions(url, params, targetSelect) {
-    targetSelect.prop('disabled', true).html('<option value="">Loading...</option>');
-    
-    $.get(url, params)
-        .done(function(data) {
-            let options = '<option value="">Select...</option>';
-            const dataKey = Object.keys(data)[0]; // blocks, floors, departments, or rooms
-            
-            data[dataKey].forEach(function(item) {
-                const name = item.name || item.room_number;
-                const code = item.code ? ` (${item.code})` : '';
-                const floorNum = item.floor_number ? ` - Floor ${item.floor_number}` : '';
-                options += `<option value="${item.id}">${name}${code}${floorNum}</option>`;
-            });
-            
-            targetSelect.html(options).prop('disabled', false);
-        })
-        .fail(function() {
-            targetSelect.html('<option value="">Error loading data</option>');
-        });
-}
-
-// Reset cascade fields
-function resetCascadeFields(fieldIds) {
-    fieldIds.forEach(function(fieldId) {
-        $(`#${fieldId}`).html('<option value="">Select...</option>').prop('disabled', true);
-    });
-    $('#final-location-group').hide();
-    $('#location-breadcrumb').hide();
-}
-
-// Load final locations based on selected hierarchy
-function loadFinalLocations() {
-    const building = $('#location_building').val();
-    const block = $('#location_block').val();
-    const floor = $('#location_floor').val();
-    const department = $('#location_department').val();
-    const room = $('#location_room').val();
-    
-    if (department) {
-        const params = {
-            building_id: building,
-            block_id: block,
-            floor_id: floor,
-            department_id: department,
-            room_id: room || ''
-        };
-        
-        $.get('{% url "inventory:ajax_location_search" %}', params)
-            .done(function(data) {
-                let options = '<option value="">Select Final Location...</option>';
-                data.locations.forEach(function(location) {
-                    options += `<option value="${location.id}">${location.display_text}</option>`;
-                });
-                
-                $('#{{ form.assigned_to_location.id_for_label }}').html(options);
-                $('#final-location-group').show();
-            });
-    }
-}
-
-// Update location breadcrumb display
-function updateLocationBreadcrumb() {
-    const parts = [];
-    
-    const building = $('#location_building option:selected').text();
-    const block = $('#location_block option:selected').text();
-    const floor = $('#location_floor option:selected').text();
-    const department = $('#location_department option:selected').text();
-    const room = $('#location_room option:selected').text();
-    
-    if (building && building !== 'Select Building...') parts.push(building);
-    if (block && block !== 'Select...' && block !== 'Loading...') parts.push(block);
-    if (floor && floor !== 'Select...' && floor !== 'Loading...') parts.push(floor);
-    if (department && department !== 'Select...' && department !== 'Loading...') parts.push(department);
-    if (room && room !== 'Select...' && room !== 'Loading...') parts.push(room);
-    
-    if (parts.length > 0) {
-        $('#location-breadcrumb-text').text(parts.join(' → '));
-        $('#location-breadcrumb').show();
-        
-        // Update preview
-        updateLocationPreview(parts.join(' → '));
-    } else {
-        $('#location-breadcrumb').hide();
-        $('#locationPreview').removeClass('active');
-    }
-}
-
-// Update location preview panel
-function updateLocationPreview(hierarchyText) {
-    $('#locationName').text('Selected Location');
-    $('#locationHierarchy').text(hierarchyText);
-    
-    // Create badges for hierarchy levels
-    const parts = hierarchyText.split(' → ');
-    let badges = '';
-    const badgeClasses = ['badge-primary', 'badge-info', 'badge-success', 'badge-warning', 'badge-secondary'];
-    
-    parts.forEach(function(part, index) {
-        if (index < badgeClasses.length) {
-            badges += `<span class="badge ${badgeClasses[index]} mr-1">${part}</span>`;
-        }
-    });
-    
-    $('#locationBadges').html(badges);
-    $('#locationPreview').addClass('active');
-}
-
-// Enhanced location selection change handler
-$('#{{ form.assigned_to_location.id_for_label }}').change(function() {
-    const locationText = $(this).find('option:selected').text();
-    if ($(this).val()) {
-        $('#locationName').text(locationText);
-        $('#locationPreview').addClass('active');
-    } else {
-        $('#locationPreview').removeClass('active');
-    }
-});
-
-// Initialize on document ready
 $(document).ready(function() {
-    initializeLocationCascade();
+    // Tab switching with form clearing
+    $('.nav-tabs a').on('click', function(e) {
+        e.preventDefault();
+        
+        // Clear other assignment fields when switching tabs
+        const currentTab = $(this).attr('href');
+        
+        if (currentTab === '#staff-panel') {
+            $('#id_assigned_to_department').val('');
+            $('#id_assigned_to_location').val('');
+            $('#departmentPreview, #locationPreview').hide();
+        } else if (currentTab === '#department-panel') {
+            $('#id_assigned_to_staff').val('');
+            $('#id_assigned_to_location').val('');
+            $('#staffPreview, #locationPreview').hide();
+        } else if (currentTab === '#location-panel') {
+            $('#id_assigned_to_staff').val('');
+            $('#id_assigned_to_department').val('');
+            $('#staffPreview, #departmentPreview').hide();
+        }
+        
+        $(this).tab('show');
+    });
+
+    // Device selection change handler
+    $('#id_device').on('change', function() {
+        const deviceId = $(this).val();
+        if (deviceId) {
+            // Show device info preview
+            const deviceText = $(this).find('option:selected').text();
+            const deviceParts = deviceText.split(' - ');
+            
+            $('#deviceId').text(deviceParts[0] || 'N/A');
+            $('#deviceName').text(deviceParts[1] || 'N/A');
+            $('#deviceType').text(deviceParts[2] || 'N/A');
+            $('#deviceStatus').text('Available');
+            $('#deviceCondition').text('Good');
+            
+            $('#deviceInfoPreview').slideDown();
+        } else {
+            $('#deviceInfoPreview').slideUp();
+        }
+    });
+
+    // Staff selection change handler
+    $('#id_assigned_to_staff').on('change', function() {
+        const staffId = $(this).val();
+        if (staffId) {
+            const staffText = $(this).find('option:selected').text();
+            const staffParts = staffText.split(' - ');
+            
+            $('#staffName').text(staffParts[0] || 'N/A');
+            $('#staffPosition').text(staffParts[1] || 'N/A');
+            $('#staffDepartment').text(staffParts[2] || 'N/A');
+            
+            $('#staffPreview').slideDown();
+        } else {
+            $('#staffPreview').slideUp();
+        }
+    });
+
+    // Department selection change handler
+    $('#id_assigned_to_department').on('change', function() {
+        const deptId = $(this).val();
+        if (deptId) {
+            const deptText = $(this).find('option:selected').text();
+            $('#departmentName').text(deptText);
+            $('#departmentPreview').slideDown();
+        } else {
+            $('#departmentPreview').slideUp();
+        }
+    });
+
+    // Location selection change handler
+    $('#id_assigned_to_location').on('change', function() {
+        const locationId = $(this).val();
+        if (locationId) {
+            const locationText = $(this).find('option:selected').text();
+            $('#locationHierarchy').text(locationText);
+            $('#locationPreview').slideDown();
+        } else {
+            $('#locationPreview').slideUp();
+        }
+    });
+
+    // Assignment type change handler
+    $('#id_assignment_type').on('change', function() {
+        const assignmentType = $(this).val();
+        const returnDateField = $('#id_expected_return_date').closest('.form-group');
+        
+        if (assignmentType === 'TEMPORARY' || assignmentType === 'PROJECT') {
+            returnDateField.show();
+            $('#id_expected_return_date').prop('required', true);
+        } else {
+            returnDateField.hide();
+            $('#id_expected_return_date').prop('required', false);
+        }
+    });
+
+    // Preview button handler
+    $('#previewBtn').on('click', function() {
+        generateAssignmentPreview();
+        $('#assignmentPreviewModal').modal('show');
+    });
+
+    // Form validation
+    $('#assignmentForm').on('submit', function(e) {
+        const staff = $('#id_assigned_to_staff').val();
+        const department = $('#id_assigned_to_department').val();
+        const location = $('#id_assigned_to_location').val();
+        
+        if (!staff && !department && !location) {
+            e.preventDefault();
+            alert('Please select at least one assignment target (Staff, Department, or Location).');
+            return false;
+        }
+        
+        return true;
+    });
+
+    // Initialize form state
+    $('#id_assignment_type').trigger('change');
+    $('#id_device').trigger('change');
 });
+
+function generateAssignmentPreview() {
+    const device = $('#id_device option:selected').text();
+    const assignmentType = $('#id_assignment_type option:selected').text();
+    const staff = $('#id_assigned_to_staff option:selected').text();
+    const department = $('#id_assigned_to_department option:selected').text();
+    const location = $('#id_assigned_to_location option:selected').text();
+    const purpose = $('#id_purpose').val();
+    const returnDate = $('#id_expected_return_date').val();
+    const notes = $('#id_notes').val();
+    
+    let assignedTo = 'Not specified';
+    if (staff && staff !== '---------') assignedTo = `Staff: ${staff}`;
+    else if (department && department !== '---------') assignedTo = `Department: ${department}`;
+    else if (location && location !== '---------') assignedTo = `Location: ${location}`;
+    
+    const previewHtml = `
+        <div class="card">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="fas fa-clipboard-check"></i> Assignment Summary</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Device:</strong> ${device || 'Not selected'}</p>
+                        <p><strong>Assignment Type:</strong> ${assignmentType || 'Not selected'}</p>
+                        <p><strong>Assigned To:</strong> ${assignedTo}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Purpose:</strong> ${purpose || 'Not specified'}</p>
+                        <p><strong>Return Date:</strong> ${returnDate || 'Not specified'}</p>
+                        <p><strong>Notes:</strong> ${notes || 'None'}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    $('#previewContent').html(previewHtml);
+}
 </script>
 {% endblock %}

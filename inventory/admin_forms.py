@@ -19,13 +19,16 @@ from .models import (
 # ================================
 
 class DeviceAdminForm(forms.ModelForm):
-    """Enhanced device form for admin interface"""
+    """Enhanced device form for admin interface with Block hierarchy support"""
     
     class Meta:
         model = Device
         fields = '__all__'
         widgets = {
-            'specifications': forms.Textarea(attrs={'rows': 8, 'cols': 80}),
+            'processor': forms.TextInput(attrs={'class': 'vTextField'}),
+            'memory_ram': forms.TextInput(attrs={'class': 'vTextField'}),
+            'storage_capacity': forms.TextInput(attrs={'class': 'vTextField'}),
+            'operating_system': forms.TextInput(attrs={'class': 'vTextField'}),
             'notes': forms.Textarea(attrs={'rows': 4, 'cols': 80}),
             'purchase_date': forms.DateInput(attrs={'type': 'date'}),
             'warranty_start_date': forms.DateInput(attrs={'type': 'date'}),
@@ -41,6 +44,11 @@ class DeviceAdminForm(forms.ModelForm):
                 field.widget.attrs.update({'class': 'vTextField'})
             elif isinstance(field.widget, forms.Textarea):
                 field.widget.attrs.update({'class': 'vLargeTextField'})
+        
+        # Enhanced location filtering with Block hierarchy
+        if hasattr(self, 'instance') and self.instance.pk and self.instance.location:
+            location = self.instance.location
+            self.fields['location'].help_text = f"Current location hierarchy: {location.get_full_hierarchy()}"
     
     def clean(self):
         cleaned_data = super().clean()
@@ -49,23 +57,42 @@ class DeviceAdminForm(forms.ModelForm):
         if not cleaned_data.get('device_id'):
             device_type = cleaned_data.get('device_type')
             if device_type:
-                # Generate ID based on device type
+                # Generate ID based on device type and building
+                location = cleaned_data.get('location')
+                building_code = location.building.code if location and location.building else 'BPS'
+                block_code = location.block.code if location and location.block else 'MAIN'
                 count = Device.objects.filter(device_type=device_type).count() + 1
-                cleaned_data['device_id'] = f"BPS-{device_type.code}-{count:03d}"
+                cleaned_data['device_id'] = f"{building_code}-{block_code}-{device_type.code}-{count:03d}"
+        
+        # Validate warranty dates
+        warranty_start = cleaned_data.get('warranty_start_date')
+        warranty_end = cleaned_data.get('warranty_end_date')
+        purchase_date = cleaned_data.get('purchase_date')
+        
+        if warranty_start and warranty_end and warranty_start >= warranty_end:
+            raise ValidationError('Warranty end date must be after warranty start date.')
+        
+        if purchase_date and warranty_start and warranty_start < purchase_date:
+            raise ValidationError('Warranty start date cannot be before purchase date.')
         
         return cleaned_data
 
 
 class DeviceInlineForm(forms.ModelForm):
-    """Inline form for devices in location admin"""
+    """Inline form for devices in location admin with enhanced display"""
     
     class Meta:
         model = Device
         fields = ['device_id', 'device_name', 'device_type', 'status', 'condition']
         widgets = {
-            'device_id': forms.TextInput(attrs={'size': 15}),
-            'device_name': forms.TextInput(attrs={'size': 30}),
+            'device_id': forms.TextInput(attrs={'size': 20}),
+            'device_name': forms.TextInput(attrs={'size': 35}),
         }
+
+
+# ================================
+# BLOCK ADMIN FORMS (NEW)
+# ================================
 
 class BlockAdminForm(forms.ModelForm):
     """Enhanced block form for admin interface"""
@@ -75,103 +102,93 @@ class BlockAdminForm(forms.ModelForm):
         fields = '__all__'
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3, 'cols': 80}),
-            'code': forms.TextInput(attrs={
-                'placeholder': 'e.g., EB, WB, NB, SB',
-                'style': 'text-transform: uppercase;'
-            }),
-            'name': forms.TextInput(attrs={
-                'placeholder': 'e.g., East Block, West Block'
-            }),
         }
     
-    def clean_code(self):
-        code = self.cleaned_data.get('code')
-        if code:
-            code = code.upper().strip()
-            
-            # Check for duplicate code within the same building
-            building = self.cleaned_data.get('building')
-            if building:
-                existing_block = Block.objects.filter(
-                    building=building,
-                    code=code
-                )
-                
-                if self.instance.pk:
-                    existing_block = existing_block.exclude(pk=self.instance.pk)
-                
-                if existing_block.exists():
-                    raise ValidationError(f'Block with code "{code}" already exists in this building.')
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         
-        return code
+        # Filter buildings to active only
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        building = cleaned_data.get('building')
+        name = cleaned_data.get('name')
+        code = cleaned_data.get('code')
+        
+        # Check for duplicate block name within the same building
+        if building and name:
+            existing_block = Block.objects.filter(
+                building=building,
+                name=name
+            )
+            
+            if self.instance.pk:
+                existing_block = existing_block.exclude(pk=self.instance.pk)
+            
+            if existing_block.exists():
+                raise ValidationError(f'Block "{name}" already exists in {building.name}.')
+        
+        # Check for duplicate block code within the same building
+        if building and code:
+            existing_code = Block.objects.filter(
+                building=building,
+                code=code
+            )
+            
+            if self.instance.pk:
+                existing_code = existing_code.exclude(pk=self.instance.pk)
+            
+            if existing_code.exists():
+                raise ValidationError(f'Block code "{code}" already exists in {building.name}.')
+        
+        return cleaned_data
 
-    def clean_name(self):
-        name = self.cleaned_data.get('name')
-        if name:
-            name = name.strip()
-            
-            # Check for duplicate name within the same building
-            building = self.cleaned_data.get('building')
-            if building:
-                existing_block = Block.objects.filter(
-                    building=building,
-                    name__iexact=name
-                )
-                
-                if self.instance.pk:
-                    existing_block = existing_block.exclude(pk=self.instance.pk)
-                
-                if existing_block.exists():
-                    raise ValidationError(f'Block with name "{name}" already exists in this building.')
-        
-        return name
+
+# ================================
+# FLOOR ADMIN FORMS (UPDATED)
+# ================================
 
 class FloorAdminForm(forms.ModelForm):
-    """Enhanced floor form for admin interface"""
+    """Enhanced floor form for admin interface with Block support"""
     
     class Meta:
         model = Floor
         fields = '__all__'
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3, 'cols': 80}),
-            'floor_number': forms.NumberInput(attrs={
-                'min': 0,
-                'max': 50,
-                'placeholder': 'e.g., 1, 2, 3'
-            }),
-            'name': forms.TextInput(attrs={
-                'placeholder': 'e.g., First Floor, Ground Floor'
-            }),
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Filter blocks based on selected building
+        # Filter buildings and blocks to active only
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+        self.fields['block'].queryset = Block.objects.filter(is_active=True)
+        
+        # Cascade filtering for building -> block
         if 'building' in self.data:
             try:
                 building_id = int(self.data.get('building'))
                 self.fields['block'].queryset = Block.objects.filter(
                     building_id=building_id,
                     is_active=True
-                ).order_by('name')
+                )
             except (ValueError, TypeError):
-                self.fields['block'].queryset = Block.objects.none()
+                pass
         elif self.instance.pk and self.instance.building:
             self.fields['block'].queryset = Block.objects.filter(
                 building=self.instance.building,
                 is_active=True
-            ).order_by('name')
-        else:
-            self.fields['block'].queryset = Block.objects.filter(is_active=True)
-
+            )
+    
     def clean(self):
         cleaned_data = super().clean()
         building = cleaned_data.get('building')
         block = cleaned_data.get('block')
         floor_number = cleaned_data.get('floor_number')
         
-        # Validate that block belongs to the selected building
+        # Validate block belongs to building
         if building and block and block.building != building:
             raise ValidationError('Selected block does not belong to the selected building.')
         
@@ -187,15 +204,17 @@ class FloorAdminForm(forms.ModelForm):
                 existing_floor = existing_floor.exclude(pk=self.instance.pk)
             
             if existing_floor.exists():
-                raise ValidationError(f'Floor {floor_number} already exists in {block.name}.')
+                raise ValidationError(f'Floor {floor_number} already exists in {building.name} - {block.name}.')
         
         return cleaned_data
+
+
 # ================================
-# ASSIGNMENT ADMIN FORMS
+# ASSIGNMENT ADMIN FORMS (UPDATED)
 # ================================
 
 class AssignmentAdminForm(forms.ModelForm):
-    """Enhanced assignment form for admin interface"""
+    """Enhanced assignment form for admin interface with Block hierarchy"""
     
     class Meta:
         model = Assignment
@@ -219,17 +238,40 @@ class AssignmentAdminForm(forms.ModelForm):
         
         # Filter active staff
         self.fields['assigned_to_staff'].queryset = Staff.objects.filter(is_active=True)
+        
+        # Filter active locations with hierarchy display
+        locations = Location.objects.filter(is_active=True).select_related(
+            'building', 'block', 'floor', 'department', 'room'
+        )
+        self.fields['assigned_to_location'].queryset = locations
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        device = cleaned_data.get('device')
+        staff = cleaned_data.get('assigned_to_staff')
+        department = cleaned_data.get('assigned_to_department')
+        location = cleaned_data.get('assigned_to_location')
+        
+        # Ensure at least one assignment target
+        if not any([staff, department, location]):
+            raise ValidationError('Device must be assigned to staff, department, or location.')
+        
+        # Validate device availability for new assignments
+        if device and not self.instance.pk and device.status != 'AVAILABLE':
+            raise ValidationError(f'Device {device.device_id} is not available for assignment.')
+        
+        return cleaned_data
 
 
 # ================================
-# STAFF ADMIN FORMS
+# STAFF ADMIN FORMS (UPDATED)
 # ================================
 
 class StaffAdminForm(forms.ModelForm):
-    """Enhanced staff form for admin interface"""
+    """Enhanced staff form for admin interface with User integration"""
     
     # User fields for inline editing
-    username = forms.CharField(max_length=150)
+    username = forms.CharField(max_length=150, help_text="Required. 150 characters or fewer.")
     first_name = forms.CharField(max_length=30)
     last_name = forms.CharField(max_length=30)
     email = forms.EmailField()
@@ -249,6 +291,12 @@ class StaffAdminForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+        # Filter departments to active only with hierarchy display
+        departments = Department.objects.filter(is_active=True).select_related(
+            'floor__building', 'floor__block'
+        )
+        self.fields['department'].queryset = departments
         
         # Populate user fields if editing existing staff
         if self.instance.pk and hasattr(self.instance, 'user'):
@@ -270,6 +318,18 @@ class StaffAdminForm(forms.ModelForm):
                 raise ValidationError(f"Username '{username}' already exists.")
         
         return username
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            existing = User.objects.filter(email=email)
+            if self.instance.pk and hasattr(self.instance, 'user'):
+                existing = existing.exclude(pk=self.instance.user.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"Email '{email}' is already in use.")
+        
+        return email
     
     def save(self, commit=True):
         staff = super().save(commit=False)
@@ -295,11 +355,11 @@ class StaffAdminForm(forms.ModelForm):
 
 
 # ================================
-# LOCATION ADMIN FORMS
+# LOCATION ADMIN FORMS (UPDATED)
 # ================================
 
 class LocationAdminForm(forms.ModelForm):
-    """Enhanced location form for admin interface"""
+    """Enhanced location form for admin interface with Block hierarchy"""
     
     class Meta:
         model = Location
@@ -311,21 +371,21 @@ class LocationAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        # Cascade filtering for block -> floor -> department -> room
+        # Cascade filtering for building -> block -> floor -> department -> room
         if 'building' in self.data:
             try:
                 building_id = int(self.data.get('building'))
                 self.fields['block'].queryset = Block.objects.filter(
                     building_id=building_id,
                     is_active=True
-                ).order_by('name')
+                )
             except (ValueError, TypeError):
-                self.fields['block'].queryset = Block.objects.none()
+                pass
         elif self.instance.pk and self.instance.building:
             self.fields['block'].queryset = Block.objects.filter(
                 building=self.instance.building,
                 is_active=True
-            ).order_by('name')
+            )
         
         if 'block' in self.data:
             try:
@@ -333,45 +393,15 @@ class LocationAdminForm(forms.ModelForm):
                 self.fields['floor'].queryset = Floor.objects.filter(
                     block_id=block_id,
                     is_active=True
-                ).order_by('floor_number')
+                )
             except (ValueError, TypeError):
-                self.fields['floor'].queryset = Floor.objects.none()
+                pass
         elif self.instance.pk and self.instance.block:
             self.fields['floor'].queryset = Floor.objects.filter(
                 block=self.instance.block,
                 is_active=True
-            ).order_by('floor_number')
-        
-        if 'floor' in self.data:
-            try:
-                floor_id = int(self.data.get('floor'))
-                self.fields['department'].queryset = Department.objects.filter(
-                    floor_id=floor_id,
-                    is_active=True
-                ).order_by('name')
-            except (ValueError, TypeError):
-                self.fields['department'].queryset = Department.objects.none()
-        elif self.instance.pk and self.instance.floor:
-            self.fields['department'].queryset = Department.objects.filter(
-                floor=self.instance.floor,
-                is_active=True
-            ).order_by('name')
-        
-        if 'department' in self.data:
-            try:
-                department_id = int(self.data.get('department'))
-                self.fields['room'].queryset = Room.objects.filter(
-                    department_id=department_id,
-                    is_active=True
-                ).order_by('room_number')
-            except (ValueError, TypeError):
-                self.fields['room'].queryset = Room.objects.none()
-        elif self.instance.pk and self.instance.department:
-            self.fields['room'].queryset = Room.objects.filter(
-                department=self.instance.department,
-                is_active=True
-            ).order_by('room_number')
-
+            )
+    
     def clean(self):
         cleaned_data = super().clean()
         building = cleaned_data.get('building')
@@ -380,7 +410,7 @@ class LocationAdminForm(forms.ModelForm):
         department = cleaned_data.get('department')
         room = cleaned_data.get('room')
         
-        # Validate hierarchical relationships
+        # Validate hierarchy relationships
         if building and block and block.building != building:
             raise ValidationError('Selected block does not belong to the selected building.')
         
@@ -413,7 +443,7 @@ class LocationAdminForm(forms.ModelForm):
 
 
 # ================================
-# MAINTENANCE ADMIN FORMS
+# MAINTENANCE ADMIN FORMS (UPDATED)
 # ================================
 
 class MaintenanceScheduleAdminForm(forms.ModelForm):
@@ -423,10 +453,10 @@ class MaintenanceScheduleAdminForm(forms.ModelForm):
         model = MaintenanceSchedule
         fields = '__all__'
         widgets = {
-            'scheduled_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
-            'completed_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'next_due_date': forms.DateInput(attrs={'type': 'date'}),
+            'last_completed_date': forms.DateInput(attrs={'type': 'date'}),
             'description': forms.Textarea(attrs={'rows': 4, 'cols': 80}),
-            'completion_notes': forms.Textarea(attrs={'rows': 4, 'cols': 80}),
+            'estimated_duration': forms.TextInput(attrs={'placeholder': 'e.g., 2:00:00 (HH:MM:SS)'}),
         }
     
     def __init__(self, *args, **kwargs):
@@ -437,14 +467,29 @@ class MaintenanceScheduleAdminForm(forms.ModelForm):
             vendor_type__in=['SERVICE_PROVIDER', 'MAINTENANCE_CONTRACTOR'],
             is_active=True
         )
+        
+        # Filter devices to show hierarchy location
+        devices = Device.objects.select_related('location__building', 'location__block')
+        self.fields['device'].queryset = devices
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        next_due_date = cleaned_data.get('next_due_date')
+        last_completed_date = cleaned_data.get('last_completed_date')
+        status = cleaned_data.get('status')
+        
+        if last_completed_date and next_due_date and last_completed_date > next_due_date:
+            raise ValidationError('Last completed date cannot be after next due date.')
+        
+        return cleaned_data
 
 
 # ================================
-# BULK OPERATION FORMS
+# BULK OPERATION FORMS (UPDATED)
 # ================================
 
 class BulkDeviceUpdateForm(forms.Form):
-    """Form for bulk device updates in admin"""
+    """Form for bulk device updates in admin with enhanced options"""
     
     ACTION_CHOICES = [
         ('', 'Select Action'),
@@ -452,6 +497,8 @@ class BulkDeviceUpdateForm(forms.Form):
         ('update_location', 'Update Location'),
         ('update_condition', 'Update Condition'),
         ('assign_vendor', 'Assign Vendor'),
+        ('bulk_assignment', 'Bulk Assignment'),
+        ('generate_qr', 'Generate QR Codes'),
         ('export_data', 'Export Data'),
     ]
     
@@ -467,9 +514,11 @@ class BulkDeviceUpdateForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     
-    # Location update
+    # Location update with hierarchy
     new_location = forms.ModelChoiceField(
-        queryset=Location.objects.filter(is_active=True),
+        queryset=Location.objects.filter(is_active=True).select_related(
+            'building', 'block', 'floor', 'department'
+        ),
         required=False,
         empty_label="Select Location",
         widget=forms.Select(attrs={'class': 'form-control'})
@@ -490,30 +539,71 @@ class BulkDeviceUpdateForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     
+    # Bulk assignment options
+    assign_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Staff",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assign_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
     update_reason = forms.CharField(
         max_length=500,
         required=False,
         widget=forms.Textarea(attrs={
             'rows': 3,
-            'placeholder': 'Reason for bulk update...'
+            'placeholder': 'Reason for bulk update...',
+            'class': 'form-control'
         })
     )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
+        
+        # Validate required fields based on action
+        if action == 'update_status' and not cleaned_data.get('new_status'):
+            raise ValidationError('New status is required for status update.')
+        
+        if action == 'update_location' and not cleaned_data.get('new_location'):
+            raise ValidationError('New location is required for location update.')
+        
+        if action == 'update_condition' and not cleaned_data.get('new_condition'):
+            raise ValidationError('New condition is required for condition update.')
+        
+        if action == 'assign_vendor' and not cleaned_data.get('new_vendor'):
+            raise ValidationError('Vendor is required for vendor assignment.')
+        
+        if action == 'bulk_assignment':
+            if not any([cleaned_data.get('assign_to_staff'), cleaned_data.get('assign_to_department')]):
+                raise ValidationError('Staff or department is required for bulk assignment.')
+        
+        return cleaned_data
 
 
 # ================================
-# IMPORT/EXPORT ADMIN FORMS
+# IMPORT/EXPORT ADMIN FORMS (UPDATED)
 # ================================
 
 class DataImportForm(forms.Form):
-    """Form for importing data in admin interface"""
+    """Form for importing data in admin interface with enhanced validation"""
     
     IMPORT_MODELS = [
         ('devices', 'Devices'),
-        ('staff', 'Staff Members'),
         ('locations', 'Locations'),
-        ('vendors', 'Vendors'),
+        ('staff', 'Staff'),
+        ('buildings', 'Buildings'),
+        ('blocks', 'Blocks'),
+        ('floors', 'Floors'),
+        ('departments', 'Departments'),
         ('assignments', 'Assignments'),
-        ('device_types', 'Device Types'),
     ]
     
     model_type = forms.ChoiceField(
@@ -524,46 +614,91 @@ class DataImportForm(forms.Form):
     import_file = forms.FileField(
         widget=forms.FileInput(attrs={
             'class': 'form-control',
-            'accept': '.csv,.xlsx,.json'
+            'accept': '.csv,.xlsx,.xls'
         }),
-        help_text="Supported formats: CSV, Excel (XLSX), JSON"
-    )
-    
-    has_header = forms.BooleanField(
-        initial=True,
-        required=False,
-        label="File has header row",
-        help_text="Check if the first row contains column headers"
+        help_text="Supported formats: CSV, Excel (.xlsx, .xls)"
     )
     
     update_existing = forms.BooleanField(
-        initial=False,
         required=False,
-        label="Update existing records",
-        help_text="Update records if they already exist (based on unique identifiers)"
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Update existing records if found"
     )
     
     validate_only = forms.BooleanField(
-        initial=False,
         required=False,
-        label="Validate only (don't import)",
-        help_text="Only validate the data without importing"
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Only validate data without importing"
     )
     
     def clean_import_file(self):
-        import_file = self.cleaned_data.get('import_file')
-        if import_file:
-            # Check file extension
-            allowed_extensions = ['.csv', '.xlsx', '.json']
-            file_ext = import_file.name.lower().split('.')[-1]
-            if f'.{file_ext}' not in allowed_extensions:
-                raise ValidationError("File must be CSV, Excel (XLSX), or JSON format.")
+        file = self.cleaned_data.get('import_file')
+        if file:
+            # Validate file size (max 10MB)
+            if file.size > 10 * 1024 * 1024:
+                raise ValidationError('File size cannot exceed 10MB.')
             
-            # Check file size (5MB limit)
-            if import_file.size > 5 * 1024 * 1024:
-                raise ValidationError("File size cannot exceed 5MB.")
+            # Validate file extension
+            valid_extensions = ['.csv', '.xlsx', '.xls']
+            if not any(file.name.lower().endswith(ext) for ext in valid_extensions):
+                raise ValidationError('Please upload a valid CSV or Excel file.')
         
-        return import_file
+        return file
+
+
+class DataExportForm(forms.Form):
+    """Form for exporting data from admin interface"""
+    
+    EXPORT_MODELS = [
+        ('devices', 'Devices'),
+        ('locations', 'Locations'),
+        ('staff', 'Staff'),
+        ('assignments', 'Assignments'),
+        ('maintenance', 'Maintenance Records'),
+        ('audit_logs', 'Audit Logs'),
+    ]
+    
+    FORMAT_CHOICES = [
+        ('csv', 'CSV'),
+        ('xlsx', 'Excel'),
+        ('pdf', 'PDF Report'),
+    ]
+    
+    model_type = forms.ChoiceField(
+        choices=EXPORT_MODELS,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    export_format = forms.ChoiceField(
+        choices=FORMAT_CHOICES,
+        initial='xlsx',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Filter records from this date"
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        help_text="Filter records until this date"
+    )
+    
+    include_inactive = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text="Include inactive/deleted records"
+    )
 
 
 # ================================

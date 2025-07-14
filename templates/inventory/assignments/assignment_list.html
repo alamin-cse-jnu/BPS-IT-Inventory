@@ -1,308 +1,291 @@
-<!-- File location: D:\Development\projects\BPS-IT-Inventory\templates\inventory\assignments\assignment_list.html -->
-
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load static %}
 
-{% block title %}Assignments - BPS Inventory{% endblock %}
+{% block title %}Assignment Management{% endblock %}
 
 {% block extra_css %}
+<link href="{% static 'css/assignments.css' %}" rel="stylesheet">
 <style>
-    .assignment-card {
-        transition: all 0.3s ease;
-        border: 1px solid #e3e6f0;
-    }
-    .assignment-card:hover {
-        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-        transform: translateY(-2px);
-    }
-    .status-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-    }
-    .assignment-actions {
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-    .assignment-card:hover .assignment-actions {
-        opacity: 1;
-    }
-    .filter-section {
-        background-color: #f8f9fc;
-        border-radius: 0.35rem;
-        padding: 1.25rem;
-        margin-bottom: 1.5rem;
-    }
-    .quick-stats {
-        margin-bottom: 1.5rem;
-    }
-    .quick-stats .card {
-        border-left: 0.25rem solid;
-        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-    }
-    .overdue-highlight {
-        border-left-color: #e74a3b !important;
-        background-color: #fff5f5;
-    }
-    .due-soon-highlight {
-        border-left-color: #f6c23e !important;
-        background-color: #fffef0;
-    }
+.assignment-card {
+    transition: all 0.3s ease;
+    border: 1px solid #e3e6f0;
+    margin-bottom: 1rem;
+}
+
+.assignment-card:hover {
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    transform: translateY(-2px);
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+}
+
+.assignment-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 10px 10px 0 0;
+}
+
+.search-section {
+    background: #f8f9fc;
+    padding: 1.5rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+}
+
+.filter-card {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.assignment-meta {
+    background: #f8f9fc;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.overdue-alert {
+    border-left: 4px solid #e74a3b;
+    background: #fdf2f2;
+}
+
+.due-soon-alert {
+    border-left: 4px solid #f39c12;
+    background: #fef9e7;
+}
+
+.assigned-to-section {
+    padding: 1rem;
+    background: #f8f9fc;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+}
+
+.device-info {
+    padding: 1rem;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e3e6f0;
+}
+
+.action-buttons .btn {
+    margin: 0 0.25rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    background: #f8f9fc;
+    border-radius: 10px;
+}
+
+.stats-cards {
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border: 1px solid #e3e6f0;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    color: #6c757d;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid px-4">
     <!-- Page Header -->
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-clipboard-list text-primary"></i> Device Assignments
-        </h1>
-        <div class="btn-group">
-            <a href="{% url 'inventory:assignment_create' %}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> New Assignment
-            </a>
-            <a href="{% url 'inventory:bulk_assignment' %}" class="btn btn-success">
-                <i class="fas fa-layer-group"></i> Bulk Assign
-            </a>
-            <a href="{% url 'inventory:assignment_report' %}" class="btn btn-info">
-                <i class="fas fa-chart-bar"></i> Reports
-            </a>
+    <div class="assignment-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="mb-2">
+                    <i class="fas fa-clipboard-list"></i> Assignment Management
+                </h1>
+                <p class="mb-0 opacity-75">Manage device assignments across staff, departments, and locations</p>
+            </div>
+            <div>
+                <a href="{% url 'inventory:assignment_create' %}" class="btn btn-light btn-lg">
+                    <i class="fas fa-plus"></i> New Assignment
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Quick Statistics -->
-    <div class="row quick-stats">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Total Assignments
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ assignments.count }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
+    <!-- Statistics Cards -->
+    <div class="stats-cards">
+        <div class="row">
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-number text-primary">{{ assignments.count }}</div>
+                    <div class="stat-label">Total Assignments</div>
                 </div>
             </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Active Assignments
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ active_count|default:0 }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
-                        </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-number text-success">
+                        {{ assignments|length|add:'-'|add:assignments.filter.status='RETURNED'|length }}
                     </div>
+                    <div class="stat-label">Active Assignments</div>
                 </div>
             </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Due Soon
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ due_soon_count|default:0 }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-clock fa-2x text-gray-300"></i>
-                        </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-number text-warning">
+                        {% if overdue_count %}{{ overdue_count }}{% else %}0{% endif %}
                     </div>
+                    <div class="stat-label">Overdue Items</div>
                 </div>
             </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                Overdue Returns
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ overdue_count|default:0 }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-number text-info">{{ unique_devices_count|default:"0" }}</div>
+                    <div class="stat-label">Unique Devices</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Filters Section -->
-    <div class="filter-section">
-        <form method="get" class="row">
-            <div class="col-md-3">
-                <div class="form-group">
-                    <label for="search" class="text-sm font-weight-bold">Search:</label>
-                    <input type="text" class="form-control" name="search" id="search" 
-                           value="{{ request.GET.search }}" placeholder="Device ID, Staff name, Department...">
-                </div>
+    <!-- Search and Filters -->
+    <div class="search-section">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="search_query" class="form-label">
+                    <i class="fas fa-search"></i> Search Assignments
+                </label>
+                <input 
+                    type="text" 
+                    name="search_query" 
+                    id="search_query" 
+                    class="form-control" 
+                    placeholder="Search by device ID, staff name, or purpose..."
+                    value="{{ request.GET.search_query }}"
+                >
             </div>
             <div class="col-md-2">
-                <div class="form-group">
-                    <label for="status" class="text-sm font-weight-bold">Status:</label>
-                    <select class="form-control" name="status" id="status">
-                        <option value="">All Status</option>
-                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
-                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
-                        <option value="overdue" {% if request.GET.status == 'overdue' %}selected{% endif %}>Overdue</option>
-                    </select>
-                </div>
+                <label for="assignment_type" class="form-label">
+                    <i class="fas fa-tag"></i> Type
+                </label>
+                <select name="assignment_type" id="assignment_type" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="PERMANENT" {% if request.GET.assignment_type == 'PERMANENT' %}selected{% endif %}>Permanent</option>
+                    <option value="TEMPORARY" {% if request.GET.assignment_type == 'TEMPORARY' %}selected{% endif %}>Temporary</option>
+                    <option value="PROJECT" {% if request.GET.assignment_type == 'PROJECT' %}selected{% endif %}>Project</option>
+                    <option value="MAINTENANCE" {% if request.GET.assignment_type == 'MAINTENANCE' %}selected{% endif %}>Maintenance</option>
+                </select>
             </div>
             <div class="col-md-2">
-                <div class="form-group">
-                    <label for="assignment_type" class="text-sm font-weight-bold">Type:</label>
-                    <select class="form-control" name="assignment_type" id="assignment_type">
-                        <option value="">All Types</option>
-                        <option value="PERMANENT" {% if request.GET.assignment_type == 'PERMANENT' %}selected{% endif %}>Permanent</option>
-                        <option value="TEMPORARY" {% if request.GET.assignment_type == 'TEMPORARY' %}selected{% endif %}>Temporary</option>
-                        <option value="PROJECT" {% if request.GET.assignment_type == 'PROJECT' %}selected{% endif %}>Project</option>
-                        <option value="POOL" {% if request.GET.assignment_type == 'POOL' %}selected{% endif %}>Pool</option>
-                    </select>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="form-group">
-                    <label for="department" class="text-sm font-weight-bold">Department:</label>
-                    <select class="form-control" name="department" id="department">
-                        <option value="">All Departments</option>
-                        {% for dept in departments %}
-                            <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>
-                                {{ dept.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <label for="status" class="form-label">
+                    <i class="fas fa-status"></i> Status
+                </label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="ACTIVE" {% if request.GET.status == 'ACTIVE' %}selected{% endif %}>Active</option>
+                    <option value="RETURNED" {% if request.GET.status == 'RETURNED' %}selected{% endif %}>Returned</option>
+                    <option value="TRANSFERRED" {% if request.GET.status == 'TRANSFERRED' %}selected{% endif %}>Transferred</option>
+                </select>
             </div>
             <div class="col-md-2">
-                <div class="form-group">
-                    <label class="text-sm font-weight-bold" style="visibility: hidden;">Action</label>
-                    <div>
-                        <button type="submit" class="btn btn-primary btn-block">
-                            <i class="fas fa-search"></i> Filter
-                        </button>
-                    </div>
+                <label for="department" class="form-label">
+                    <i class="fas fa-building"></i> Department
+                </label>
+                <select name="department" id="department" class="form-select">
+                    <option value="">All Departments</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept.id }}" {% if request.GET.department == dept.id|stringformat:"s" %}selected{% endif %}>
+                            {{ dept.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter"></i> Filter
+                    </button>
+                    <a href="{% url 'inventory:assignment_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </a>
                 </div>
             </div>
         </form>
     </div>
 
     <!-- Assignments List -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">
-                Assignment List ({{ assignments.count }} items)
-            </h6>
-            <div class="dropdown no-arrow">
-                <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
-                   data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
-                </a>
-                <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
-                     aria-labelledby="dropdownMenuLink">
-                    <a class="dropdown-item" href="{% url 'inventory:assignment_export' %}">
-                        <i class="fas fa-download fa-sm fa-fw mr-2 text-gray-400"></i>
-                        Export to Excel
-                    </a>
-                    <a class="dropdown-item" href="{% url 'inventory:assignment_print' %}">
-                        <i class="fas fa-print fa-sm fa-fw mr-2 text-gray-400"></i>
-                        Print List
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="card-body">
-            {% if assignments %}
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover" id="assignmentTable">
-                        <thead class="thead-light">
-                            <tr>
-                                <th style="width: 15%">
-                                    <i class="fas fa-laptop text-primary"></i> Device
-                                </th>
-                                <th style="width: 20%">
-                                    <i class="fas fa-user text-info"></i> Assigned To
-                                </th>
-                                <th style="width: 12%">
-                                    <i class="fas fa-tag text-success"></i> Type
-                                </th>
-                                <th style="width: 12%">
-                                    <i class="fas fa-calendar text-warning"></i> Start Date
-                                </th>
-                                <th style="width: 12%">
-                                    <i class="fas fa-calendar-check text-danger"></i> Return Date
-                                </th>
-                                <th style="width: 10%">
-                                    <i class="fas fa-info-circle text-secondary"></i> Status
-                                </th>
-                                <th style="width: 19%">
-                                    <i class="fas fa-cog text-dark"></i> Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for assignment in assignments %}
-                                <tr class="assignment-row {% if assignment.is_overdue %}overdue-highlight{% elif assignment.days_until_due and assignment.days_until_due <= 7 %}due-soon-highlight{% endif %}">
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="device-icon mr-2">
-                                                {% if assignment.device.device_type.name == 'Laptop' %}
-                                                    <i class="fas fa-laptop text-primary"></i>
-                                                {% elif assignment.device.device_type.name == 'Desktop' %}
-                                                    <i class="fas fa-desktop text-success"></i>
-                                                {% elif assignment.device.device_type.name == 'Mobile' %}
-                                                    <i class="fas fa-mobile-alt text-info"></i>
+    <div class="row">
+        {% if assignments %}
+            {% for assignment in assignments %}
+                <div class="col-12 mb-3">
+                    <div class="assignment-card 
+                        {% if assignment.is_overdue %}overdue-alert{% elif assignment.days_until_due and assignment.days_until_due <= 7 %}due-soon-alert{% endif %}">
+                        
+                        <div class="card-body p-4">
+                            <div class="row">
+                                <!-- Device Information -->
+                                <div class="col-lg-4">
+                                    <div class="device-info">
+                                        <div class="d-flex align-items-center mb-3">
+                                            <div class="device-icon me-3">
+                                                {% if assignment.device.device_type.name|lower == 'laptop' %}
+                                                    <i class="fas fa-laptop fa-2x text-primary"></i>
+                                                {% elif assignment.device.device_type.name|lower == 'desktop' %}
+                                                    <i class="fas fa-desktop fa-2x text-primary"></i>
+                                                {% elif assignment.device.device_type.name|lower == 'monitor' %}
+                                                    <i class="fas fa-tv fa-2x text-primary"></i>
+                                                {% elif assignment.device.device_type.name|lower == 'printer' %}
+                                                    <i class="fas fa-print fa-2x text-primary"></i>
                                                 {% else %}
-                                                    <i class="fas fa-microchip text-secondary"></i>
+                                                    <i class="fas fa-microchip fa-2x text-primary"></i>
                                                 {% endif %}
                                             </div>
                                             <div>
-                                                <div class="font-weight-bold text-primary">
-                                                    {{ assignment.device.device_id }}
-                                                </div>
-                                                <small class="text-muted">{{ assignment.device.device_name }}</small>
-                                                {% if assignment.device.asset_tag %}
-                                                    <br><small class="badge badge-light">{{ assignment.device.asset_tag }}</small>
-                                                {% endif %}
+                                                <h5 class="mb-1">{{ assignment.device.device_name|default:assignment.device.device_id }}</h5>
+                                                <p class="mb-0 text-muted">{{ assignment.device.device_type.name }} • {{ assignment.device.brand }}</p>
+                                                <small class="text-primary">{{ assignment.device.asset_tag|default:assignment.device.device_id }}</small>
                                             </div>
                                         </div>
-                                    </td>
-                                    <td>
+                                        <div class="device-meta">
+                                            <small class="text-muted">
+                                                <strong>Model:</strong> {{ assignment.device.model|default:"N/A" }}<br>
+                                                <strong>Serial:</strong> {{ assignment.device.serial_number|default:"N/A" }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Assignment Target Information -->
+                                <div class="col-lg-4">
+                                    <div class="assigned-to-section">
+                                        <h6 class="mb-3">
+                                            <i class="fas fa-user-tag"></i> Assigned To
+                                        </h6>
+                                        
                                         {% if assignment.assigned_to_staff %}
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar-sm mr-2">
-                                                    <img src="{% static 'img/avatars/default-avatar.jpg' %}" 
-                                                         class="rounded-circle" width="30" height="30" 
-                                                         alt="Avatar">
-                                                </div>
+                                                <i class="fas fa-user text-primary me-2"></i>
                                                 <div>
-                                                    <div class="font-weight-bold text-dark">
+                                                    <div class="fw-bold text-dark">
                                                         {{ assignment.assigned_to_staff.user.first_name }} {{ assignment.assigned_to_staff.user.last_name }}
                                                     </div>
                                                     <small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
@@ -313,9 +296,9 @@
                                             </div>
                                         {% elif assignment.assigned_to_department %}
                                             <div class="d-flex align-items-center">
-                                                <i class="fas fa-building text-info mr-2"></i>
+                                                <i class="fas fa-building text-info me-2"></i>
                                                 <div>
-                                                    <div class="font-weight-bold text-info">
+                                                    <div class="fw-bold text-info">
                                                         {{ assignment.assigned_to_department.name }}
                                                     </div>
                                                     <small class="text-muted">Department Pool</small>
@@ -323,161 +306,196 @@
                                             </div>
                                         {% elif assignment.assigned_to_location %}
                                             <div class="d-flex align-items-center">
-                                                <i class="fas fa-map-marker-alt text-success mr-2"></i>
+                                                <i class="fas fa-map-marker-alt text-success me-2"></i>
                                                 <div>
-                                                    <div class="font-weight-bold text-success">
+                                                    <div class="fw-bold text-success">
                                                         {{ assignment.assigned_to_location }}
                                                     </div>
                                                     <small class="text-muted">Location Pool</small>
                                                 </div>
                                             </div>
                                         {% else %}
-                                            <span class="text-muted">
-                                                <i class="fas fa-question-circle"></i> Unassigned
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% elif assignment.assignment_type == 'TEMPORARY' %}warning{% elif assignment.assignment_type == 'PROJECT' %}info{% else %}secondary{% endif %} status-badge">
-                                            {{ assignment.get_assignment_type_display }}
-                                        </span>
-                                        {% if assignment.is_temporary %}
-                                            <br><small class="text-muted">
-                                                <i class="fas fa-clock"></i> Temporary
-                                            </small>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="font-weight-bold">
-                                            {{ assignment.start_date|date:"M d, Y" }}
-                                        </div>
-                                        <small class="text-muted">
-                                            {{ assignment.start_date|timesince }} ago
-                                        </small>
-                                    </td>
-                                    <td>
-                                        {% if assignment.expected_return_date %}
-                                            <div class="{% if assignment.is_overdue %}text-danger font-weight-bold{% elif assignment.days_until_due and assignment.days_until_due <= 7 %}text-warning font-weight-bold{% endif %}">
-                                                {{ assignment.expected_return_date|date:"M d, Y" }}
+                                            <div class="text-muted">
+                                                <i class="fas fa-question-circle"></i> Not Assigned
                                             </div>
-                                            {% if assignment.is_overdue %}
-                                                <small class="text-danger">
-                                                    <i class="fas fa-exclamation-triangle"></i> 
-                                                    {{ assignment.expected_return_date|timesince }} overdue
-                                                </small>
-                                            {% elif assignment.days_until_due %}
-                                                <small class="text-{% if assignment.days_until_due <= 7 %}warning{% else %}muted{% endif %}">
-                                                    {% if assignment.days_until_due <= 0 %}
-                                                        <i class="fas fa-calendar-check"></i> Due today
-                                                    {% else %}
-                                                        <i class="fas fa-clock"></i> {{ assignment.days_until_due }} days remaining
-                                                    {% endif %}
-                                                </small>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">No return date</span>
                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if assignment.is_active %}
-                                            <span class="badge badge-success status-badge">
-                                                <i class="fas fa-check-circle"></i> Active
-                                            </span>
-                                        {% else %}
-                                            <span class="badge badge-secondary status-badge">
-                                                <i class="fas fa-pause-circle"></i> Inactive
-                                            </span>
-                                        {% endif %}
-                                        
-                                        {% if assignment.is_overdue %}
-                                            <br><span class="badge badge-danger status-badge mt-1">
-                                                <i class="fas fa-exclamation-triangle"></i> Overdue
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="btn-group assignment-actions" role="group">
-                                            <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
-                                               class="btn btn-sm btn-outline-primary" title="View Details">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <a href="{% url 'inventory:assignment_edit' assignment.assignment_id %}" 
-                                               class="btn btn-sm btn-outline-secondary" title="Edit Assignment">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            {% if assignment.is_temporary and assignment.is_active %}
-                                                <a href="{% url 'inventory:assignment_extend' assignment.assignment_id %}" 
-                                                   class="btn btn-sm btn-outline-warning" title="Extend Assignment">
-                                                    <i class="fas fa-clock"></i>
-                                                </a>
-                                                <a href="{% url 'inventory:assignment_return' assignment.assignment_id %}" 
-                                                   class="btn btn-sm btn-outline-success" title="Return Device">
-                                                    <i class="fas fa-undo"></i>
-                                                </a>
-                                            {% endif %}
-                                            <a href="{% url 'inventory:assignment_transfer' assignment.assignment_id %}" 
-                                               class="btn btn-sm btn-outline-info" title="Transfer Assignment">
-                                                <i class="fas fa-exchange-alt"></i>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                                    </div>
+                                </div>
 
-                <!-- Pagination -->
-                {% if assignments.has_other_pages %}
-                    <nav aria-label="Assignments pagination">
+                                <!-- Assignment Metadata -->
+                                <div class="col-lg-4">
+                                    <div class="assignment-meta">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <div>
+                                                <span class="status-badge badge 
+                                                    {% if assignment.status == 'ACTIVE' %}bg-success
+                                                    {% elif assignment.status == 'RETURNED' %}bg-secondary
+                                                    {% elif assignment.status == 'TRANSFERRED' %}bg-info
+                                                    {% else %}bg-warning{% endif %}">
+                                                    {{ assignment.get_status_display }}
+                                                </span>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge bg-light text-dark">
+                                                    {{ assignment.get_assignment_type_display }}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div class="assignment-dates">
+                                            <div class="mb-2">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-calendar-plus"></i> 
+                                                    <strong>Assigned:</strong> {{ assignment.start_date|date:"M d, Y" }}
+                                                </small>
+                                            </div>
+                                            
+                                            {% if assignment.expected_return_date %}
+                                                <div class="mb-2">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-calendar-check"></i>
+                                                        <strong>Expected Return:</strong> {{ assignment.expected_return_date|date:"M d, Y" }}
+                                                        {% if assignment.is_overdue %}
+                                                            <span class="text-danger ms-1">
+                                                                <i class="fas fa-exclamation-triangle"></i> Overdue
+                                                            </span>
+                                                        {% elif assignment.days_until_due and assignment.days_until_due <= 7 %}
+                                                            <span class="text-warning ms-1">
+                                                                <i class="fas fa-clock"></i> Due in {{ assignment.days_until_due }} days
+                                                            </span>
+                                                        {% endif %}
+                                                    </small>
+                                                </div>
+                                            {% endif %}
+
+                                            {% if assignment.purpose %}
+                                                <div class="mb-2">
+                                                    <small class="text-muted">
+                                                        <i class="fas fa-info-circle"></i>
+                                                        <strong>Purpose:</strong> {{ assignment.purpose|truncatechars:50 }}
+                                                    </small>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Action Buttons -->
+                                        <div class="action-buttons mt-3">
+                                            <div class="btn-group btn-group-sm w-100" role="group">
+                                                <a href="{% url 'inventory:assignment_detail' assignment.id %}" 
+                                                   class="btn btn-outline-primary" title="View Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                
+                                                {% if assignment.status == 'ACTIVE' %}
+                                                    <a href="{% url 'inventory:assignment_edit' assignment.id %}" 
+                                                       class="btn btn-outline-secondary" title="Edit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    <a href="{% url 'inventory:assignment_return' assignment.id %}" 
+                                                       class="btn btn-outline-warning" title="Return">
+                                                        <i class="fas fa-undo"></i>
+                                                    </a>
+                                                    <a href="{% url 'inventory:assignment_transfer' assignment.id %}" 
+                                                       class="btn btn-outline-info" title="Transfer">
+                                                        <i class="fas fa-exchange-alt"></i>
+                                                    </a>
+                                                {% endif %}
+                                                
+                                                <div class="dropdown">
+                                                    <button class="btn btn-outline-secondary dropdown-toggle" 
+                                                            type="button" data-bs-toggle="dropdown">
+                                                        <i class="fas fa-ellipsis-v"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li>
+                                                            <a class="dropdown-item" href="{% url 'inventory:device_detail' assignment.device.device_id %}">
+                                                                <i class="fas fa-microchip"></i> View Device
+                                                            </a>
+                                                        </li>
+                                                        {% if assignment.assigned_to_staff %}
+                                                            <li>
+                                                                <a class="dropdown-item" href="{% url 'inventory:staff_detail' assignment.assigned_to_staff.staff_id %}">
+                                                                    <i class="fas fa-user"></i> View Staff
+                                                                </a>
+                                                            </li>
+                                                        {% endif %}
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="#" onclick="printAssignment('{{ assignment.id }}')">
+                                                                <i class="fas fa-print"></i> Print Assignment
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+                <div class="col-12">
+                    <nav aria-label="Assignment pagination" class="mt-4">
                         <ul class="pagination justify-content-center">
-                            {% if assignments.has_previous %}
+                            {% if page_obj.has_previous %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page={{ assignments.previous_page_number }}">
+                                    <a class="page-link" href="?{% if request.GET.search_query %}search_query={{ request.GET.search_query }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page=1">
+                                        <i class="fas fa-angle-double-left"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if request.GET.search_query %}search_query={{ request.GET.search_query }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page={{ page_obj.previous_page_number }}">
                                         <i class="fas fa-angle-left"></i> Previous
                                     </a>
                                 </li>
                             {% endif %}
 
-                            {% for num in assignments.paginator.page_range %}
-                                {% if assignments.number == num %}
-                                    <li class="page-item active">
-                                        <span class="page-link">{{ num }}</span>
-                                    </li>
-                                {% elif num > assignments.number|add:'-3' and num < assignments.number|add:'3' %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page={{ num }}">{{ num }}</a>
-                                    </li>
-                                {% endif %}
-                            {% endfor %}
+                            <li class="page-item active">
+                                <span class="page-link">
+                                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                </span>
+                            </li>
 
-                            {% if assignments.has_next %}
+                            {% if page_obj.has_next %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page={{ assignments.next_page_number }}">
+                                    <a class="page-link" href="?{% if request.GET.search_query %}search_query={{ request.GET.search_query }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page={{ page_obj.next_page_number }}">
                                         Next <i class="fas fa-angle-right"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if request.GET.search_query %}search_query={{ request.GET.search_query }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.assignment_type %}assignment_type={{ request.GET.assignment_type }}&{% endif %}{% if request.GET.department %}department={{ request.GET.department }}&{% endif %}page={{ page_obj.paginator.num_pages }}">
+                                        <i class="fas fa-angle-double-right"></i>
                                     </a>
                                 </li>
                             {% endif %}
                         </ul>
                     </nav>
-                {% endif %}
-            {% else %}
-                <!-- Empty State -->
-                <div class="text-center py-5">
+                </div>
+            {% endif %}
+
+        {% else %}
+            <!-- Empty State -->
+            <div class="col-12">
+                <div class="empty-state">
                     <div class="mb-4">
-                        <i class="fas fa-clipboard-list fa-3x text-gray-300"></i>
+                        <i class="fas fa-clipboard-list fa-5x text-muted"></i>
                     </div>
-                    <h5 class="text-gray-500">No assignments found</h5>
-                    <p class="text-gray-400 mb-4">
-                        {% if request.GET.search or request.GET.status or request.GET.assignment_type or request.GET.department %}
+                    <h3 class="text-muted mb-3">No Assignments Found</h3>
+                    <p class="text-muted mb-4">
+                        {% if request.GET.search_query or request.GET.status or request.GET.assignment_type or request.GET.department %}
                             No assignments match your current filters. Try adjusting your search criteria.
                         {% else %}
                             Get started by creating your first device assignment.
                         {% endif %}
                     </p>
                     <div>
-                        {% if request.GET.search or request.GET.status or request.GET.assignment_type or request.GET.department %}
-                            <a href="{% url 'inventory:assignment_list' %}" class="btn btn-secondary mr-2">
+                        {% if request.GET.search_query or request.GET.status or request.GET.assignment_type or request.GET.department %}
+                            <a href="{% url 'inventory:assignment_list' %}" class="btn btn-secondary me-2">
                                 <i class="fas fa-times"></i> Clear Filters
                             </a>
                         {% endif %}
@@ -486,8 +504,8 @@
                         </a>
                     </div>
                 </div>
-            {% endif %}
-        </div>
+            </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -495,26 +513,39 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Initialize DataTable for sorting (optional)
-    $('#assignmentTable').DataTable({
-        "paging": false,
-        "searching": false,
-        "info": false,
-        "ordering": true,
-        "order": [[ 3, "desc" ]], // Sort by start date descending
-        "columnDefs": [
-            { "orderable": false, "targets": 6 } // Disable sorting for actions column
-        ]
-    });
-
     // Auto-submit filter form on change
     $('#status, #assignment_type, #department').change(function() {
         $(this).closest('form').submit();
     });
 
-    // Highlight overdue assignments
-    $('.overdue-highlight').addClass('table-danger');
-    $('.due-soon-highlight').addClass('table-warning');
+    // Search on Enter key
+    $('#search_query').on('keypress', function(e) {
+        if (e.which === 13) {
+            $(this).closest('form').submit();
+        }
+    });
+
+    // Tooltip initialization
+    $('[data-bs-toggle="tooltip"]').tooltip();
+
+    // Confirm actions
+    $('.btn-outline-warning[title="Return"]').on('click', function(e) {
+        if (!confirm('Are you sure you want to mark this assignment as returned?')) {
+            e.preventDefault();
+        }
+    });
 });
+
+// Print assignment function
+function printAssignment(assignmentId) {
+    window.open(`/assignments/${assignmentId}/print/`, '_blank');
+}
+
+// Export functions
+function exportAssignments(format) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', format);
+    window.location.href = `${window.location.pathname}?${params.toString()}`;
+}
 </script>
 {% endblock %}

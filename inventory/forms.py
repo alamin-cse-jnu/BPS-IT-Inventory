@@ -65,25 +65,22 @@ class BlockForm(forms.ModelForm):
     
     class Meta:
         model = Block
-        fields = ['building', 'name', 'code', 'description', 'is_active']
+        fields = ['name', 'code', 'building', 'description', 'is_active']
         widgets = {
-            'building': forms.Select(attrs={
-                'class': 'form-control',
-                'required': True
-            }),
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Block name (e.g., East Block, West Block)'
+                'placeholder': 'Block name (e.g., Administrative Block, East Wing)'
             }),
             'code': forms.TextInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'Block code (e.g., EB, WB, NB, SB)',
-                'maxlength': 20
+                'placeholder': 'Block code (e.g., ADMIN-BLK, EAST-WING)',
+                'maxlength': 50
             }),
+            'building': forms.Select(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': 'Description of this block and its departments'
+                'placeholder': 'Description of the block and its purpose'
             }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
@@ -92,57 +89,46 @@ class BlockForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only show active buildings
-        self.fields['building'].queryset = Building.objects.filter(is_active=True).order_by('name')
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
     
-    def clean(self):
-        cleaned_data = super().clean()
-        building = cleaned_data.get('building')
-        code = cleaned_data.get('code', '').upper()
+    def clean_code(self):
+        code = self.cleaned_data.get('code', '').upper()
+        building = self.cleaned_data.get('building')
         
-        if building and code:
+        if code and building:
             # Check for duplicate code within the same building
-            existing = Block.objects.filter(building=building, code=code)
+            existing = Block.objects.filter(code=code, building=building)
             if self.instance.pk:
                 existing = existing.exclude(pk=self.instance.pk)
             if existing.exists():
-                raise ValidationError(f'Block with code "{code}" already exists in {building.name}.')
-        
-        cleaned_data['code'] = code
-        return cleaned_data
+                raise ValidationError(
+                    f'Block with code "{code}" already exists in {building.name}.'
+                )
+        return code
 
 class FloorForm(forms.ModelForm):
-    """Form for creating and editing floors with building and block hierarchy"""
+    """Form for creating and editing floors"""
     
     class Meta:
         model = Floor
-        fields = ['building', 'block', 'name', 'floor_number', 'description', 'is_active']
+        # CHANGE: Replace 'number' with 'floor_number'
+        fields = ['floor_number', 'name', 'building', 'block', 'description', 'is_active']
         widgets = {
-            'building': forms.Select(attrs={
-                'class': 'form-control cascade-parent',
-                'data-cascade-target': 'block',
-                'data-cascade-url': '/api/blocks/by-building/',
-                'required': True
-            }),
-            'block': forms.Select(attrs={
-                'class': 'form-control cascade-child',
-                'data-cascade-parent': 'building',
-                'required': True
+            # CHANGE: Replace 'number' with 'floor_number'
+            'floor_number': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Floor number (e.g., 1, 2, 3)'
             }),
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Floor name (e.g., Ground Floor, First Floor)'
             }),
-            'floor_number': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': 0,
-                'max': 50,
-                'placeholder': 'Floor number (0 for ground floor)'
-            }),
+            'building': forms.Select(attrs={'class': 'form-control'}),
+            'block': forms.Select(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={
                 'class': 'form-control',
-                'rows': 3,
-                'placeholder': 'Description of this floor and its departments'
+                'rows': 2,
+                'placeholder': 'Floor description'
             }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
@@ -151,35 +137,37 @@ class FloorForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only show active buildings and blocks
-        self.fields['building'].queryset = Building.objects.filter(is_active=True).order_by('name')
-        
-        # If editing, filter blocks by building
-        if self.instance.pk and self.instance.building:
-            self.fields['block'].queryset = Block.objects.filter(
-                building=self.instance.building, 
-                is_active=True
-            ).order_by('name')
-        else:
-            self.fields['block'].queryset = Block.objects.none()
+        self.fields['building'].queryset = Building.objects.filter(is_active=True)
+        self.fields['block'].queryset = Block.objects.filter(is_active=True)
+        self.fields['block'].required = False
     
     def clean(self):
         cleaned_data = super().clean()
         building = cleaned_data.get('building')
         block = cleaned_data.get('block')
+        # CHANGE: Replace 'number' with 'floor_number'
         floor_number = cleaned_data.get('floor_number')
         
-        # Validate block belongs to building
-        if building and block and block.building != building:
-            raise ValidationError('Selected block does not belong to the selected building.')
+        if block and building and block.building != building:
+            raise ValidationError("Selected block does not belong to the selected building.")
         
-        # Check for duplicate floor number within the same block
-        if building and block and floor_number is not None:
-            existing = Floor.objects.filter(building=building, block=block, floor_number=floor_number)
+        if building and floor_number is not None:
+            # Check for duplicate floor number in building/block combination
+            existing = Floor.objects.filter(
+                building=building,
+                block=block,
+                # CHANGE: Replace 'number' with 'floor_number'
+                floor_number=floor_number
+            )
             if self.instance.pk:
                 existing = existing.exclude(pk=self.instance.pk)
             if existing.exists():
-                raise ValidationError(f'Floor {floor_number} already exists in {block.name}.')
+                location_str = f"{building.name}"
+                if block:
+                    location_str += f" - {block.name}"
+                raise ValidationError(
+                    f'Floor {floor_number} already exists in {location_str}.'
+                )
         
         return cleaned_data
 
@@ -504,11 +492,31 @@ class AssignmentForm(forms.ModelForm):
     
     class Meta:
         model = Assignment
-        fields = ['device', 'staff', 'location', 'purpose', 'expected_return_date', 'notes']
+        fields = [
+            'device', 
+            'assigned_to_staff', 
+            'assigned_to_department', 
+            'assigned_to_location', 
+            'assignment_type',
+            'purpose', 
+            'expected_return_date', 
+            'notes'
+        ]
         widgets = {
             'device': forms.Select(attrs={'class': 'form-control'}),
-            'staff': forms.Select(attrs={'class': 'form-control'}),
-            'location': forms.Select(attrs={'class': 'form-control'}),
+            'assigned_to_staff': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_assigned_to_staff'
+            }),
+            'assigned_to_department': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_assigned_to_department'
+            }),
+            'assigned_to_location': forms.Select(attrs={
+                'class': 'form-control',
+                'id': 'id_assigned_to_location'
+            }),
+            'assignment_type': forms.Select(attrs={'class': 'form-control'}),
             'purpose': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Purpose of assignment'
@@ -526,48 +534,502 @@ class AssignmentForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only show available devices, active staff, and active locations
-        self.fields['device'].queryset = Device.objects.filter(status='AVAILABLE')
-        self.fields['staff'].queryset = Staff.objects.filter(is_active=True).select_related('user', 'department')
-        self.fields['location'].queryset = Location.objects.filter(is_active=True).select_related(
-            'building', 'block', 'floor', 'department', 'room'
-        )
+        
+        # Filter querysets for better performance and relevant data
+        self.fields['device'].queryset = Device.objects.filter(
+            status='AVAILABLE'
+        ).select_related('device_type', 'current_location')
+        
+        self.fields['assigned_to_staff'].queryset = Staff.objects.filter(
+            is_active=True
+        ).select_related('user', 'department')
+        
+        self.fields['assigned_to_location'].queryset = Location.objects.filter(
+            is_active=True
+        ).select_related('building', 'block', 'floor', 'department', 'room')
+        
+        # Make assignment target fields optional since only one is required
+        self.fields['assigned_to_staff'].required = False
+        self.fields['assigned_to_department'].required = False
+        self.fields['assigned_to_location'].required = False
+        
+        # Set help texts
+        self.fields['assigned_to_staff'].help_text = "Assign to a specific staff member"
+        self.fields['assigned_to_department'].help_text = "Assign to department pool"
+        self.fields['assigned_to_location'].help_text = "Assign to a specific location"
+        
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # Ensure at least one assignment target is specified
+        staff = cleaned_data.get('assigned_to_staff')
+        department = cleaned_data.get('assigned_to_department')
+        location = cleaned_data.get('assigned_to_location')
+        
+        if not any([staff, department, location]):
+            raise ValidationError(
+                "At least one assignment target must be specified "
+                "(Staff, Department, or Location)."
+            )
+        
+        # Validate expected return date
+        expected_return = cleaned_data.get('expected_return_date')
+        if expected_return and expected_return <= timezone.now().date():
+            raise ValidationError(
+                "Expected return date must be in the future."
+            )
+        
+        return cleaned_data
 
 # ================================
 # DEVICE FORM (Updated to include current_location hierarchy)
 # ================================
 
 class DeviceForm(forms.ModelForm):
-    """Enhanced device form with location hierarchy"""
+    """Enhanced device form with current location hierarchy"""
     
     class Meta:
         model = Device
         fields = [
-            'device_type', 'brand', 'model', 'serial_number', 'asset_tag',
-            'purchase_date', 'purchase_price', 'vendor', 'warranty_end_date',
-            'current_location', 'status', 'notes'
+            'device_id', 'device_name', 'device_type', 'brand', 'model',
+            'serial_number', 'asset_tag', 'purchase_date', 'purchase_price',
+            'location', 'status', 'device_condition', 'warranty_end_date',
+            'processor', 'memory_ram', 'storage_capacity', 'operating_system',
+            'is_critical', 'notes'
         ]
         widgets = {
+            'device_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Auto-generated if left blank'
+            }),
+            'device_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Descriptive device name'
+            }),
             'device_type': forms.Select(attrs={'class': 'form-control'}),
-            'brand': forms.TextInput(attrs={'class': 'form-control'}),
-            'model': forms.TextInput(attrs={'class': 'form-control'}),
-            'serial_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'asset_tag': forms.TextInput(attrs={'class': 'form-control'}),
-            'purchase_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'vendor': forms.Select(attrs={'class': 'form-control'}),
-            'warranty_end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'current_location': forms.Select(attrs={'class': 'form-control'}),
+            'brand': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Device brand/manufacturer'
+            }),
+            'model': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Model number/name'
+            }),
+            'serial_number': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Serial number'
+            }),
+            'asset_tag': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Asset tag number'
+            }),
+            'purchase_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'purchase_price': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0'
+            }),
+            'location': forms.Select(attrs={'class': 'form-control'}),
             'status': forms.Select(attrs={'class': 'form-control'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'device_condition': forms.Select(attrs={'class': 'form-control'}),
+            'warranty_end_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'is_critical': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'processor': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., Intel Core i7-1165G7'
+            }),
+            'memory_ram': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 16GB DDR4'
+            }),
+            'storage_capacity': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 512GB SSD'
+            }),
+            'operating_system': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., Windows 11 Pro'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Additional notes'
+            }),
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Show locations with hierarchy information
-        self.fields['current_location'].queryset = Location.objects.filter(is_active=True).select_related(
-            'building', 'block', 'floor', 'department', 'room'
-        )
+        
+        # Filter active locations with proper hierarchy
+        self.fields['location'].queryset = Location.objects.filter(
+            is_active=True
+        ).select_related('building', 'block', 'floor', 'department', 'room')
+        
+        # Make device_id optional for auto-generation
+        self.fields['device_id'].required = False
+
+# ================================
+# Vendor FORMS
+# ================================
+
+class VendorForm(forms.ModelForm):
+    """Form for creating and editing vendors"""
+    
+    class Meta:
+        model = Vendor
+        fields = [
+            'name', 'vendor_type', 'contact_person', 'email', 'phone', 
+            'address', 'website', 'tax_id', 'is_active'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Vendor name'
+            }),
+            'vendor_type': forms.Select(attrs={'class': 'form-control'}),
+            'contact_person': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Primary contact person'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'vendor@example.com'
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '+1-234-567-8900'
+            }),
+            'address': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Business address'
+            }),
+            'website': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://vendor-website.com'
+            }),
+            'tax_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Tax ID / Business registration number'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Make name required
+        self.fields['name'].required = True
+        self.fields['vendor_type'].required = True
+        
+        # Add help text
+        self.fields['name'].help_text = "Official vendor/supplier name"
+        self.fields['vendor_type'].help_text = "Select the type of vendor"
+        self.fields['contact_person'].help_text = "Primary contact person"
+        self.fields['email'].help_text = "Primary email for communications"
+        self.fields['phone'].help_text = "Include country code for international numbers"
+        self.fields['website'].help_text = "Company website URL"
+        self.fields['tax_id'].help_text = "Business registration or tax identification number"
+        self.fields['is_active'].help_text = "Uncheck to deactivate this vendor"
+    
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        if name:
+            # Check for duplicate vendor names
+            existing = Vendor.objects.filter(name__iexact=name)
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"A vendor with the name '{name}' already exists.")
+        
+        return name
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            # Basic email validation (Django's EmailField handles most cases)
+            # Check for duplicate emails
+            existing = Vendor.objects.filter(email__iexact=email)
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"A vendor with the email '{email}' already exists.")
+        
+        return email
+    
+    def clean_website(self):
+        website = self.cleaned_data.get('website')
+        if website:
+            # Ensure website starts with http:// or https://
+            if not website.startswith(('http://', 'https://')):
+                website = 'https://' + website
+        
+        return website
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        vendor_type = cleaned_data.get('vendor_type')
+        email = cleaned_data.get('email')
+        phone = cleaned_data.get('phone')
+        
+        # For certain vendor types, require contact information
+        if vendor_type in ['SERVICE_PROVIDER', 'MAINTENANCE_CONTRACTOR', 'CONSULTANT']:
+            if not email and not phone:
+                raise ValidationError(
+                    f"For {vendor_type.replace('_', ' ').title()} vendors, "
+                    "either email or phone number is required."
+                )
+        
+        return cleaned_data
+
+# ================================
+# CSVImport FORMS
+# ================================
+
+class CSVImportForm(forms.Form):
+    """Form for importing data from CSV/Excel files"""
+    
+    IMPORT_TYPES = [
+        ('devices', 'Devices'),
+        ('staff', 'Staff'),
+        ('locations', 'Locations'),
+        ('assignments', 'Assignments'),
+        ('vendors', 'Vendors'),
+        ('buildings', 'Buildings'),
+        ('departments', 'Departments'),
+    ]
+    
+    # Import configuration
+    import_type = forms.ChoiceField(
+        choices=IMPORT_TYPES,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Data type to import"
+    )
+    
+    csv_file = forms.FileField(
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv,.xlsx,.xls'
+        }),
+        label="Import file",
+        help_text="Supported formats: CSV, Excel (.xlsx, .xls). Maximum size: 10MB"
+    )
+    
+    # Import options
+    skip_header = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="File has header row",
+        help_text="Check if the first row contains column headers"
+    )
+    
+    update_existing = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Update existing records",
+        help_text="Update existing records if duplicates are found"
+    )
+    
+    validate_only = forms.BooleanField(
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Validate only (don't import)",
+        help_text="Only validate the data without actually importing"
+    )
+    
+    # Advanced options
+    batch_size = forms.IntegerField(
+        min_value=1,
+        max_value=1000,
+        initial=100,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'min': '1',
+            'max': '1000'
+        }),
+        label="Batch size",
+        help_text="Number of records to process at once"
+    )
+    
+    encoding = forms.ChoiceField(
+        choices=[
+            ('utf-8', 'UTF-8'),
+            ('utf-16', 'UTF-16'),
+            ('iso-8859-1', 'ISO-8859-1'),
+            ('windows-1252', 'Windows-1252'),
+        ],
+        initial='utf-8',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="File encoding",
+        help_text="Character encoding of the file"
+    )
+    
+    delimiter = forms.ChoiceField(
+        choices=[
+            (',', 'Comma (,)'),
+            (';', 'Semicolon (;)'),
+            ('\t', 'Tab'),
+            ('|', 'Pipe (|)'),
+        ],
+        initial=',',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="CSV delimiter",
+        help_text="Character used to separate fields (for CSV files only)"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Add help text for import types
+        self.fields['import_type'].help_text = "Select the type of data you want to import"
+    
+    def clean_csv_file(self):
+        file = self.cleaned_data.get('csv_file')
+        if file:
+            # Validate file size (max 10MB)
+            if file.size > 10 * 1024 * 1024:
+                raise ValidationError('File size cannot exceed 10MB.')
+            
+            # Validate file extension
+            valid_extensions = ['.csv', '.xlsx', '.xls']
+            file_ext = '.' + file.name.split('.')[-1].lower()
+            
+            if file_ext not in valid_extensions:
+                raise ValidationError(
+                    f'Invalid file format. Supported formats: {", ".join(valid_extensions)}'
+                )
+            
+            # Basic file content validation
+            if file.size == 0:
+                raise ValidationError('The uploaded file is empty.')
+        
+        return file
+    
+    def clean_batch_size(self):
+        batch_size = self.cleaned_data.get('batch_size')
+        if batch_size and batch_size < 1:
+            raise ValidationError('Batch size must be at least 1.')
+        if batch_size and batch_size > 1000:
+            raise ValidationError('Batch size cannot exceed 1000.')
+        
+        return batch_size
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        import_type = cleaned_data.get('import_type')
+        csv_file = cleaned_data.get('csv_file')
+        
+        # Additional validation can be added here based on import_type
+        if import_type and csv_file:
+            file_ext = '.' + csv_file.name.split('.')[-1].lower()
+            
+            # For certain import types, recommend specific formats
+            if import_type in ['devices', 'staff'] and file_ext == '.csv':
+                # CSV is good for these types
+                pass
+            elif import_type in ['locations', 'assignments'] and file_ext in ['.xlsx', '.xls']:
+                # Excel is preferred for complex data
+                pass
+        
+        return cleaned_data
+# ================================
+# ADDITIONAL UTILITY FORMS
+# ================================
+
+class DeviceSearchForm(forms.Form):
+    """Advanced device search form"""
+    
+    search_query = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search devices...'
+        })
+    )
+    
+    device_type = forms.ModelChoiceField(
+        queryset=DeviceType.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Types",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    status = forms.ChoiceField(
+        choices=[('', 'All Status')] + Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Locations",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+class AssignmentSearchForm(forms.Form):
+    """Assignment search and filter form"""
+    
+    search_query = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search assignments...'
+        })
+    )
+    
+    assignment_type = forms.ChoiceField(
+        choices=[('', 'All Types')] + Assignment.ASSIGNMENT_TYPES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="All Staff",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="All Departments",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
 
 # ================================
 # SEARCH AND FILTER FORMS (Updated with Block Support)
@@ -629,3 +1091,562 @@ class AdvancedSearchForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
     )
+
+# ================================
+# MAINTENANCE AND SERVICE FORMS
+# ================================
+
+class MaintenanceScheduleForm(forms.ModelForm):
+    """Form for scheduling device maintenance"""
+    
+    class Meta:
+        model = MaintenanceSchedule
+        fields = [
+            'device', 'maintenance_type', 'next_due_date', 'assigned_technician',
+            'estimated_duration', 'description', 'frequency', 'vendor', 
+            'cost_estimate', 'status'
+        ]
+        widgets = {
+            'device': forms.Select(attrs={'class': 'form-control'}),
+            'maintenance_type': forms.Select(attrs={'class': 'form-control'}),
+            'next_due_date': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'assigned_technician': forms.Select(attrs={'class': 'form-control'}),
+            'estimated_duration': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 2 hours, 1 day'
+            }),
+            'frequency': forms.Select(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Maintenance description'
+            }),
+            'vendor': forms.Select(attrs={'class': 'form-control'}),
+            'cost_estimate': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'min': '0'
+            }),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter active devices
+        self.fields['device'].queryset = Device.objects.filter(
+            status__in=['AVAILABLE', 'ASSIGNED']
+        ).select_related('device_type', 'location')
+        
+        # Filter active technicians
+        self.fields['assigned_technician'].queryset = Staff.objects.filter(
+            is_active=True,
+            role__in=['TECHNICIAN', 'MAINTENANCE', 'IT_SUPPORT']
+        )
+        
+        # Filter maintenance vendors
+        self.fields['vendor'].queryset = Vendor.objects.filter(
+            vendor_type__in=['SERVICE_PROVIDER', 'MAINTENANCE_CONTRACTOR'],
+            is_active=True
+        )
+
+# ================================
+# QUICK ACTION FORMS
+# ================================
+
+class ReturnForm(forms.Form):
+    """Simple form for returning devices"""
+    
+    return_date = forms.DateField(
+        initial=timezone.now().date,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    
+    return_condition = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Condition upon return'
+        })
+    )
+    
+    return_notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Return notes'
+        })
+    )
+    
+    device_condition = forms.ChoiceField(
+        choices=Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+class TransferForm(forms.Form):
+    """Simple form for transferring assignments"""
+    
+    new_assigned_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select staff member",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_assigned_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.all(),
+        required=False,
+        empty_label="Select department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_assigned_to_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select location",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    transfer_reason = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Reason for transfer'
+        })
+    )
+    
+    conditions = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Transfer conditions'
+        })
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        staff = cleaned_data.get('new_assigned_to_staff')
+        department = cleaned_data.get('new_assigned_to_department')
+        location = cleaned_data.get('new_assigned_to_location')
+        
+        if not any([staff, department, location]):
+            raise ValidationError(
+                "At least one new assignment target must be specified."
+            )
+        
+        return cleaned_data
+
+# ================================
+# SIMPLE CATEGORY FORMS
+# ================================
+
+class DeviceTypeForm(forms.ModelForm):
+    """Simple form for device types"""
+    
+    class Meta:
+        model = DeviceType
+        fields = [
+            'name', 'subcategory','description', 'is_active'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'subcategory': forms.Select(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3
+            }),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter active subcategories
+        self.fields['subcategory'].queryset = DeviceSubCategory.objects.filter(
+            is_active=True,
+            category__is_active=True
+        ).select_related('category')
+        
+        # Add help text
+        self.fields['subcategory'].help_text = "Select the subcategory for this device type"
+
+# ================================
+# BULK ACTION FORMS
+# ================================
+
+class BulkDeviceActionForm(forms.Form):
+    """Form for bulk device actions"""
+    
+    ACTION_CHOICES = [
+        ('', 'Select Action'),
+        ('update_status', 'Update Status'),
+        ('update_location', 'Update Location'),
+        ('update_condition', 'Update Condition'),
+        ('assign_vendor', 'Assign Vendor'),
+        ('bulk_assignment', 'Bulk Assignment'),
+        ('generate_qr', 'Generate QR Codes'),
+        ('export_data', 'Export Data'),
+    ]
+    
+    action = forms.ChoiceField(
+        choices=ACTION_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Status update
+    new_status = forms.ChoiceField(
+        choices=[('', 'Select Status')] + Device.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Location update
+    new_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Location",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Condition update
+    new_condition = forms.ChoiceField(
+        choices=[('', 'Select Condition')] + Device.CONDITION_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Vendor assignment
+    new_vendor = forms.ModelChoiceField(
+        queryset=Vendor.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Vendor",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Bulk assignment options
+    assign_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Staff",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assign_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select Department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    update_reason = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 3,
+            'placeholder': 'Reason for bulk update...',
+            'class': 'form-control'
+        })
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        action = cleaned_data.get('action')
+        
+        # Validate required fields based on action
+        if action == 'update_status' and not cleaned_data.get('new_status'):
+            raise ValidationError('New status is required for status update.')
+        
+        if action == 'update_location' and not cleaned_data.get('new_location'):
+            raise ValidationError('New location is required for location update.')
+        
+        if action == 'update_condition' and not cleaned_data.get('new_condition'):
+            raise ValidationError('New condition is required for condition update.')
+        
+        if action == 'assign_vendor' and not cleaned_data.get('new_vendor'):
+            raise ValidationError('Vendor is required for vendor assignment.')
+        
+        if action == 'bulk_assignment':
+            if not any([cleaned_data.get('assign_to_staff'), cleaned_data.get('assign_to_department')]):
+                raise ValidationError('Staff or department is required for bulk assignment.')
+        
+        return cleaned_data
+
+class BulkAssignmentForm(forms.Form):
+    """Form for bulk assignment creation"""
+    
+    # Device selection
+    devices = forms.ModelMultipleChoiceField(
+        queryset=Device.objects.filter(status='AVAILABLE'),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        label="Select devices to assign"
+    )
+    
+    # Assignment targets (at least one required)
+    assigned_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select staff member",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assigned_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    assigned_to_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select location",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Assignment details
+    is_temporary = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Temporary assignment"
+    )
+    
+    expected_return_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        label="Expected return date"
+    )
+    
+    purpose = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Purpose of assignment...'
+        })
+    )
+    
+    conditions = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Assignment conditions...'
+        })
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter devices to only available ones
+        self.fields['devices'].queryset = Device.objects.filter(
+            status='AVAILABLE'
+        ).select_related('device_type', 'location')
+        
+        # Filter active staff and departments
+        self.fields['assigned_to_staff'].queryset = Staff.objects.filter(is_active=True)
+        self.fields['assigned_to_department'].queryset = Department.objects.filter(is_active=True)
+        self.fields['assigned_to_location'].queryset = Location.objects.filter(
+            is_active=True
+        ).select_related('building', 'block', 'floor', 'department')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        devices = cleaned_data.get('devices')
+        staff = cleaned_data.get('assigned_to_staff')
+        department = cleaned_data.get('assigned_to_department')
+        location = cleaned_data.get('assigned_to_location')
+        is_temporary = cleaned_data.get('is_temporary')
+        expected_return_date = cleaned_data.get('expected_return_date')
+        
+        # Validate at least one assignment target
+        if not any([staff, department, location]):
+            raise ValidationError(
+                "At least one assignment target (staff, department, or location) must be specified."
+            )
+        
+        # Validate devices are selected
+        if not devices:
+            raise ValidationError("At least one device must be selected for assignment.")
+        
+        # Validate expected return date for temporary assignments
+        if is_temporary and not expected_return_date:
+            raise ValidationError(
+                "Expected return date is required for temporary assignments."
+            )
+        
+        if expected_return_date and expected_return_date <= timezone.now().date():
+            raise ValidationError(
+                "Expected return date must be in the future."
+            )
+        
+        return cleaned_data
+
+# ================================
+# Transfer FORMS
+# ================================
+
+class DeviceTransferForm(forms.Form):
+    """Form for transferring device assignments"""
+    
+    # Source assignment (if transferring from existing assignment)
+    source_assignment = forms.ModelChoiceField(
+        queryset=Assignment.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select current assignment",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Or select device directly
+    device = forms.ModelChoiceField(
+        queryset=Device.objects.filter(status__in=['ASSIGNED', 'AVAILABLE']),
+        required=False,
+        empty_label="Select device",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Transfer targets (at least one required)
+    new_assigned_to_staff = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select staff member",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_assigned_to_department = forms.ModelChoiceField(
+        queryset=Department.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select department",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    new_assigned_to_location = forms.ModelChoiceField(
+        queryset=Location.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select location",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    # Transfer details
+    transfer_type = forms.ChoiceField(
+        choices=[
+            ('permanent', 'Permanent Transfer'),
+            ('temporary', 'Temporary Transfer'),
+        ],
+        initial='permanent',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    expected_return_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        }),
+        label="Expected return date (for temporary transfers)"
+    )
+    
+    transfer_reason = forms.CharField(
+        max_length=500,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Reason for transfer...'
+        })
+    )
+    
+    conditions = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Transfer conditions...'
+        })
+    )
+    
+    # Approval workflow
+    requires_approval = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Requires approval"
+    )
+    
+    approved_by = forms.ModelChoiceField(
+        queryset=Staff.objects.filter(is_active=True),
+        required=False,
+        empty_label="Select approver",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Filter active assignments
+        self.fields['source_assignment'].queryset = Assignment.objects.filter(
+            is_active=True
+        ).select_related('device', 'assigned_to_staff', 'assigned_to_department')
+        
+        # Filter devices
+        self.fields['device'].queryset = Device.objects.filter(
+            status__in=['ASSIGNED', 'AVAILABLE']
+        ).select_related('device_type')
+        
+        # Filter locations with hierarchy
+        self.fields['new_assigned_to_location'].queryset = Location.objects.filter(
+            is_active=True
+        ).select_related('building', 'block', 'floor', 'department')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        source_assignment = cleaned_data.get('source_assignment')
+        device = cleaned_data.get('device')
+        staff = cleaned_data.get('new_assigned_to_staff')
+        department = cleaned_data.get('new_assigned_to_department')
+        location = cleaned_data.get('new_assigned_to_location')
+        transfer_type = cleaned_data.get('transfer_type')
+        expected_return_date = cleaned_data.get('expected_return_date')
+        
+        # Validate source (either assignment or device)
+        if not any([source_assignment, device]):
+            raise ValidationError(
+                "Either a source assignment or device must be specified."
+            )
+        
+        # Validate transfer target
+        if not any([staff, department, location]):
+            raise ValidationError(
+                "At least one transfer target (staff, department, or location) must be specified."
+            )
+        
+        # Validate return date for temporary transfers
+        if transfer_type == 'temporary' and not expected_return_date:
+            raise ValidationError(
+                "Expected return date is required for temporary transfers."
+            )
+        
+        if expected_return_date and expected_return_date <= timezone.now().date():
+            raise ValidationError(
+                "Expected return date must be in the future."
+            )
+        
+        return cleaned_data
+
+# Alias the correctly named forms
+MaintenanceForm = MaintenanceScheduleForm

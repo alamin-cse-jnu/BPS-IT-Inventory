@@ -1,404 +1,467 @@
-{% extends 'inventory/base.html' %}
+{% extends "base.html" %}
 {% load static %}
 
-{% block title %}Return Assignment {{ assignment.assignment_id }}{% endblock %}
+{% block title %}Return Assignment - {{ assignment.device.device_name }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .return-status {
-        border: 2px solid #28a745;
-        border-radius: 8px;
-        background: rgba(40, 167, 69, 0.1);
-    }
-    .overdue-alert {
-        border: 2px solid #dc3545;
-        border-radius: 8px;
-        background: rgba(220, 53, 69, 0.1);
-    }
-    .device-card {
-        border: 1px solid #e3e6f0;
-        border-radius: 8px;
-        background: #f8f9fc;
-    }
-    .assignment-info {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 8px;
-    }
-    .form-section {
-        border: 1px solid #e3e6f0;
-        border-radius: 8px;
-        background: white;
-    }
+.return-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+}
+
+.assignment-summary {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    border: 1px solid #e3e6f0;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.return-form {
+    background: white;
+    border-radius: 10px;
+    padding: 2rem;
+    border: 1px solid #e3e6f0;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.condition-selector {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+}
+
+.condition-option {
+    flex: 1;
+    min-width: 120px;
+    padding: 1rem;
+    border: 2px solid #e3e6f0;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.condition-option:hover {
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+.condition-option.selected {
+    border-color: #28a745;
+    background: #d4edda;
+}
+
+.condition-option.excellent { border-color: #28a745; }
+.condition-option.good { border-color: #17a2b8; }
+.condition-option.fair { border-color: #ffc107; }
+.condition-option.poor { border-color: #fd7e14; }
+.condition-option.damaged { border-color: #dc3545; }
+
+.condition-option.excellent.selected { background: #d4edda; }
+.condition-option.good.selected { background: #d1ecf1; }
+.condition-option.fair.selected { background: #fff3cd; }
+.condition-option.poor.selected { background: #ffd6cc; }
+.condition-option.damaged.selected { background: #f8d7da; }
+
+.overdue-warning {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+.return-summary {
+    background: #e7f3ff;
+    border: 1px solid #b8daff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.assignment-duration {
+    background: #f8f9fc;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.checklist-item {
+    padding: 0.75rem 1rem;
+    border: 1px solid #e3e6f0;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.checklist-item:hover {
+    background: #f8f9fc;
+}
+
+.checklist-item.checked {
+    background: #d4edda;
+    border-color: #28a745;
+}
+
+.return-checklist {
+    background: #f8f9fc;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid px-4">
     <!-- Page Header -->
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-undo-alt text-success"></i>
-            Return Assignment
-        </h1>
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_list' %}">Assignments</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}">{{ assignment.assignment_id }}</a></li>
-                <li class="breadcrumb-item active">Return</li>
-            </ol>
-        </nav>
-    </div>
-
-    <!-- Status Alert -->
-    {% if is_overdue %}
-    <div class="alert alert-danger overdue-alert mb-4">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h5 class="alert-heading mb-2">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    Overdue Assignment
-                </h5>
-                <p class="mb-0">
-                    This assignment is <strong>{{ days_overdue }} day{{ days_overdue|pluralize }}</strong> overdue.
-                    Expected return date was {{ assignment.expected_return_date }}.
-                </p>
+    <div class="return-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="mb-2">
+                    <i class="fas fa-undo-alt"></i> Return Assignment
+                </h1>
+                <p class="mb-0 opacity-75">Complete device return process</p>
             </div>
-            <div class="col-md-4 text-right">
-                <span class="badge badge-danger badge-lg">
-                    {{ days_overdue }} day{{ days_overdue|pluralize }} overdue
-                </span>
+            <div>
+                <a href="{% url 'inventory:assignment_detail' assignment.id %}" class="btn btn-light">
+                    <i class="fas fa-arrow-left"></i> Back to Assignment
+                </a>
             </div>
         </div>
     </div>
+
+    <!-- Overdue Warning -->
+    {% if assignment.is_overdue %}
+        <div class="overdue-warning">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-triangle fa-2x text-danger me-3"></i>
+                <div>
+                    <h5 class="mb-1 text-danger">Assignment Overdue</h5>
+                    <p class="mb-0">
+                        This assignment was due on {{ assignment.expected_return_date|date:"F d, Y" }}. 
+                        It is {{ assignment.days_overdue|default:"0" }} day{{ assignment.days_overdue|pluralize }} overdue.
+                    </p>
+                </div>
+            </div>
+        </div>
     {% endif %}
 
     <div class="row">
-        <!-- Assignment Details -->
-        <div class="col-lg-4">
-            <!-- Assignment Information Card -->
-            <div class="card shadow mb-4">
-                <div class="card-header assignment-info py-3">
-                    <h6 class="m-0 font-weight-bold">
-                        <i class="fas fa-clipboard-list"></i>
-                        Assignment Details
-                    </h6>
+        <!-- Assignment Summary -->
+        <div class="col-lg-4 mb-4">
+            <div class="assignment-summary">
+                <h5 class="mb-3">
+                    <i class="fas fa-info-circle text-primary"></i> Assignment Details
+                </h5>
+                
+                <!-- Device Info -->
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Device</h6>
+                    <div class="d-flex align-items-center">
+                        {% if assignment.device.device_type.name|lower == 'laptop' %}
+                            <i class="fas fa-laptop text-primary me-2"></i>
+                        {% elif assignment.device.device_type.name|lower == 'desktop' %}
+                            <i class="fas fa-desktop text-primary me-2"></i>
+                        {% elif assignment.device.device_type.name|lower == 'monitor' %}
+                            <i class="fas fa-tv text-primary me-2"></i>
+                        {% elif assignment.device.device_type.name|lower == 'printer' %}
+                            <i class="fas fa-print text-primary me-2"></i>
+                        {% else %}
+                            <i class="fas fa-microchip text-primary me-2"></i>
+                        {% endif %}
+                        <div>
+                            <div class="fw-bold">{{ assignment.device.device_name|default:assignment.device.device_id }}</div>
+                            <small class="text-muted">{{ assignment.device.device_type.name }} • {{ assignment.device.brand }}</small>
+                            <br><small class="text-primary">{{ assignment.device.asset_tag|default:assignment.device.device_id }}</small>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Assignment ID:</label>
-                            <p class="mb-1">{{ assignment.assignment_id }}</p>
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Assignment Type:</label>
-                            <p class="mb-1">
-                                <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% else %}info{% endif %}">
-                                    {{ assignment.get_assignment_type_display }}
-                                </span>
-                            </p>
-                        </div>
-                    </div>
 
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Assigned To:</label>
-                            <p class="mb-1">
-                                {% if assignment.assigned_to_staff %}
-                                    <i class="fas fa-user text-primary"></i>
-                                    {{ assignment.assigned_to_staff.user.get_full_name }}
-                                    <br><small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
-                                {% elif assignment.assigned_to_department %}
-                                    <i class="fas fa-building text-info"></i>
-                                    {{ assignment.assigned_to_department.name }}
-                                {% elif assignment.assigned_to_location %}
-                                    <i class="fas fa-map-marker-alt text-success"></i>
-                                    {{ assignment.assigned_to_location.name }}
-                                {% else %}
-                                    <span class="text-muted">Not specified</span>
+                <!-- Current Assignment -->
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Currently Assigned To</h6>
+                    {% if assignment.assigned_to_staff %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-user text-success me-2"></i>
+                            <div>
+                                <div class="fw-bold">{{ assignment.assigned_to_staff.user.get_full_name }}</div>
+                                <small class="text-muted">{{ assignment.assigned_to_staff.employee_id }}</small>
+                                {% if assignment.assigned_to_staff.department %}
+                                    <br><small class="text-info">{{ assignment.assigned_to_staff.department.name }}</small>
                                 {% endif %}
-                            </p>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Assignment Date:</label>
-                            <p class="mb-1">{{ assignment.assignment_date|default:"-" }}</p>
+                    {% elif assignment.assigned_to_department %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-building text-info me-2"></i>
+                            <div class="fw-bold">{{ assignment.assigned_to_department.name }}</div>
                         </div>
-                    </div>
+                    {% elif assignment.assigned_to_location %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-map-marker-alt text-warning me-2"></i>
+                            <div class="fw-bold">{{ assignment.assigned_to_location }}</div>
+                        </div>
+                    {% endif %}
+                </div>
 
+                <!-- Assignment Timeline -->
+                <div class="assignment-duration">
+                    <h6 class="text-muted mb-2">Assignment Timeline</h6>
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <i class="fas fa-play text-success"></i>
+                            <strong>Started:</strong> {{ assignment.start_date|date:"M d, Y" }}
+                        </small>
+                    </div>
                     {% if assignment.expected_return_date %}
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Expected Return:</label>
-                            <p class="mb-1 {% if is_overdue %}text-danger font-weight-bold{% endif %}">
-                                {{ assignment.expected_return_date }}
-                                {% if is_overdue %}
-                                    <i class="fas fa-exclamation-triangle text-danger ml-1"></i>
+                        <div class="mb-2">
+                            <small class="text-muted {% if assignment.is_overdue %}text-danger{% endif %}">
+                                <i class="fas fa-calendar-check"></i>
+                                <strong>Expected Return:</strong> {{ assignment.expected_return_date|date:"M d, Y" }}
+                                {% if assignment.is_overdue %}
+                                    <span class="text-danger">
+                                        <i class="fas fa-exclamation-triangle"></i> Overdue
+                                    </span>
                                 {% endif %}
-                            </p>
+                            </small>
                         </div>
-                    </div>
                     {% endif %}
-
-                    {% if assignment_duration %}
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Assignment Duration:</label>
-                            <p class="mb-1">{{ assignment_duration }} day{{ assignment_duration|pluralize }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if assignment.assignment_purpose %}
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Purpose:</label>
-                            <p class="mb-1">{{ assignment.assignment_purpose }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if assignment.assignment_notes %}
-                    <div class="row">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Assignment Notes:</label>
-                            <p class="mb-0 text-muted">{{ assignment.assignment_notes }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Device Information Card -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-laptop"></i>
-                        Device Information
-                    </h6>
-                </div>
-                <div class="card-body device-card">
-                    <div class="row mb-2">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Device ID:</label>
-                            <p class="mb-1">
-                                <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" class="text-primary">
-                                    {{ assignment.device.device_id }}
-                                </a>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="row mb-2">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Device Name:</label>
-                            <p class="mb-1">{{ assignment.device.device_name }}</p>
-                        </div>
-                    </div>
-
-                    {% if assignment.device.asset_tag %}
-                    <div class="row mb-2">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Asset Tag:</label>
-                            <p class="mb-1">{{ assignment.device.asset_tag }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if assignment.device.device_type %}
-                    <div class="row mb-2">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Device Type:</label>
-                            <p class="mb-1">{{ assignment.device.device_type.name }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <div class="row mb-2">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Current Status:</label>
-                            <p class="mb-1">
-                                <span class="badge badge-warning">{{ assignment.device.get_status_display }}</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-12">
-                            <label class="font-weight-bold text-gray-700">Current Condition:</label>
-                            <p class="mb-0">
-                                <span class="badge badge-{% if assignment.device.condition == 'EXCELLENT' %}success{% elif assignment.device.condition == 'GOOD' %}info{% elif assignment.device.condition == 'FAIR' %}warning{% else %}danger{% endif %}">
-                                    {{ assignment.device.get_condition_display }}
-                                </span>
-                            </p>
-                        </div>
+                    <div>
+                        <small class="text-muted">
+                            <i class="fas fa-clock text-info"></i>
+                            <strong>Duration:</strong> 
+                            {% if assignment.start_date %}
+                                {% now "Y-m-d" as today %}
+                                {% widthratio assignment.start_date|timesince:"days" 1 1 %} days
+                            {% else %}
+                                -
+                            {% endif %}
+                        </small>
                     </div>
                 </div>
+
+                <!-- Current Device Status -->
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Current Device Status</h6>
+                    <span class="badge 
+                        {% if assignment.device.status == 'ASSIGNED' %}bg-primary
+                        {% elif assignment.device.status == 'AVAILABLE' %}bg-success
+                        {% elif assignment.device.status == 'MAINTENANCE' %}bg-warning
+                        {% else %}bg-secondary{% endif %}">
+                        {{ assignment.device.get_status_display }}
+                    </span>
+                    <br>
+                    <small class="text-muted mt-1">
+                        Condition: 
+                        <span class="badge 
+                            {% if assignment.device.condition == 'EXCELLENT' %}bg-success
+                            {% elif assignment.device.condition == 'GOOD' %}bg-info
+                            {% elif assignment.device.condition == 'FAIR' %}bg-warning
+                            {% else %}bg-danger{% endif %}">
+                            {{ assignment.device.get_condition_display }}
+                        </span>
+                    </small>
+                </div>
+
+                {% if assignment.purpose %}
+                <div class="mb-3">
+                    <h6 class="text-muted mb-2">Assignment Purpose</h6>
+                    <small class="text-muted">{{ assignment.purpose }}</small>
+                </div>
+                {% endif %}
             </div>
         </div>
 
         <!-- Return Form -->
         <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-success">
-                        <i class="fas fa-undo-alt"></i>
-                        Device Return Form
+            <div class="return-form">
+                <h4 class="mb-4">
+                    <i class="fas fa-undo-alt text-success"></i> Device Return Form
+                </h4>
+
+                <!-- Return Checklist -->
+                <div class="return-checklist">
+                    <h6 class="mb-3">
+                        <i class="fas fa-clipboard-check"></i> Pre-Return Checklist
                     </h6>
-                </div>
-                <div class="card-body form-section">
-                    <form method="post" id="return-form">
-                        {% csrf_token %}
-                        
-                        <!-- Return Date -->
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.return_date.id_for_label }}" class="font-weight-bold">
-                                        Return Date <span class="text-danger">*</span>
-                                    </label>
-                                    {{ form.return_date }}
-                                    {% if form.return_date.errors %}
-                                        <div class="invalid-feedback d-block">
-                                            {{ form.return_date.errors.0 }}
-                                        </div>
-                                    {% endif %}
-                                    <small class="form-text text-muted">Date when the device is being returned</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="{{ form.device_condition.id_for_label }}" class="font-weight-bold">
-                                        Device Condition
-                                    </label>
-                                    {{ form.device_condition }}
-                                    {% if form.device_condition.errors %}
-                                        <div class="invalid-feedback d-block">
-                                            {{ form.device_condition.errors.0 }}
-                                        </div>
-                                    {% endif %}
-                                    <small class="form-text text-muted">Current physical condition of the device</small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Return Condition -->
-                        <div class="form-group mb-4">
-                            <label for="{{ form.return_condition.id_for_label }}" class="font-weight-bold">
-                                Return Condition
+                    <div class="checklist-item" data-check="data-backup">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="dataBackup">
+                            <label class="form-check-label" for="dataBackup">
+                                <i class="fas fa-hdd"></i> Data backup completed (if applicable)
                             </label>
-                            {{ form.return_condition }}
-                            {% if form.return_condition.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.return_condition.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Brief description of the device condition at return (e.g., "Good working condition", "Minor scratches", etc.)
-                            </small>
                         </div>
-
-                        <!-- Return Notes -->
-                        <div class="form-group mb-4">
-                            <label for="{{ form.return_notes.id_for_label }}" class="font-weight-bold">
-                                Return Notes
+                    </div>
+                    <div class="checklist-item" data-check="software-removed">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="softwareRemoved">
+                            <label class="form-check-label" for="softwareRemoved">
+                                <i class="fas fa-trash"></i> Personal software/data removed
                             </label>
-                            {{ form.return_notes }}
-                            {% if form.return_notes.errors %}
-                                <div class="invalid-feedback d-block">
-                                    {{ form.return_notes.errors.0 }}
-                                </div>
-                            {% endif %}
-                            <small class="form-text text-muted">
-                                Additional notes about the return process, any issues found, or special circumstances
-                            </small>
                         </div>
-
-                        <!-- Return Summary -->
-                        <div class="alert alert-info return-status mb-4">
-                            <h5 class="alert-heading">
-                                <i class="fas fa-info-circle"></i>
-                                Return Summary
-                            </h5>
-                            <p class="mb-2">
-                                <strong>Device:</strong> {{ assignment.device.device_name }} ({{ assignment.device.device_id }})
-                            </p>
-                            <p class="mb-2">
-                                <strong>Returning from:</strong>
-                                {% if assignment.assigned_to_staff %}
-                                    {{ assignment.assigned_to_staff.user.get_full_name }}
-                                {% elif assignment.assigned_to_department %}
-                                    {{ assignment.assigned_to_department.name }}
-                                {% elif assignment.assigned_to_location %}
-                                    {{ assignment.assigned_to_location.name }}
-                                {% endif %}
-                            </p>
-                            {% if assignment_duration %}
-                            <p class="mb-2">
-                                <strong>Assignment Duration:</strong> {{ assignment_duration }} day{{ assignment_duration|pluralize }}
-                            </p>
-                            {% endif %}
-                            <p class="mb-0">
-                                <strong>After return:</strong> Device will be marked as <span class="badge badge-success">Available</span> and ready for reassignment.
-                            </p>
+                    </div>
+                    <div class="checklist-item" data-check="accessories-included">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="accessoriesIncluded">
+                            <label class="form-check-label" for="accessoriesIncluded">
+                                <i class="fas fa-plug"></i> All accessories included (charger, cables, etc.)
+                            </label>
                         </div>
-
-                        <!-- Form Actions -->
-                        <div class="row">
-                            <div class="col-md-6">
-                                <button type="submit" class="btn btn-success btn-lg btn-block">
-                                    <i class="fas fa-check"></i>
-                                    Confirm Return
-                                </button>
-                            </div>
-                            <div class="col-md-6">
-                                <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
-                                   class="btn btn-secondary btn-lg btn-block">
-                                    <i class="fas fa-times"></i>
-                                    Cancel
-                                </a>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <a href="{% url 'inventory:assignment_detail' assignment.assignment_id %}" 
-                               class="btn btn-outline-primary btn-sm btn-block mb-2">
-                                <i class="fas fa-eye"></i>
-                                View Assignment
-                            </a>
-                        </div>
-                        <div class="col-md-4">
-                            <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" 
-                               class="btn btn-outline-info btn-sm btn-block mb-2">
-                                <i class="fas fa-laptop"></i>
-                                View Device
-                            </a>
-                        </div>
-                        <div class="col-md-4">
-                            <a href="{% url 'inventory:assignment_list' %}" 
-                               class="btn btn-outline-secondary btn-sm btn-block mb-2">
-                                <i class="fas fa-list"></i>
-                                All Assignments
-                            </a>
+                    </div>
+                    <div class="checklist-item" data-check="physical-inspection">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="physicalInspection">
+                            <label class="form-check-label" for="physicalInspection">
+                                <i class="fas fa-search"></i> Physical inspection completed
+                            </label>
                         </div>
                     </div>
                 </div>
+
+                <form method="post" id="returnForm">
+                    {% csrf_token %}
+                    
+                    <!-- Return Date -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label for="actual_return_date" class="form-label fw-bold">
+                                <i class="fas fa-calendar"></i> Return Date <span class="text-danger">*</span>
+                            </label>
+                            <input 
+                                type="date" 
+                                class="form-control form-control-lg" 
+                                id="actual_return_date" 
+                                name="actual_return_date" 
+                                required
+                                value="{% now 'Y-m-d' %}"
+                                max="{% now 'Y-m-d' %}"
+                            >
+                            <div class="form-text">Date when the device was physically returned</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-user"></i> Returned By
+                            </label>
+                            <input 
+                                type="text" 
+                                class="form-control form-control-lg" 
+                                value="{{ user.get_full_name }}" 
+                                disabled
+                            >
+                            <div class="form-text">IT staff processing the return</div>
+                        </div>
+                    </div>
+
+                    <!-- Device Condition Assessment -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-clipboard-check"></i> Device Condition Assessment <span class="text-danger">*</span>
+                        </label>
+                        <div class="condition-selector">
+                            <div class="condition-option excellent" data-condition="EXCELLENT">
+                                <i class="fas fa-star fa-2x text-success mb-2"></i>
+                                <div class="fw-bold">Excellent</div>
+                                <small class="text-muted">Like new condition</small>
+                            </div>
+                            <div class="condition-option good" data-condition="GOOD">
+                                <i class="fas fa-thumbs-up fa-2x text-info mb-2"></i>
+                                <div class="fw-bold">Good</div>
+                                <small class="text-muted">Minor wear</small>
+                            </div>
+                            <div class="condition-option fair" data-condition="FAIR">
+                                <i class="fas fa-exclamation fa-2x text-warning mb-2"></i>
+                                <div class="fw-bold">Fair</div>
+                                <small class="text-muted">Noticeable wear</small>
+                            </div>
+                            <div class="condition-option poor" data-condition="POOR">
+                                <i class="fas fa-times fa-2x text-danger mb-2"></i>
+                                <div class="fw-bold">Poor</div>
+                                <small class="text-muted">Significant issues</small>
+                            </div>
+                            <div class="condition-option damaged" data-condition="DAMAGED">
+                                <i class="fas fa-wrench fa-2x text-danger mb-2"></i>
+                                <div class="fw-bold">Damaged</div>
+                                <small class="text-muted">Needs repair</small>
+                            </div>
+                        </div>
+                        <input type="hidden" name="return_condition" id="returnCondition" required>
+                        <div class="form-text">Select the current physical condition of the device</div>
+                    </div>
+
+                    <!-- Return Notes -->
+                    <div class="mb-4">
+                        <label for="return_notes" class="form-label fw-bold">
+                            <i class="fas fa-comment-alt"></i> Return Notes
+                        </label>
+                        <textarea 
+                            class="form-control" 
+                            id="return_notes" 
+                            name="return_notes" 
+                            rows="4"
+                            placeholder="Document any issues, damages, missing accessories, or other relevant information about the device condition..."
+                        ></textarea>
+                        <div class="form-text">Detailed notes about the device condition and return process</div>
+                    </div>
+
+                    <!-- Device Next Status -->
+                    <div class="mb-4">
+                        <label for="next_status" class="form-label fw-bold">
+                            <i class="fas fa-route"></i> Device Next Status
+                        </label>
+                        <select class="form-select form-select-lg" id="next_status" name="next_status" required>
+                            <option value="AVAILABLE">Available - Ready for reassignment</option>
+                            <option value="MAINTENANCE">Maintenance - Needs servicing</option>
+                            <option value="RETIRED">Retired - End of life</option>
+                            <option value="DAMAGED">Damaged - Requires repair</option>
+                        </select>
+                        <div class="form-text">What should happen to this device after return?</div>
+                    </div>
+
+                    <!-- Return Summary -->
+                    <div class="return-summary">
+                        <h6 class="mb-3">
+                            <i class="fas fa-clipboard-list text-info"></i> Return Summary
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Device:</strong><br>
+                                <span class="text-primary">{{ assignment.device.device_name|default:assignment.device.device_id }}</span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Returning From:</strong><br>
+                                {% if assignment.assigned_to_staff %}
+                                    <span class="text-success">{{ assignment.assigned_to_staff.user.get_full_name }}</span>
+                                {% elif assignment.assigned_to_department %}
+                                    <span class="text-info">{{ assignment.assigned_to_department.name }}</span>
+                                {% elif assignment.assigned_to_location %}
+                                    <span class="text-warning">{{ assignment.assigned_to_location }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <strong>Post-Return Status:</strong> <span id="statusPreview" class="badge bg-success">Device will be marked as Available</span>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'inventory:assignment_detail' assignment.id %}" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg" id="submitReturn" disabled>
+                            <i class="fas fa-check"></i> Complete Return
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -408,38 +471,123 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Form validation
-    $('#return-form').on('submit', function(e) {
-        const returnDate = $('#id_return_date').val();
-        const today = new Date().toISOString().split('T')[0];
+    const conditionInput = $('#returnCondition');
+    const nextStatusSelect = $('#next_status');
+    const submitButton = $('#submitReturn');
+    const statusPreview = $('#statusPreview');
+    
+    // Condition selection
+    $('.condition-option').on('click', function() {
+        $('.condition-option').removeClass('selected');
+        $(this).addClass('selected');
         
-        // Check if return date is not in the future
-        if (returnDate > today) {
-            if (!confirm('The return date is in the future. Are you sure you want to proceed?')) {
-                e.preventDefault();
-                return false;
-            }
+        const condition = $(this).data('condition');
+        conditionInput.val(condition);
+        
+        // Auto-suggest next status based on condition
+        if (condition === 'DAMAGED' || condition === 'POOR') {
+            nextStatusSelect.val('MAINTENANCE');
+        } else if (condition === 'EXCELLENT' || condition === 'GOOD') {
+            nextStatusSelect.val('AVAILABLE');
+        } else {
+            nextStatusSelect.val('AVAILABLE');
         }
         
-        // Final confirmation
-        if (!confirm('Are you sure you want to return this device? This action cannot be undone.')) {
+        updateStatusPreview();
+        checkFormCompletion();
+    });
+    
+    // Checklist items
+    $('.checklist-item input[type="checkbox"]').on('change', function() {
+        const item = $(this).closest('.checklist-item');
+        if ($(this).is(':checked')) {
+            item.addClass('checked');
+        } else {
+            item.removeClass('checked');
+        }
+        checkFormCompletion();
+    });
+    
+    // Next status change
+    nextStatusSelect.on('change', function() {
+        updateStatusPreview();
+    });
+    
+    // Update status preview
+    function updateStatusPreview() {
+        const status = nextStatusSelect.val();
+        const statusText = nextStatusSelect.find('option:selected').text();
+        
+        statusPreview.removeClass('bg-success bg-warning bg-info bg-danger');
+        
+        switch(status) {
+            case 'AVAILABLE':
+                statusPreview.addClass('bg-success').text('Available for reassignment');
+                break;
+            case 'MAINTENANCE':
+                statusPreview.addClass('bg-warning').text('Sent to maintenance');
+                break;
+            case 'RETIRED':
+                statusPreview.addClass('bg-secondary').text('Marked as retired');
+                break;
+            case 'DAMAGED':
+                statusPreview.addClass('bg-danger').text('Marked as damaged');
+                break;
+        }
+    }
+    
+    // Check form completion
+    function checkFormCompletion() {
+        const dateSelected = $('#actual_return_date').val();
+        const conditionSelected = conditionInput.val();
+        const allChecked = $('.checklist-item input[type="checkbox"]:checked').length >= 3; // At least 3 items checked
+        
+        if (dateSelected && conditionSelected && allChecked) {
+            submitButton.prop('disabled', false);
+        } else {
+            submitButton.prop('disabled', true);
+        }
+    }
+    
+    // Form validation
+    $('#returnForm').on('submit', function(e) {
+        const condition = conditionInput.val();
+        const returnDate = $('#actual_return_date').val();
+        const nextStatus = nextStatusSelect.val();
+        
+        if (!condition) {
+            e.preventDefault();
+            alert('Please select the device condition.');
+            return false;
+        }
+        
+        if (!returnDate) {
+            e.preventDefault();
+            alert('Please select the return date.');
+            return false;
+        }
+        
+        // Confirmation dialog
+        const confirmMsg = `Confirm device return:\n\nDevice: {{ assignment.device.device_name|default:assignment.device.device_id }}\nCondition: ${condition}\nNext Status: ${nextStatusSelect.find('option:selected').text()}\n\nThis action cannot be undone.`;
+        
+        if (!confirm(confirmMsg)) {
             e.preventDefault();
             return false;
         }
     });
-
+    
     // Auto-resize textarea
-    $('textarea').on('input', function() {
+    $('#return_notes').on('input', function() {
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
     });
-
-    // Set max date for return date to today
-    const today = new Date().toISOString().split('T')[0];
-    $('#id_return_date').attr('max', today);
-
-    // Add form control classes if not present
-    $('input, select, textarea').addClass('form-control');
+    
+    // Initialize
+    updateStatusPreview();
+    checkFormCompletion();
+    
+    // Check initial form state
+    $('#actual_return_date, #returnCondition').on('change', checkFormCompletion);
 });
 </script>
-{% endblock %}
+{% endblock %>}

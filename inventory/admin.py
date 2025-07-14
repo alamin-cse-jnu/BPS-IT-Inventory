@@ -1,5 +1,5 @@
 # inventory/admin.py
-# Updated admin configuration with Block support
+# Updated admin configuration with Block support and fixed errors
 
 from django.contrib import admin
 from django.utils.html import format_html
@@ -189,7 +189,7 @@ class DepartmentAdmin(admin.ModelAdmin):
     get_hierarchy_path.short_description = 'Location Path'
     
     def get_staff_count(self, obj):
-        count = obj.staff.count()
+        count = obj.staff_members.count()
         if count > 0:
             url = reverse('admin:inventory_staff_changelist')
             return format_html(
@@ -252,7 +252,7 @@ class RoomAdmin(admin.ModelAdmin):
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
     list_display = ('get_location_name', 'get_location_code', 'get_hierarchy_path', 'get_assignments_count', 'is_active')
-    list_filter = ('building', 'block', 'floor__building', 'department', 'is_active')
+    list_filter = ('building', 'block', 'floor', 'department', 'is_active')
     search_fields = ('building__name', 'block__name', 'floor__name', 'department__name', 'room__room_number', 'description')
     list_select_related = ('building', 'block', 'floor', 'department', 'room')
     readonly_fields = ('created_at', 'updated_at')
@@ -296,11 +296,11 @@ class LocationAdmin(admin.ModelAdmin):
     
     def get_assignments_count(self, obj):
         """Show count of assignments at this location"""
-        count = obj.assignments.filter(status='ASSIGNED').count()
+        count = obj.device_assignments.filter(assignment_type='PERMANENT').count()
         if count > 0:
             url = reverse('admin:inventory_assignment_changelist')
             return format_html(
-                '<a href="{}?location__id__exact={}">{}</a>',
+                '<a href="{}?assigned_to_location__id__exact={}">{}</a>',
                 url, obj.pk, count
             )
         return 0
@@ -345,11 +345,11 @@ class StaffAdmin(admin.ModelAdmin):
     get_department_hierarchy.short_description = 'Department Hierarchy'
     
     def get_assignments_count(self, obj):
-        count = obj.assignments.filter(status='ASSIGNED').count()
+        count = obj.device_assignments.filter(assignment_type='PERMANENT').count()
         if count > 0:
             url = reverse('admin:inventory_assignment_changelist')
             return format_html(
-                '<a href="{}?staff__id__exact={}">{}</a>',
+                '<a href="{}?assigned_to_staff__id__exact={}">{}</a>',
                 url, obj.pk, count
             )
         return 0
@@ -362,16 +362,16 @@ class StaffAdmin(admin.ModelAdmin):
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
     list_display = ('asset_tag', 'device_type', 'brand', 'model', 'get_current_location', 'status', 'created_at')
-    list_filter = ('status', 'device_type', 'brand', 'created_at', 'current_location__building', 'current_location__block')
+    list_filter = ('status', 'device_type', 'brand', 'created_at', 'location__building_id', 'location__block_id')
     search_fields = ('asset_tag', 'serial_number', 'model', 'brand')
-    list_select_related = ('device_type', 'current_location__building', 'current_location__block', 'current_location__department')
+    list_select_related = ('device_type', 'location__building', 'location__block', 'location__department')
     readonly_fields = ('created_at', 'updated_at')
     
     def get_current_location(self, obj):
-        if obj.current_location:
-            hierarchy = f"{obj.current_location.building.name} → {obj.current_location.block.name} → {obj.current_location.department.name}"
-            if obj.current_location.room:
-                hierarchy += f" → {obj.current_location.room.room_number}"
+        if obj.location:
+            hierarchy = f"{obj.location.building.name} → {obj.location.block.name} → {obj.location.department.name}"
+            if obj.location.room:
+                hierarchy += f" → {obj.location.room.room_number}"
             return hierarchy
         return "-"
     get_current_location.short_description = 'Current Location'
@@ -382,23 +382,27 @@ class DeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Assignment)
 class AssignmentAdmin(admin.ModelAdmin):
-    list_display = ('device', 'staff', 'get_location_hierarchy', 'status', 'assigned_date', 'expected_return_date')
-    list_filter = ('status', 'assigned_date', 'location__building', 'location__block', 'location__department')
-    search_fields = ('device__asset_tag', 'staff__user__first_name', 'staff__user__last_name', 'staff__employee_id')
-    list_select_related = ('device', 'staff__user', 'location__building', 'location__block', 'location__department')
-    readonly_fields = ('assigned_date', 'created_at', 'updated_at')
+    list_display = ('device', 'get_assigned_to', 'get_location_hierarchy', 'assignment_type', 'start_date', 'expected_return_date')
+    list_filter = ('assignment_type', 'start_date', 'assigned_to_location__building_id', 'assigned_to_location__block_id', 'assigned_to_location__department_id')
+    search_fields = ('device__asset_tag', 'assigned_to_staff__user__first_name', 'assigned_to_staff__user__last_name', 'assigned_to_staff__employee_id')
+    list_select_related = ('device', 'assigned_to_staff__user', 'assigned_to_location__building', 'assigned_to_location__block', 'assigned_to_location__department')
+    readonly_fields = ('start_date', 'created_at', 'updated_at')
+    
+    def get_assigned_to(self, obj):
+        return obj.assigned_to_staff.user.get_full_name() or obj.assigned_to_staff.user.username if obj.assigned_to_staff else "-"
+    get_assigned_to.short_description = 'Assigned To'
     
     def get_location_hierarchy(self, obj):
-        if obj.location:
-            hierarchy = f"{obj.location.building.name} → {obj.location.block.name} → {obj.location.department.name}"
-            if obj.location.room:
-                hierarchy += f" → {obj.location.room.room_number}"
+        if obj.assigned_to_location:
+            hierarchy = f"{obj.assigned_to_location.building.name} → {obj.assigned_to_location.block.name} → {obj.assigned_to_location.department.name}"
+            if obj.assigned_to_location.room:
+                hierarchy += f" → {obj.assigned_to_location.room.room_number}"
             return hierarchy
         return "-"
     get_location_hierarchy.short_description = 'Assignment Location'
 
 # ================================
-#  ADMIN CONFIGURATIONS 
+# OTHER ADMIN CONFIGURATIONS 
 # ================================
 
 @admin.register(DeviceCategory)
@@ -431,8 +435,8 @@ class VendorAdmin(admin.ModelAdmin):
 
 @admin.register(MaintenanceSchedule)
 class MaintenanceScheduleAdmin(admin.ModelAdmin):
-    list_display = ('device', 'maintenance_type', 'scheduled_date', 'status', 'vendor')
-    list_filter = ('maintenance_type', 'status', 'scheduled_date', 'vendor')
+    list_display = ('device', 'maintenance_type', 'next_due_date', 'status', 'vendor')
+    list_filter = ('maintenance_type', 'status', 'next_due_date', 'vendor')
     search_fields = ('device__asset_tag', 'device__serial_number', 'vendor__name')
 
 @admin.register(AuditLog)

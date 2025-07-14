@@ -183,16 +183,16 @@ urlpatterns = [
     path('ajax/device-stats/<str:device_id>/', views.ajax_device_stats, name='ajax_device_stats'),
     path('ajax/assignment-quick-actions/<str:assignment_id>/', views.ajax_assignment_quick_actions, name='ajax_assignment_quick_actions'),
     path('ajax/staff-search/', views.ajax_staff_search, name='ajax_staff_search'),
-    path('ajax/validate-hierarchy/', views.ajax_validate_hierarchy, name='ajax_validate_hierarchy'),
-    path('ajax/suggest-block-code/', views.ajax_suggest_block_code, name='ajax_suggest_block_code'),
-    path('ajax/location-breadcrumb/', views.ajax_location_breadcrumb, name='ajax_location_breadcrumb'),
+    path('ajax/validate-hierarchy/', views.api_validate_hierarchy, name='ajax_validate_hierarchy'),
+    # path('ajax/suggest-block-code/', views.ajax_suggest_block_code, name='ajax_suggest_block_code'),
+    # path('ajax/location-breadcrumb/', views.ajax_location_breadcrumb, name='ajax_location_breadcrumb'),
     
     # ================================
     # LOCATION-SPECIFIC REPORTS
     # ================================
-    path('reports/location-utilization/', views.location_utilization_report, name='location_utilization_report'),
-    path('reports/hierarchy-breakdown/', views.hierarchy_breakdown_report, name='hierarchy_breakdown_report'),
-    path('reports/space-analysis/', views.space_analysis_report, name='space_analysis_report'),
+    #path('reports/location-utilization/', views.location_utilization_report, name='location_utilization_report'),
+    #path('reports/hierarchy-breakdown/', views.hierarchy_breakdown_report, name='hierarchy_breakdown_report'),
+    #path('reports/space-analysis/', views.space_analysis_report, name='space_analysis_report'),
     
     # ================================
     # HIERARCHY OVERVIEW

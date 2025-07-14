@@ -1,601 +1,612 @@
-<!-- File location: D:\Development\projects\BPS-IT-Inventory\templates\inventory\assignments\assignment_detail.html -->
-
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Assignment Details - {{ assignment.assignment_id }} - BPS Inventory{% endblock %}
+{% block title %}
+    Assignment Details - {{ assignment.device.device_id }} - BPS IT Inventory
+{% endblock %}
 
 {% block extra_css %}
+<link href="{% static 'css/assignment-form.css' %}" rel="stylesheet">
 <style>
-    .assignment-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 0.35rem;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-    }
-    .status-card {
-        border-left: 4px solid;
-        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-        transition: all 0.3s ease;
-    }
-    .status-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 0.25rem 2rem 0 rgba(58, 59, 69, 0.2);
-    }
-    .status-active { border-left-color: #1cc88a; }
-    .status-overdue { border-left-color: #e74a3b; }
-    .status-due-soon { border-left-color: #f6c23e; }
-    .status-returned { border-left-color: #36b9cc; }
-    .info-card {
-        background: #f8f9fc;
-        border: 1px solid #e3e6f0;
-        border-radius: 0.35rem;
-        padding: 1.25rem;
-        margin-bottom: 1rem;
-    }
-    .timeline-item {
-        border-left: 2px solid #e3e6f0;
-        padding-left: 1rem;
-        margin-bottom: 1rem;
-        position: relative;
-    }
-    .timeline-item::before {
-        content: '';
-        position: absolute;
-        left: -6px;
-        top: 5px;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background-color: #5a5c69;
-    }
-    .timeline-item.active::before {
-        background-color: #1cc88a;
-    }
-    .timeline-item.overdue::before {
-        background-color: #e74a3b;
-    }
-    .device-preview {
-        border: 2px dashed #e3e6f0;
-        border-radius: 0.35rem;
-        padding: 1rem;
-        text-align: center;
-        background: #f8f9fc;
-    }
-    .assignee-avatar {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        border: 3px solid #fff;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    }
-    .action-btn {
-        margin-right: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-    .assignment-timeline {
-        max-height: 400px;
-        overflow-y: auto;
-    }
+.assignment-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.assignment-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    animation: float 8s ease-in-out infinite;
+}
+
+.info-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    border-left: 4px solid #667eea;
+    transition: all 0.3s ease;
+}
+
+.info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.status-badge {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.status-active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.status-overdue {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+.status-returned {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+}
+
+.timeline {
+    position: relative;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, #667eea, #764ba2);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+    padding-left: 60px;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    top: 8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid #667eea;
+    z-index: 2;
+}
+
+.timeline-content {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    border-left: 3px solid #667eea;
+}
+
+.action-buttons {
+    gap: 10px;
+}
+
+.btn-action {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <!-- Assignment Header -->
-    <div class="assignment-header">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <div class="d-flex align-items-center mb-2">
-                    <i class="fas fa-clipboard-list fa-2x mr-3"></i>
-                    <div>
-                        <h1 class="h3 mb-0">Assignment #{{ assignment.assignment_id }}</h1>
-                        <p class="mb-0 opacity-75">{{ assignment.device.device_name }} → 
-                            {% if assignment.assigned_to_staff %}
-                                {{ assignment.assigned_to_staff.user.get_full_name }}
-                            {% elif assignment.assigned_to_department %}
-                                {{ assignment.assigned_to_department.name }}
-                            {% elif assignment.assigned_to_location %}
-                                {{ assignment.assigned_to_location }}
-                            {% endif %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="assignment-header">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="display-4 mb-2">
+                            <i class="fas fa-clipboard-list"></i>
+                            Assignment Details
+                        </h1>
+                        <p class="lead mb-0">
+                            {{ assignment.device.device_id }} - {{ assignment.device.device_name }}
                         </p>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-4 text-right">
-                <div class="btn-group">
-                    <a href="{% url 'inventory:assignment_edit' assignment.assignment_id %}" 
-                       class="btn btn-light action-btn">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
-                    {% if assignment.is_active and assignment.is_temporary %}
-                        <a href="{% url 'inventory:assignment_return' assignment.assignment_id %}" 
-                           class="btn btn-success action-btn">
-                            <i class="fas fa-undo"></i> Return
-                        </a>
-                    {% endif %}
-                    <a href="{% url 'inventory:assignment_transfer' assignment.assignment_id %}" 
-                       class="btn btn-warning action-btn">
-                        <i class="fas fa-exchange-alt"></i> Transfer
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card border-left-primary">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h6 class="text-primary font-weight-bold mb-1">Quick Actions</h6>
-                            <p class="text-muted mb-0">Manage this assignment efficiently</p>
-                        </div>
-                        <div class="col-md-4 text-right">
-                            <a href="{% url 'inventory:assignment_list' %}" class="btn btn-outline-secondary mr-2">
-                                <i class="fas fa-arrow-left"></i> Back to List
-                            </a>
-                            {% if assignment.is_temporary and assignment.is_active %}
-                                <a href="{% url 'inventory:assignment_extend' assignment.assignment_id %}" 
-                                   class="btn btn-outline-warning">
-                                    <i class="fas fa-clock"></i> Extend
-                                </a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Status Overview -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card status-card {% if assignment.is_active %}status-active{% else %}status-returned{% endif %} h-100">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-uppercase mb-1">
-                                Assignment Status
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {% if assignment.is_active %}
-                                    <span class="text-success">Active</span>
-                                {% else %}
-                                    <span class="text-secondary">Inactive</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas {% if assignment.is_active %}fa-check-circle text-success{% else %}fa-pause-circle text-secondary{% endif %} fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card status-card {% if is_overdue %}status-overdue{% elif assignment.days_until_due and assignment.days_until_due <= 7 %}status-due-soon{% else %}status-active{% endif %} h-100">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-uppercase mb-1">
-                                Return Status
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {% if is_overdue %}
-                                    <span class="text-danger">Overdue</span>
-                                {% elif assignment.days_until_due and assignment.days_until_due <= 7 %}
-                                    <span class="text-warning">Due Soon</span>
-                                {% elif assignment.expected_return_date %}
-                                    <span class="text-success">On Track</span>
-                                {% else %}
-                                    <span class="text-muted">No Due Date</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas {% if is_overdue %}fa-exclamation-triangle text-danger{% elif assignment.days_until_due and assignment.days_until_due <= 7 %}fa-clock text-warning{% else %}fa-calendar-check text-success{% endif %} fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card status-card status-active h-100">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-uppercase mb-1">
-                                Assignment Duration
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {% if assignment_duration %}
-                                    {{ assignment_duration }} days
-                                {% else %}
-                                    Calculating...
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card status-card status-active h-100">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-uppercase mb-1">
-                                Assignment Type
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ assignment.get_assignment_type_display }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas {% if assignment.assignment_type == 'PERMANENT' %}fa-anchor{% elif assignment.assignment_type == 'TEMPORARY' %}fa-clock{% elif assignment.assignment_type == 'PROJECT' %}fa-project-diagram{% else %}fa-layer-group{% endif %} fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="row">
-        <!-- Assignment Details -->
-        <div class="col-lg-8">
-            <!-- Device Information -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-laptop mr-2"></i>Device Information
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="device-preview">
-                                <div class="mb-3">
-                                    {% if assignment.device.device_type.name == 'Laptop' %}
-                                        <i class="fas fa-laptop fa-3x text-primary"></i>
-                                    {% elif assignment.device.device_type.name == 'Desktop' %}
-                                        <i class="fas fa-desktop fa-3x text-success"></i>
-                                    {% elif assignment.device.device_type.name == 'Mobile' %}
-                                        <i class="fas fa-mobile-alt fa-3x text-info"></i>
-                                    {% else %}
-                                        <i class="fas fa-microchip fa-3x text-secondary"></i>
-                                    {% endif %}
-                                </div>
-                                <h5 class="font-weight-bold">{{ assignment.device.device_id }}</h5>
-                                <p class="text-muted mb-2">{{ assignment.device.device_name }}</p>
-                                {% if assignment.device.asset_tag %}
-                                    <span class="badge badge-secondary">{{ assignment.device.asset_tag }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-8">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="info-card">
-                                        <h6 class="font-weight-bold text-dark">Device Details</h6>
-                                        <hr class="my-2">
-                                        <p class="mb-1"><strong>Brand:</strong> {{ assignment.device.brand|default:"N/A" }}</p>
-                                        <p class="mb-1"><strong>Model:</strong> {{ assignment.device.model|default:"N/A" }}</p>
-                                        <p class="mb-1"><strong>Serial:</strong> {{ assignment.device.serial_number|default:"N/A" }}</p>
-                                        <p class="mb-0"><strong>Status:</strong> 
-                                            <span class="badge badge-{% if assignment.device.status == 'ACTIVE' %}success{% elif assignment.device.status == 'MAINTENANCE' %}warning{% elif assignment.device.status == 'RETIRED' %}danger{% else %}secondary{% endif %}">
-                                                {{ assignment.device.get_status_display }}
-                                            </span>
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="info-card">
-                                        <h6 class="font-weight-bold text-dark">Specifications</h6>
-                                        <hr class="my-2">
-                                        {% if assignment.device.specifications %}
-                                            <div class="text-sm">
-                                                {{ assignment.device.specifications|linebreaks }}
-                                            </div>
-                                        {% else %}
-                                            <p class="text-muted mb-0">No specifications available</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="text-center mt-3">
-                                <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" 
-                                   class="btn btn-outline-primary">
-                                    <i class="fas fa-external-link-alt"></i> View Full Device Details
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Assignment Information -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-info-circle mr-2"></i>Assignment Information
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="info-card">
-                                <h6 class="font-weight-bold text-dark">Assignment Details</h6>
-                                <hr class="my-2">
-                                <p class="mb-2">
-                                    <strong>Assignment ID:</strong> {{ assignment.assignment_id }}
-                                </p>
-                                <p class="mb-2">
-                                    <strong>Type:</strong> 
-                                    <span class="badge badge-{% if assignment.assignment_type == 'PERMANENT' %}success{% elif assignment.assignment_type == 'TEMPORARY' %}warning{% elif assignment.assignment_type == 'PROJECT' %}info{% else %}secondary{% endif %}">
-                                        {{ assignment.get_assignment_type_display }}
-                                    </span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong>Start Date:</strong> {{ assignment.start_date|date:"F d, Y" }}
-                                </p>
-                                {% if assignment.expected_return_date %}
-                                    <p class="mb-2">
-                                        <strong>Expected Return:</strong> 
-                                        <span class="{% if is_overdue %}text-danger{% elif assignment.days_until_due and assignment.days_until_due <= 7 %}text-warning{% endif %}">
-                                            {{ assignment.expected_return_date|date:"F d, Y" }}
-                                        </span>
-                                    </p>
-                                {% endif %}
-                                {% if assignment.actual_return_date %}
-                                    <p class="mb-0">
-                                        <strong>Actual Return:</strong> {{ assignment.actual_return_date|date:"F d, Y" }}
-                                    </p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="info-card">
-                                <h6 class="font-weight-bold text-dark">Purpose & Notes</h6>
-                                <hr class="my-2">
-                                {% if assignment.purpose %}
-                                    <p class="mb-2"><strong>Purpose:</strong></p>
-                                    <p class="mb-3 text-muted">{{ assignment.purpose }}</p>
-                                {% endif %}
-                                {% if assignment.notes %}
-                                    <p class="mb-2"><strong>Notes:</strong></p>
-                                    <p class="mb-0 text-muted">{{ assignment.notes|linebreaks }}</p>
-                                {% else %}
-                                    <p class="text-muted mb-0">No additional notes provided</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Audit Trail -->
-            {% if audit_logs %}
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-history mr-2"></i>Assignment History
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="assignment-timeline">
-                        {% for log in audit_logs %}
-                            <div class="timeline-item {% if forloop.first %}active{% endif %}">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <h6 class="font-weight-bold mb-1">{{ log.action }}</h6>
-                                        <p class="text-muted mb-1">{{ log.details|default:"No details available" }}</p>
-                                        <small class="text-muted">
-                                            by {{ log.user.get_full_name|default:log.user.username }}
-                                        </small>
-                                    </div>
-                                    <small class="text-muted">{{ log.timestamp|date:"M d, Y H:i" }}</small>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Sidebar -->
-        <div class="col-lg-4">
-            <!-- Assignee Information -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-user mr-2"></i>Assignee Information
-                    </h6>
-                </div>
-                <div class="card-body text-center">
-                    {% if assignment.assigned_to_staff %}
-                        <img src="{% static 'img/avatars/default-avatar.jpg' %}" 
-                             class="assignee-avatar mb-3" alt="Staff Avatar">
-                        <h5 class="font-weight-bold">
-                            {{ assignment.assigned_to_staff.user.first_name }} {{ assignment.assigned_to_staff.user.last_name }}
-                        </h5>
-                        <p class="text-muted mb-2">{{ assignment.assigned_to_staff.designation|default:"Staff Member" }}</p>
-                        <p class="text-primary mb-3">{{ assignment.assigned_to_staff.employee_id }}</p>
-                        
-                        <div class="info-card text-left">
-                            <h6 class="font-weight-bold text-dark">Contact Information</h6>
-                            <hr class="my-2">
-                            <p class="mb-1"><strong>Email:</strong> {{ assignment.assigned_to_staff.user.email|default:"N/A" }}</p>
-                            <p class="mb-1"><strong>Phone:</strong> {{ assignment.assigned_to_staff.phone_number|default:"N/A" }}</p>
-                            {% if assignment.assigned_to_staff.department %}
-                                <p class="mb-0"><strong>Department:</strong> {{ assignment.assigned_to_staff.department.name }}</p>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="mt-3">
-                            <a href="{% url 'inventory:staff_detail' assignment.assigned_to_staff.id %}" 
-                               class="btn btn-outline-primary btn-sm">
-                                <i class="fas fa-user"></i> View Staff Profile
-                            </a>
-                        </div>
-                    {% elif assignment.assigned_to_department %}
-                        <div class="mb-3">
-                            <i class="fas fa-building fa-3x text-info"></i>
-                        </div>
-                        <h5 class="font-weight-bold">{{ assignment.assigned_to_department.name }}</h5>
-                        <p class="text-muted mb-3">Department Assignment</p>
-                        
-                        <div class="info-card text-left">
-                            <h6 class="font-weight-bold text-dark">Department Information</h6>
-                            <hr class="my-2">
-                            <p class="mb-1"><strong>Department:</strong> {{ assignment.assigned_to_department.name }}</p>
-                            {% if assignment.assigned_to_department.description %}
-                                <p class="mb-0"><strong>Description:</strong> {{ assignment.assigned_to_department.description }}</p>
-                            {% endif %}
-                        </div>
-                    {% elif assignment.assigned_to_location %}
-                        <div class="mb-3">
-                            <i class="fas fa-map-marker-alt fa-3x text-success"></i>
-                        </div>
-                        <h5 class="font-weight-bold">{{ assignment.assigned_to_location }}</h5>
-                        <p class="text-muted mb-3">Location Assignment</p>
-                        
-                        <div class="info-card text-left">
-                            <h6 class="font-weight-bold text-dark">Location Information</h6>
-                            <hr class="my-2">
-                            <p class="mb-0"><strong>Location:</strong> {{ assignment.assigned_to_location }}</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Assignment Management -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-cogs mr-2"></i>Assignment Management
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="info-card mb-3">
-                        <h6 class="font-weight-bold text-dark">Created Information</h6>
-                        <hr class="my-2">
-                        <p class="mb-1"><strong>Created By:</strong> {{ assignment.created_by.get_full_name|default:assignment.created_by.username }}</p>
-                        <p class="mb-0"><strong>Created Date:</strong> {{ assignment.created_at|date:"F d, Y H:i" }}</p>
-                    </div>
-                    
-                    {% if assignment.updated_at != assignment.created_at %}
-                        <div class="info-card mb-3">
-                            <h6 class="font-weight-bold text-dark">Last Updated</h6>
-                            <hr class="my-2">
-                            <p class="mb-0"><strong>Updated:</strong> {{ assignment.updated_at|date:"F d, Y H:i" }}</p>
-                        </div>
-                    {% endif %}
-                    
-                    <div class="text-center">
-                        <a href="{% url 'inventory:assignment_edit' assignment.assignment_id %}" 
-                           class="btn btn-primary btn-block mb-2">
-                            <i class="fas fa-edit"></i> Edit Assignment
-                        </a>
+                    <div class="col-md-4 text-right">
                         {% if assignment.is_active %}
-                            <a href="{% url 'inventory:assignment_transfer' assignment.assignment_id %}" 
-                               class="btn btn-warning btn-block mb-2">
-                                <i class="fas fa-exchange-alt"></i> Transfer Assignment
-                            </a>
-                            {% if assignment.is_temporary %}
-                                <a href="{% url 'inventory:assignment_return' assignment.assignment_id %}" 
-                                   class="btn btn-success btn-block">
-                                    <i class="fas fa-undo"></i> Return Device
-                                </a>
+                            {% if is_overdue %}
+                                <span class="status-badge status-overdue">
+                                    <i class="fas fa-exclamation-triangle"></i> Overdue
+                                </span>
+                            {% else %}
+                                <span class="status-badge status-active">
+                                    <i class="fas fa-check-circle"></i> Active
+                                </span>
                             {% endif %}
+                        {% else %}
+                            <span class="status-badge status-returned">
+                                <i class="fas fa-undo"></i> Returned
+                            </span>
                         {% endif %}
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Related Actions -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-link mr-2"></i>Related Actions
-                    </h6>
+    <div class="row">
+        <!-- Main Assignment Information -->
+        <div class="col-lg-8">
+            <!-- Device Information -->
+            <div class="info-card">
+                <h4 class="text-primary mb-3">
+                    <i class="fas fa-desktop"></i> Device Information
+                </h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Device ID:</strong> {{ assignment.device.device_id }}</p>
+                        <p><strong>Device Name:</strong> {{ assignment.device.device_name }}</p>
+                        <p><strong>Type:</strong> {{ assignment.device.device_type }}</p>
+                        <p><strong>Brand:</strong> {{ assignment.device.brand|default:"N/A" }}</p>
+                        <p><strong>Model:</strong> {{ assignment.device.model|default:"N/A" }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Serial Number:</strong> {{ assignment.device.serial_number|default:"N/A" }}</p>
+                        <p><strong>Asset Tag:</strong> {{ assignment.device.asset_tag|default:"N/A" }}</p>
+                        <p><strong>Status:</strong> 
+                            <span class="badge badge-info">{{ assignment.device.get_status_display }}</span>
+                        </p>
+                        <p><strong>Condition:</strong> 
+                            <span class="badge badge-success">{{ assignment.device.get_condition_display }}</span>
+                        </p>
+                        <p><strong>Current Location:</strong> {{ assignment.device.current_location|default:"Not specified" }}</p>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <a href="{% url 'inventory:device_detail' assignment.device.device_id %}" 
-                       class="btn btn-outline-primary btn-sm btn-block mb-2">
-                        <i class="fas fa-laptop"></i> View Device Details
-                    </a>
-                    <a href="{% url 'inventory:device_qr_code' assignment.device.device_id %}" 
-                       class="btn btn-outline-info btn-sm btn-block mb-2">
-                        <i class="fas fa-qrcode"></i> Generate QR Code
-                    </a>
-                    <a href="{% url 'inventory:assignment_list' %}?search={{ assignment.device.device_id }}" 
-                       class="btn btn-outline-secondary btn-sm btn-block mb-2">
-                        <i class="fas fa-search"></i> View All Device Assignments
-                    </a>
-                    {% if assignment.assigned_to_staff %}
-                        <a href="{% url 'inventory:assignment_list' %}?search={{ assignment.assigned_to_staff.user.get_full_name }}" 
-                           class="btn btn-outline-secondary btn-sm btn-block">
-                            <i class="fas fa-user"></i> View Staff Assignments
+            </div>
+
+            <!-- Assignment Details -->
+            <div class="info-card">
+                <h4 class="text-primary mb-3">
+                    <i class="fas fa-user-plus"></i> Assignment Details
+                </h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Assignment ID:</strong> #{{ assignment.assignment_id }}</p>
+                        <p><strong>Assignment Type:</strong> 
+                            <span class="badge badge-primary">{{ assignment.get_assignment_type_display }}</span>
+                        </p>
+                        <p><strong>Start Date:</strong> {{ assignment.start_date|date:"M d, Y" }}</p>
+                        {% if assignment.expected_return_date %}
+                            <p><strong>Expected Return:</strong> {{ assignment.expected_return_date|date:"M d, Y" }}
+                                {% if is_overdue %}
+                                    <span class="badge badge-danger ml-2">{{ days_until_due|add:"-1" }} days overdue</span>
+                                {% elif days_until_due and days_until_due <= 7 %}
+                                    <span class="badge badge-warning ml-2">{{ days_until_due }} days remaining</span>
+                                {% endif %}
+                            </p>
+                        {% endif %}
+                        {% if assignment.actual_return_date %}
+                            <p><strong>Actual Return:</strong> {{ assignment.actual_return_date|date:"M d, Y" }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Created By:</strong> {{ assignment.created_by.get_full_name|default:assignment.created_by.username }}</p>
+                        <p><strong>Created At:</strong> {{ assignment.created_at|date:"M d, Y H:i" }}</p>
+                        <p><strong>Last Updated:</strong> {{ assignment.updated_at|date:"M d, Y H:i" }}</p>
+                        <p><strong>Purpose:</strong> {{ assignment.purpose|default:"Not specified" }}</p>
+                    </div>
+                </div>
+                
+                {% if assignment.notes %}
+                    <div class="mt-3">
+                        <p><strong>Notes:</strong></p>
+                        <div class="bg-light p-3 rounded">
+                            {{ assignment.notes|linebreaks }}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Assignment Target -->
+            <div class="info-card">
+                <h4 class="text-primary mb-3">
+                    <i class="fas fa-bullseye"></i> Assignment Target
+                </h4>
+                
+                {% if assignment.assigned_to_staff %}
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-user-circle fa-3x text-primary mr-3"></i>
+                        <div>
+                            <h5 class="mb-1">Staff Assignment</h5>
+                            <p class="mb-1"><strong>Name:</strong> {{ assignment.assigned_to_staff.user.get_full_name }}</p>
+                            <p class="mb-1"><strong>Employee ID:</strong> {{ assignment.assigned_to_staff.employee_id }}</p>
+                            <p class="mb-1"><strong>Position:</strong> {{ assignment.assigned_to_staff.position|default:"N/A" }}</p>
+                            <p class="mb-0"><strong>Department:</strong> {{ assignment.assigned_to_staff.department }}</p>
+                        </div>
+                    </div>
+                {% elif assignment.assigned_to_department %}
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-users fa-3x text-info mr-3"></i>
+                        <div>
+                            <h5 class="mb-1">Department Assignment</h5>
+                            <p class="mb-1"><strong>Department:</strong> {{ assignment.assigned_to_department.name }}</p>
+                            <p class="mb-1"><strong>Code:</strong> {{ assignment.assigned_to_department.code }}</p>
+                            {% if assignment.assigned_to_department.head %}
+                                <p class="mb-0"><strong>Head:</strong> {{ assignment.assigned_to_department.head.user.get_full_name }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% elif assignment.assigned_to_location %}
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-map-marker-alt fa-3x text-success mr-3"></i>
+                        <div>
+                            <h5 class="mb-1">Location Assignment</h5>
+                            <p class="mb-1"><strong>Location:</strong> {{ assignment.assigned_to_location }}</p>
+                            {% if assignment.assigned_to_location.building %}
+                                <p class="mb-1"><strong>Building:</strong> {{ assignment.assigned_to_location.building.name }}</p>
+                            {% endif %}
+                            {% if assignment.assigned_to_location.block %}
+                                <p class="mb-1"><strong>Block:</strong> {{ assignment.assigned_to_location.block.name }}</p>
+                            {% endif %}
+                            {% if assignment.assigned_to_location.department %}
+                                <p class="mb-0"><strong>Department:</strong> {{ assignment.assigned_to_location.department.name }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Action Buttons -->
+            {% if can_edit %}
+                <div class="info-card">
+                    <h5 class="text-primary mb-3">
+                        <i class="fas fa-cogs"></i> Actions
+                    </h5>
+                    
+                    <div class="d-flex flex-column action-buttons">
+                        <a href="{% url 'inventory:assignment_edit' assignment.pk %}" 
+                           class="btn btn-primary btn-action mb-2">
+                            <i class="fas fa-edit"></i> Edit Assignment
                         </a>
-                    {% endif %}
+                        
+                        {% if can_return %}
+                            <button type="button" class="btn btn-success btn-action mb-2" 
+                                    data-toggle="modal" data-target="#returnModal">
+                                <i class="fas fa-undo"></i> Return Device
+                            </button>
+                            
+                            <button type="button" class="btn btn-warning btn-action mb-2" 
+                                    data-toggle="modal" data-target="#transferModal">
+                                <i class="fas fa-exchange-alt"></i> Transfer Assignment
+                            </button>
+                        {% endif %}
+                        
+                        <a href="{% url 'inventory:device_detail' assignment.device.pk %}" 
+                           class="btn btn-info btn-action mb-2">
+                            <i class="fas fa-desktop"></i> View Device
+                        </a>
+                        
+                        <a href="{% url 'inventory:assignment_list' %}" 
+                           class="btn btn-secondary btn-action">
+                            <i class="fas fa-list"></i> Back to Assignments
+                        </a>
+                    </div>
                 </div>
+            {% endif %}
+
+            <!-- Assignment Timeline -->
+            {% if history %}
+                <div class="info-card">
+                    <h5 class="text-primary mb-3">
+                        <i class="fas fa-history"></i> Assignment History
+                    </h5>
+                    
+                    <div class="timeline">
+                        {% for entry in history %}
+                            <div class="timeline-item">
+                                <div class="timeline-content">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="mb-0">{{ entry.get_change_type_display }}</h6>
+                                        <small class="text-muted">{{ entry.timestamp|date:"M d, H:i" }}</small>
+                                    </div>
+                                    <p class="mb-1"><strong>By:</strong> {{ entry.changed_by.get_full_name|default:entry.changed_by.username }}</p>
+                                    {% if entry.reason %}
+                                        <p class="mb-1"><strong>Reason:</strong> {{ entry.reason }}</p>
+                                    {% endif %}
+                                    {% if entry.change_summary %}
+                                        <p class="mb-0 text-muted small">{{ entry.change_summary }}</p>
+                                    {% endif %}
+                                    {% if entry.notes %}
+                                        <p class="mb-0 text-muted small"><em>{{ entry.notes }}</em></p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <a href="#" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-history"></i> View Full History
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Assignment Statistics -->
+            <div class="info-card">
+                <h5 class="text-primary mb-3">
+                    <i class="fas fa-chart-bar"></i> Quick Stats
+                </h5>
+                
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-right">
+                            <h4 class="text-success">{{ assignment.device.assignments.filter.is_active=True|length }}</h4>
+                            <small class="text-muted">Active Assignments</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-info">{{ assignment.device.assignments.count }}</h4>
+                        <small class="text-muted">Total Assignments</small>
+                    </div>
+                </div>
+                
+                {% if assignment.device.assignments.count > 1 %}
+                    <hr>
+                    <div class="text-center">
+                        <a href="#" class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-list"></i> View All Device Assignments
+                        </a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<!-- Return Device Modal -->
+{% if can_return %}
+<div class="modal fade" id="returnModal" tabindex="-1" role="dialog" aria-labelledby="returnModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="returnModalLabel">
+                    <i class="fas fa-undo"></i> Return Device
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post" action="{% url 'inventory:assignment_return' assignment.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        You are about to return <strong>{{ assignment.device.device_id }}</strong> from 
+                        {% if assignment.assigned_to_staff %}
+                            {{ assignment.assigned_to_staff.user.get_full_name }}
+                        {% elif assignment.assigned_to_department %}
+                            {{ assignment.assigned_to_department.name }}
+                        {% else %}
+                            {{ assignment.assigned_to_location }}
+                        {% endif %}.
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="return_date" class="font-weight-bold">Return Date</label>
+                        <input type="date" class="form-control" id="return_date" name="return_date" 
+                               value="{{ today|date:'Y-m-d' }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="device_condition" class="font-weight-bold">Device Condition</label>
+                        <select class="form-control" id="device_condition" name="device_condition">
+                            <option value="">No change</option>
+                            <option value="EXCELLENT">Excellent</option>
+                            <option value="GOOD">Good</option>
+                            <option value="FAIR">Fair</option>
+                            <option value="POOR">Poor</option>
+                            <option value="DAMAGED">Damaged</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="return_condition" class="font-weight-bold">Return Condition</label>
+                        <input type="text" class="form-control" id="return_condition" name="return_condition"
+                               placeholder="Brief description of device condition">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="return_notes" class="font-weight-bold">Return Notes</label>
+                        <textarea class="form-control" id="return_notes" name="return_notes" rows="3"
+                                  placeholder="Additional notes about the return"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-undo"></i> Return Device
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Transfer Assignment Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1" role="dialog" aria-labelledby="transferModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="transferModalLabel">
+                    <i class="fas fa-exchange-alt"></i> Transfer Assignment
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="post" action="{% url 'inventory:assignment_transfer' assignment.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        You are about to transfer the assignment of <strong>{{ assignment.device.device_id }}</strong> 
+                        to a new target. This action cannot be undone.
+                    </div>
+                    
+                    <!-- Transfer Target Tabs -->
+                    <ul class="nav nav-tabs" id="transferTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link active" id="transfer-staff-tab" data-toggle="tab" href="#transfer-staff" 
+                               role="tab" aria-controls="transfer-staff" aria-selected="true">
+                                <i class="fas fa-user"></i> Staff
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link" id="transfer-department-tab" data-toggle="tab" href="#transfer-department" 
+                               role="tab" aria-controls="transfer-department" aria-selected="false">
+                                <i class="fas fa-users"></i> Department
+                            </a>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <a class="nav-link" id="transfer-location-tab" data-toggle="tab" href="#transfer-location" 
+                               role="tab" aria-controls="transfer-location" aria-selected="false">
+                                <i class="fas fa-map-marker-alt"></i> Location
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content mt-3" id="transferTabContent">
+                        <div class="tab-pane fade show active" id="transfer-staff" role="tabpanel" aria-labelledby="transfer-staff-tab">
+                            <div class="form-group">
+                                <label for="new_assigned_to_staff" class="font-weight-bold">Select Staff Member</label>
+                                <select class="form-control" id="new_assigned_to_staff" name="new_assigned_to_staff">
+                                    <option value="">Select staff member...</option>
+                                    <!-- Options will be populated by JavaScript or server-side -->
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="transfer-department" role="tabpanel" aria-labelledby="transfer-department-tab">
+                            <div class="form-group">
+                                <label for="new_assigned_to_department" class="font-weight-bold">Select Department</label>
+                                <select class="form-control" id="new_assigned_to_department" name="new_assigned_to_department">
+                                    <option value="">Select department...</option>
+                                    <!-- Options will be populated by JavaScript or server-side -->
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="transfer-location" role="tabpanel" aria-labelledby="transfer-location-tab">
+                            <div class="form-group">
+                                <label for="new_assigned_to_location" class="font-weight-bold">Select Location</label>
+                                <select class="form-control" id="new_assigned_to_location" name="new_assigned_to_location">
+                                    <option value="">Select location...</option>
+                                    <!-- Options will be populated by JavaScript or server-side -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group mt-3">
+                        <label for="transfer_reason" class="font-weight-bold">Transfer Reason</label>
+                        <textarea class="form-control" id="transfer_reason" name="transfer_reason" rows="3"
+                                  placeholder="Reason for transferring this assignment"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="conditions" class="font-weight-bold">Conditions</label>
+                        <textarea class="form-control" id="conditions" name="conditions" rows="2"
+                                  placeholder="Any special conditions or notes"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-exchange-alt"></i> Transfer Assignment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Add confirmation for critical actions
-    $('a[href*="return"], a[href*="transfer"]').on('click', function(e) {
-        const action = $(this).text().trim();
-        if (!confirm(`Are you sure you want to ${action.toLowerCase()} this assignment?`)) {
-            e.preventDefault();
-        }
-    });
-
-    // Auto-refresh status if assignment is active and has return date
-    {% if assignment.is_active and assignment.expected_return_date %}
-        setInterval(function() {
-            const returnDate = new Date('{{ assignment.expected_return_date|date:"Y-m-d" }}');
-            const today = new Date();
-            const timeDiff = returnDate.getTime() - today.getTime();
-            const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-            
-            // Update status cards if needed
-            if (daysDiff < 0) {
-                $('.status-card').removeClass('status-active status-due-soon').addClass('status-overdue');
-            } else if (daysDiff <= 7) {
-                $('.status-card').removeClass('status-active status-overdue').addClass('status-due-soon');
-            }
-        }, 60000); // Check every minute
-    {% endif %}
-
-    // Smooth scroll for timeline
-    $('.assignment-timeline').on('scroll', function() {
-        const items = $('.timeline-item');
-        const scrollTop = $(this).scrollTop();
+    // Tab switching for transfer modal
+    $('#transferTabs a').on('click', function(e) {
+        e.preventDefault();
         
-        items.each(function() {
-            const offset = $(this).offset().top - $(this).parent().offset().top;
-            if (offset <= scrollTop + 100) {
-                $(this).addClass('viewed');
-            }
-        });
+        // Clear other fields when switching tabs
+        const currentTab = $(this).attr('href');
+        
+        if (currentTab === '#transfer-staff') {
+            $('#new_assigned_to_department, #new_assigned_to_location').val('');
+        } else if (currentTab === '#transfer-department') {
+            $('#new_assigned_to_staff, #new_assigned_to_location').val('');
+        } else if (currentTab === '#transfer-location') {
+            $('#new_assigned_to_staff, #new_assigned_to_department').val('');
+        }
+        
+        $(this).tab('show');
+    });
+    
+    // Form validation for transfer
+    $('#transferModal form').on('submit', function(e) {
+        const staff = $('#new_assigned_to_staff').val();
+        const department = $('#new_assigned_to_department').val();
+        const location = $('#new_assigned_to_location').val();
+        
+        if (!staff && !department && !location) {
+            e.preventDefault();
+            alert('Please select at least one transfer target.');
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Load options for transfer modal when opened
+    $('#transferModal').on('show.bs.modal', function() {
+        // Load staff options
+        // Load department options  
+        // Load location options
+        // This would typically be done via AJAX
     });
 });
 </script>
