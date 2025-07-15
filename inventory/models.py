@@ -142,6 +142,7 @@ class Staff(models.Model):
     is_active = models.BooleanField(default=True)
     joining_date = models.DateField(null=True, blank=True)
     leaving_date = models.DateField(null=True, blank=True)
+    last_activity = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

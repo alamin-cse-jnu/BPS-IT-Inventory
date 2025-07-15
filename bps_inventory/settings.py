@@ -115,7 +115,7 @@ TEMPLATES = [
                 'django.template.context_processors.static',
                 'django.template.context_processors.tz',
                 
-                # BPS Custom Context Processors
+                # BPS Custom Context Processors (Main)
                 'bps_inventory.context_processors.bps_settings',
                 'bps_inventory.context_processors.user_context',
                 'bps_inventory.context_processors.navigation_context',
@@ -124,8 +124,8 @@ TEMPLATES = [
                 
                 # Legacy inventory context processors (for backward compatibility)
                 'inventory.context_processors.bps_settings',
-                'inventory.context_processors.notifications',
-                'inventory.context_processors.quick_stats',
+                'inventory.context_processors.notification_context',
+                'inventory.context_processors.quick_stats',           
             ],
         },
     },
