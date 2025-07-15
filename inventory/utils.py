@@ -441,24 +441,299 @@ def send_notification_email(subject, message, recipient_list):
         return False
 
 def log_user_activity(user, action, model_name, object_id, object_repr, changes=None, ip_address=None):
-    """Log user activity in audit log"""
+    """
+    Enhanced logging function for user activities with better error handling.
+    
+    Args:
+        user: User performing the action
+        action: Action type (CREATE, UPDATE, DELETE, etc.)
+        model_name: Name of the model being affected
+        object_id: ID of the object
+        object_repr: String representation of the object
+        changes: Dict of changes made (optional)
+        ip_address: IP address of the user (optional)
+    """
     try:
         from .models import AuditLog
         
-        AuditLog.objects.create(
+        # Create audit log entry
+        audit_log = AuditLog.objects.create(
             user=user,
             action=action,
             model_name=model_name,
-            object_id=str(object_id) if object_id else None,
-            object_repr=object_repr,
+            object_id=str(object_id),
+            object_repr=object_repr[:200],  # Limit length
             changes=changes or {},
-            ip_address=ip_address
+            ip_address=ip_address or 'Unknown',
+            timestamp=timezone.now()
         )
+        
+        # Log to file as well
+        logger.info(
+            f"User {user.username} performed {action} on {model_name} "
+            f"(ID: {object_id}) from IP {ip_address}"
+        )
+        
+        return audit_log
+        
+    except Exception as e:
+        # Don't let logging failures break the main operation
+        logger.error(f"Failed to log user activity: {e}")
+        return None
+
+def validate_staff_business_rules(staff_data, instance=None):
+    """
+    Validate business rules for staff creation/updates.
+    
+    Args:
+        staff_data: Dictionary of staff data
+        instance: Existing staff instance (for updates)
+    
+    Returns:
+        tuple: (is_valid, errors_list)
+    """
+    errors = []
+    
+    try:
+        # Rule 1: Employee ID format validation
+        employee_id = staff_data.get('employee_id', '').strip()
+        if employee_id:
+            if len(employee_id) < 3:
+                errors.append("Employee ID must be at least 3 characters long")
+            elif len(employee_id) > 20:
+                errors.append("Employee ID cannot exceed 20 characters")
+            elif not employee_id.replace('-', '').replace('_', '').isalnum():
+                errors.append("Employee ID can only contain letters, numbers, hyphens, and underscores")
+        
+        # Rule 2: Designation validation
+        designation = staff_data.get('designation', '').strip()
+        if designation and len(designation) < 2:
+            errors.append("Designation must be at least 2 characters long")
+        
+        # Rule 3: Phone number validation
+        phone = staff_data.get('phone_number', '').strip()
+        if phone:
+            clean_phone = ''.join(filter(str.isdigit, phone))
+            if len(clean_phone) < 10:
+                errors.append("Phone number must contain at least 10 digits")
+            elif len(clean_phone) > 15:
+                errors.append("Phone number cannot exceed 15 digits")
+        
+        # Rule 4: Joining date validation
+        joining_date = staff_data.get('joining_date')
+        if joining_date:
+            today = timezone.now().date()
+            if joining_date > today:
+                errors.append("Joining date cannot be in the future")
+            elif joining_date < today - timedelta(days=365 * 50):
+                errors.append("Joining date cannot be more than 50 years ago")
+        
+        # Rule 5: Department validation
+        department = staff_data.get('department')
+        if department and hasattr(department, 'is_active') and not department.is_active:
+            errors.append(f"Department '{department.name}' is not active")
+        
+        return len(errors) == 0, errors
+        
+    except Exception as e:
+        logger.error(f"Error validating staff business rules: {e}")
+        return False, ["Validation error occurred"]
+    
+def get_staff_statistics():
+    """
+    Get comprehensive staff statistics for dashboard and reporting.
+    
+    Returns:
+        dict: Statistics about staff members
+    """
+    try:
+        from .models import Staff, Assignment
+        from django.db.models import Count, Q
+        
+        stats = {
+            'total_staff': Staff.objects.count(),
+            'active_staff': Staff.objects.filter(is_active=True).count(),
+            'inactive_staff': Staff.objects.filter(is_active=False).count(),
+            'staff_with_assignments': Staff.objects.filter(
+                assignments__is_active=True
+            ).distinct().count(),
+            'staff_by_department': Staff.objects.filter(
+                is_active=True
+            ).values(
+                'department__name'
+            ).annotate(
+                count=Count('id')
+            ).order_by('-count')[:10],
+            'recent_joiners': Staff.objects.filter(
+                joining_date__gte=timezone.now().date() - timedelta(days=30),
+                is_active=True
+            ).count(),
+            'staff_without_department': Staff.objects.filter(
+                department__isnull=True,
+                is_active=True
+            ).count()
+        }
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error getting staff statistics: {e}")
+        return {}
+
+def send_staff_notification(staff, notification_type, context=None):
+    """
+    Send notifications to staff members (email, system notifications, etc.).
+    
+    Args:
+        staff: Staff instance
+        notification_type: Type of notification
+        context: Additional context for the notification
+    
+    Returns:
+        bool: Success status
+    """
+    try:
+        # This is a placeholder for future notification implementation
+        # You can integrate with email services, SMS, or push notifications
+        
+        logger.info(
+            f"Notification '{notification_type}' sent to staff {staff.employee_id} "
+            f"({staff.get_full_name()})"
+        )
+        
+        # TODO: Implement actual notification sending
+        # Examples:
+        # - Email notifications for account creation
+        # - SMS for urgent assignments
+        # - Push notifications for mobile apps
+        
         return True
         
     except Exception as e:
-        logger.error(f"Error logging user activity: {e}")
+        logger.error(f"Error sending notification to staff {staff.employee_id}: {e}")
         return False
+
+def cleanup_inactive_staff_data():
+    """
+    Cleanup data related to inactive staff members.
+    This function can be called periodically (e.g., via cron job).
+    
+    Returns:
+        dict: Cleanup statistics
+    """
+    try:
+        from .models import Staff, Assignment
+        
+        stats = {
+            'inactive_staff_checked': 0,
+            'assignments_updated': 0,
+            'errors': []
+        }
+        
+        # Find staff members inactive for more than 1 year
+        cutoff_date = timezone.now().date() - timedelta(days=365)
+        inactive_staff = Staff.objects.filter(
+            is_active=False,
+            leaving_date__lt=cutoff_date
+        )
+        
+        stats['inactive_staff_checked'] = inactive_staff.count()
+        
+        for staff in inactive_staff:
+            try:
+                # Close any remaining active assignments
+                active_assignments = Assignment.objects.filter(
+                    assigned_to_staff=staff,
+                    is_active=True
+                )
+                
+                for assignment in active_assignments:
+                    assignment.is_active = False
+                    assignment.actual_return_date = timezone.now().date()
+                    assignment.return_reason = 'Staff member no longer active'
+                    assignment.save()
+                    stats['assignments_updated'] += 1
+                    
+            except Exception as e:
+                error_msg = f"Error processing staff {staff.employee_id}: {e}"
+                stats['errors'].append(error_msg)
+                logger.error(error_msg)
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error during staff data cleanup: {e}")
+        return {'error': str(e)}
+
+# ================================
+# STAFF EXPORT UTILITIES
+# ================================
+
+def export_staff_data(queryset, format='excel', include_assignments=False):
+    """
+    Export staff data in various formats.
+    
+    Args:
+        queryset: Staff queryset to export
+        format: Export format ('excel', 'csv', 'json')
+        include_assignments: Whether to include assignment data
+    
+    Returns:
+        tuple: (success, data_or_error_message)
+    """
+    try:
+        import pandas as pd
+        from io import BytesIO
+        
+        # Prepare data
+        data = []
+        for staff in queryset.select_related('user', 'department').prefetch_related('assignments'):
+            row = {
+                'Employee ID': staff.employee_id,
+                'First Name': staff.user.first_name,
+                'Last Name': staff.user.last_name,
+                'Email': staff.user.email,
+                'Designation': staff.designation,
+                'Department': str(staff.department) if staff.department else '',
+                'Phone Number': staff.phone_number,
+                'Joining Date': staff.joining_date.strftime('%Y-%m-%d') if staff.joining_date else '',
+                'Is Active': 'Yes' if staff.is_active else 'No',
+                'Last Activity': staff.last_activity.strftime('%Y-%m-%d %H:%M') if staff.last_activity else ''
+            }
+            
+            # Include assignment data if requested
+            if include_assignments:
+                active_assignments = staff.assignments.filter(is_active=True).count()
+                total_assignments = staff.assignments.count()
+                row.update({
+                    'Active Assignments': active_assignments,
+                    'Total Assignments': total_assignments
+                })
+            
+            data.append(row)
+        
+        # Create DataFrame
+        df = pd.DataFrame(data)
+        
+        # Export based on format
+        if format.lower() == 'excel':
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Staff Data', index=False)
+            return True, buffer.getvalue()
+            
+        elif format.lower() == 'csv':
+            return True, df.to_csv(index=False)
+            
+        elif format.lower() == 'json':
+            return True, df.to_json(orient='records', indent=2)
+            
+        else:
+            return False, f"Unsupported format: {format}"
+            
+    except Exception as e:
+        logger.error(f"Error exporting staff data: {e}")
+        return False, str(e)
 
 def get_client_ip(request):
     """Get client IP address from request"""

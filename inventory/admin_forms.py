@@ -268,9 +268,9 @@ class AssignmentAdminForm(forms.ModelForm):
 # ================================
 
 class StaffAdminForm(forms.ModelForm):
-    """Enhanced staff form for admin interface with User integration"""
+    """Enhanced staff form for admin interface"""
     
-    # User fields for inline editing
+    # Additional user fields for convenience
     username = forms.CharField(max_length=150, help_text="Required. 150 characters or fewer.")
     first_name = forms.CharField(max_length=30)
     last_name = forms.CharField(max_length=30)
@@ -298,6 +298,9 @@ class StaffAdminForm(forms.ModelForm):
         )
         self.fields['department'].queryset = departments
         
+        # Only show users without staff profiles
+        self.fields['user'].queryset = User.objects.filter(staff_profile__isnull=True)
+        
         # Populate user fields if editing existing staff
         if self.instance.pk and hasattr(self.instance, 'user'):
             user = self.instance.user
@@ -306,6 +309,9 @@ class StaffAdminForm(forms.ModelForm):
             self.fields['last_name'].initial = user.last_name
             self.fields['email'].initial = user.email
             self.fields['is_active_user'].initial = user.is_active
+            self.fields['user'].queryset = User.objects.filter(
+                models.Q(staff_profile__isnull=True) | models.Q(pk=user.pk)
+            ).distinct()
     
     def clean_username(self):
         username = self.cleaned_data.get('username')
@@ -330,28 +336,6 @@ class StaffAdminForm(forms.ModelForm):
                 raise ValidationError(f"Email '{email}' is already in use.")
         
         return email
-    
-    def save(self, commit=True):
-        staff = super().save(commit=False)
-        
-        # Create or update associated user
-        if hasattr(staff, 'user'):
-            user = staff.user
-        else:
-            user = User()
-            
-        user.username = self.cleaned_data['username']
-        user.first_name = self.cleaned_data['first_name']
-        user.last_name = self.cleaned_data['last_name']
-        user.email = self.cleaned_data['email']
-        user.is_active = self.cleaned_data['is_active_user']
-        
-        if commit:
-            user.save()
-            staff.user = user
-            staff.save()
-        
-        return staff
 
 
 # ================================

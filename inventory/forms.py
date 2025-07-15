@@ -473,15 +473,27 @@ class StaffForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only show users without staff profiles and active departments
-        self.fields['user'].queryset = User.objects.filter(staff__isnull=True)
+        
+        self.fields['user'].queryset = User.objects.filter(staff_profile__isnull=True)
         self.fields['department'].queryset = Department.objects.filter(is_active=True).order_by('name')
         
         # If editing, include current user
         if self.instance.pk and self.instance.user:
             self.fields['user'].queryset = User.objects.filter(
-                Q(staff__isnull=True) | Q(pk=self.instance.user.pk)
-            )
+                Q(staff_profile__isnull=True) | Q(pk=self.instance.user.pk)
+            ).distinct()
+    
+    def clean_employee_id(self):
+        employee_id = self.cleaned_data.get('employee_id')
+        if employee_id:
+            existing = Staff.objects.filter(employee_id=employee_id)
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise ValidationError(f"Employee ID '{employee_id}' already exists.")
+        
+        return employee_id
 
 # ================================
 # UPDATED ASSIGNMENT FORM WITH LOCATION HIERARCHY

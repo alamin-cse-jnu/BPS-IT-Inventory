@@ -54,6 +54,11 @@ urlpatterns = [
     path('staff/<str:staff_id>/delete/', views.staff_delete, name='staff_delete'),
     path('staff/<str:staff_id>/assignments/', views.staff_assignments, name='staff_assignments'),
     
+    # Staff Management AJAX endpoints
+    path('ajax/generate-employee-id/', views.ajax_generate_employee_id, name='ajax_generate_employee_id'),
+    path('ajax/check-employee-id/', views.ajax_check_employee_id, name='ajax_check_employee_id'),
+    path('ajax/staff-search/', views.ajax_staff_search, name='ajax_staff_search'),
+
     # ================================
     # BUILDING MANAGEMENT
     # ================================
@@ -182,7 +187,6 @@ urlpatterns = [
     path('ajax/get-device-types/', views.ajax_device_types_by_subcategory, name='ajax_get_device_types'),  
     path('ajax/device-stats/<str:device_id>/', views.ajax_device_stats, name='ajax_device_stats'),
     path('ajax/assignment-quick-actions/<str:assignment_id>/', views.ajax_assignment_quick_actions, name='ajax_assignment_quick_actions'),
-    path('ajax/staff-search/', views.ajax_staff_search, name='ajax_staff_search'),
     path('ajax/validate-hierarchy/', views.api_validate_hierarchy, name='ajax_validate_hierarchy'),
     # path('ajax/suggest-block-code/', views.ajax_suggest_block_code, name='ajax_suggest_block_code'),
     # path('ajax/location-breadcrumb/', views.ajax_location_breadcrumb, name='ajax_location_breadcrumb'),

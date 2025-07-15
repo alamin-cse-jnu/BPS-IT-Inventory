@@ -1683,6 +1683,224 @@ def overdue_assignments_list(request):
         })
 
 # ================================
+# Helper functions for staff management
+# ================================
+
+def get_client_ip(request):
+    """
+    Get the client's IP address from request headers.
+    Handles various proxy configurations.
+    """
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR', 'Unknown')
+    return ip
+
+
+def validate_staff_data(form_data, instance=None):
+    """
+    Additional validation for staff data beyond form validation.
+    
+    Args:
+        form_data: Cleaned form data
+        instance: Existing staff instance for updates (None for create)
+    
+    Returns:
+        tuple: (is_valid: bool, errors: list)
+    """
+    errors = []
+    
+    # Check user availability
+    user = form_data.get('user')
+    if user:
+        # Check if user already has staff profile (for create or different user in update)
+        if hasattr(user, 'staff_profile'):
+            if not instance or instance.user != user:
+                errors.append(f'User "{user.username}" already has a staff profile.')
+    
+    # Check employee ID uniqueness
+    employee_id = form_data.get('employee_id')
+    if employee_id:
+        existing_staff = Staff.objects.filter(employee_id=employee_id)
+        if instance:
+            existing_staff = existing_staff.exclude(pk=instance.pk)
+        
+        if existing_staff.exists():
+            errors.append(f'Employee ID "{employee_id}" is already in use.')
+    
+    # Check department status
+    department = form_data.get('department')
+    if department and not department.is_active:
+        errors.append(f'Department "{department.name}" is not active.')
+    
+    # Validate joining date
+    joining_date = form_data.get('joining_date')
+    if joining_date:
+        if joining_date > timezone.now().date():
+            errors.append('Joining date cannot be in the future.')
+        
+        # Check if joining date is too far in the past (more than 50 years)
+        if joining_date < timezone.now().date() - timedelta(days=50*365):
+            errors.append('Joining date seems too far in the past.')
+    
+    # Validate phone number format (basic validation)
+    phone_number = form_data.get('phone_number')
+    if phone_number:
+        # Remove common formatting characters
+        clean_phone = phone_number.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
+        if not clean_phone.isdigit():
+            errors.append('Phone number should contain only digits and standard formatting characters.')
+        elif len(clean_phone) < 10 or len(clean_phone) > 15:
+            errors.append('Phone number should be between 10 and 15 digits.')
+    
+    return len(errors) == 0, errors
+
+
+def generate_employee_id_suggestion(department=None):
+    """
+    Generate a suggested employee ID based on department and existing IDs.
+    
+    Args:
+        department: Department instance (optional)
+    
+    Returns:
+        str: Suggested employee ID
+    """
+    try:
+        # Get department prefix
+        if department:
+            prefix = department.code[:3].upper() if hasattr(department, 'code') else 'EMP'
+        else:
+            prefix = 'EMP'
+        
+        # Find the highest existing number for this prefix
+        existing_ids = Staff.objects.filter(
+            employee_id__startswith=prefix
+        ).values_list('employee_id', flat=True)
+        
+        highest_number = 0
+        for emp_id in existing_ids:
+            try:
+                # Extract number part
+                number_part = emp_id[len(prefix):].lstrip('0') or '0'
+                if number_part.isdigit():
+                    highest_number = max(highest_number, int(number_part))
+            except (ValueError, IndexError):
+                continue
+        
+        # Generate next ID
+        next_number = highest_number + 1
+        return f"{prefix}{next_number:03d}"  # e.g., EMP001, IT001
+        
+    except Exception:
+        # Fallback to simple numbering
+        staff_count = Staff.objects.count()
+        return f"EMP{staff_count + 1:03d}"
+
+
+@login_required
+def ajax_generate_employee_id(request):
+    """
+    AJAX endpoint to generate employee ID suggestion.
+    """
+    if request.method == 'GET':
+        department_id = request.GET.get('department_id')
+        department = None
+        
+        if department_id:
+            try:
+                department = Department.objects.get(id=department_id)
+            except Department.DoesNotExist:
+                pass
+        
+        suggested_id = generate_employee_id_suggestion(department)
+        
+        return JsonResponse({
+            'success': True,
+            'suggested_id': suggested_id
+        })
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
+@login_required
+def ajax_check_employee_id(request):
+    """
+    AJAX endpoint to check if employee ID is available.
+    """
+    if request.method == 'GET':
+        employee_id = request.GET.get('employee_id', '').strip()
+        staff_id = request.GET.get('staff_id')  # For edit operations
+        
+        if not employee_id:
+            return JsonResponse({
+                'available': False,
+                'message': 'Employee ID is required'
+            })
+        
+        # Check if ID exists
+        existing = Staff.objects.filter(employee_id=employee_id)
+        
+        # Exclude current staff member for edit operations
+        if staff_id:
+            existing = existing.exclude(id=staff_id)
+        
+        is_available = not existing.exists()
+        
+        return JsonResponse({
+            'available': is_available,
+            'message': 'Available' if is_available else 'Employee ID already exists'
+        })
+    
+    return JsonResponse({'available': False, 'error': 'Invalid request method'})
+
+
+@login_required
+def ajax_staff_search(request):
+    """
+    AJAX endpoint for staff search functionality.
+    Used in assignment forms and other places.
+    """
+    if request.method == 'GET':
+        query = request.GET.get('q', '').strip()
+        limit = min(int(request.GET.get('limit', 10)), 50)  # Max 50 results
+        
+        if len(query) < 2:
+            return JsonResponse({'results': []})
+        
+        # Search staff members
+        staff_members = Staff.objects.filter(
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query) |
+            Q(employee_id__icontains=query) |
+            Q(designation__icontains=query) |
+            Q(department__name__icontains=query),
+            is_active=True
+        ).select_related(
+            'user', 'department'
+        ).order_by(
+            'user__first_name', 'user__last_name'
+        )[:limit]
+        
+        results = []
+        for staff in staff_members:
+            results.append({
+                'id': staff.id,
+                'text': f"{staff.get_full_name()} ({staff.employee_id})",
+                'employee_id': staff.employee_id,
+                'department': str(staff.department) if staff.department else 'No Department',
+                'designation': staff.designation,
+                'email': staff.user.email
+            })
+        
+        return JsonResponse({'results': results})
+    
+    return JsonResponse({'results': [], 'error': 'Invalid request method'})
+
+
+# ================================
 # STAFF MANAGEMENT VIEWS
 # ================================
 
@@ -1781,38 +1999,195 @@ def staff_detail(request, staff_id):
         messages.error(request, f"Error loading staff details: {str(e)}")
         return redirect('inventory:staff_list') 
 
+@login_required
 @permission_required('inventory.add_staff', raise_exception=True)
 def staff_create(request):
-    """Create new staff member"""
+    """
+    Create new staff member with comprehensive validation and error handling.
+    Features:
+    - Atomic transaction support
+    - Comprehensive form validation
+    - User activity logging
+    - Duplicate checking
+    - Email validation
+    - Employee ID uniqueness validation
+    - Department validation
+    - Enhanced error handling
+    """
+    
     if request.method == 'POST':
         form = StaffForm(request.POST)
+        
         if form.is_valid():
             try:
-                staff = form.save()
-                
-                # Log the activity
-                from .utils import log_user_activity
-                log_user_activity(
-                    user=request.user,
-                    action='CREATE',
-                    model_name='Staff',
-                    object_id=staff.id,
-                    object_repr=str(staff),
-                    ip_address=request.META.get('REMOTE_ADDR')
-                )
-                
-                messages.success(request, f'Staff member "{staff.get_full_name()}" created successfully.')
-                return redirect('inventory:staff_detail', staff_id=staff.id)
+                with transaction.atomic():
+                    # Get form data
+                    user = form.cleaned_data['user']
+                    employee_id = form.cleaned_data['employee_id']
+                    department = form.cleaned_data.get('department')
+                    
+                    # Additional validation before saving
+                    
+                    # 1. Check if user already has a staff profile
+                    if hasattr(user, 'staff_profile'):
+                        messages.error(
+                            request, 
+                            f'User "{user.username}" already has a staff profile. Please select a different user.'
+                        )
+                        raise ValidationError("User already has staff profile")
+                    
+                    # 2. Check employee ID uniqueness (extra safety)
+                    if Staff.objects.filter(employee_id=employee_id).exists():
+                        messages.error(
+                            request,
+                            f'Employee ID "{employee_id}" is already in use. Please choose a different ID.'
+                        )
+                        raise ValidationError("Employee ID already exists")
+                    
+                    # 3. Validate department is active
+                    if department and not department.is_active:
+                        messages.error(
+                            request,
+                            f'Department "{department.name}" is not active. Please select an active department.'
+                        )
+                        raise ValidationError("Department is not active")
+                    
+                    # 4. Save the staff member
+                    staff = form.save(commit=False)
+                    
+                    # Set additional fields
+                    staff.created_at = timezone.now()
+                    staff.updated_at = timezone.now()
+                    
+                    # If no joining date specified, set to today
+                    if not staff.joining_date:
+                        staff.joining_date = timezone.now().date()
+                    
+                    # Save the staff member
+                    staff.save()
+                    
+                    # 5. Update user permissions if needed
+                    if not user.is_staff:
+                        user.is_staff = True
+                        user.save(update_fields=['is_staff'])
+                    
+                    # 6. Log the activity
+                    try:
+                        from .utils import log_user_activity
+                        log_user_activity(
+                            user=request.user,
+                            action='CREATE',
+                            model_name='Staff',
+                            object_id=staff.id,
+                            object_repr=str(staff),
+                            changes={
+                                'employee_id': employee_id,
+                                'user': user.username,
+                                'department': str(department) if department else None,
+                                'designation': staff.designation,
+                                'is_active': staff.is_active,
+                            },
+                            ip_address=get_client_ip(request)
+                        )
+                    except Exception as log_error:
+                        # Don't fail the whole operation if logging fails
+                        logger.warning(f"Failed to log staff creation activity: {log_error}")
+                    
+                    # 7. Create success message with detailed info
+                    success_msg = f'Staff member "{staff.get_full_name()}" (ID: {staff.employee_id}) created successfully.'
+                    if department:
+                        success_msg += f' Assigned to {department.name} department.'
+                    
+                    messages.success(request, success_msg)
+                    
+                    # 8. Redirect to staff detail page
+                    return redirect('inventory:staff_detail', staff_id=staff.id)
+                    
+            except ValidationError as ve:
+                # Form validation errors - don't log as exceptions
+                if not messages.get_messages(request):
+                    messages.error(request, f'Validation error: {str(ve)}')
+                    
             except Exception as e:
-                messages.error(request, f'Error creating staff member: {str(e)}')
-    else:
-        form = StaffForm()
+                # Log unexpected errors
+                logger.error(f"Error creating staff member: {str(e)}", exc_info=True)
+                
+                # User-friendly error message
+                error_msg = f'Error creating staff member: {str(e)}'
+                if 'duplicate key' in str(e).lower():
+                    error_msg = 'A staff member with this information already exists.'
+                elif 'foreign key' in str(e).lower():
+                    error_msg = 'Invalid department or user selection.'
+                elif 'null value' in str(e).lower():
+                    error_msg = 'Please fill in all required fields.'
+                
+                messages.error(request, error_msg)
+        
+        else:
+            # Form validation failed
+            error_messages = []
+            for field, errors in form.errors.items():
+                for error in errors:
+                    if field == '__all__':
+                        error_messages.append(f"Form error: {error}")
+                    else:
+                        field_label = form.fields[field].label or field.replace('_', ' ').title()
+                        error_messages.append(f"{field_label}: {error}")
+            
+            if error_messages:
+                messages.error(request, "Please correct the following errors: " + "; ".join(error_messages))
+            else:
+                messages.error(request, "Please correct the form errors and try again.")
     
+    else:
+        # GET request - initialize empty form
+        form = StaffForm()
+        
+        # Pre-populate fields if provided in URL parameters
+        department_id = request.GET.get('department')
+        if department_id:
+            try:
+                department = Department.objects.get(id=department_id, is_active=True)
+                form.fields['department'].initial = department
+            except Department.DoesNotExist:
+                pass
+        
+        user_id = request.GET.get('user')
+        if user_id:
+            try:
+                user = User.objects.get(id=user_id, is_active=True)
+                # Check if user doesn't already have staff profile
+                if not hasattr(user, 'staff_profile'):
+                    form.fields['user'].initial = user
+            except User.DoesNotExist:
+                pass
+    
+    # Prepare context for template
     context = {
         'form': form,
         'title': 'Add New Staff Member',
         'action': 'Create',
+        'breadcrumbs': [
+            {'name': 'Dashboard', 'url': reverse('inventory:dashboard')},
+            {'name': 'Staff', 'url': reverse('inventory:staff_list')},
+            {'name': 'Add Staff', 'url': None}
+        ],
+        # Additional context for template
+        'available_departments': Department.objects.filter(is_active=True).order_by('name'),
+        'available_users_count': User.objects.filter(
+            staff_profile__isnull=True, 
+            is_active=True
+        ).count(),
+        'form_help_text': {
+            'employee_id': 'Unique identifier for the staff member (e.g., EMP001)',
+            'user': 'Select a user account that doesn\'t already have a staff profile',
+            'department': 'The department this staff member belongs to',
+            'designation': 'Job title or position (e.g., IT Officer, Manager)',
+            'phone_number': 'Contact phone number (e.g., +880-1XXXXXXXXX)',
+            'joining_date': 'Date when the staff member joined the organization'
+        }
     }
+    
     return render(request, 'inventory/staff/staff_form.html', context)
 
 @login_required
